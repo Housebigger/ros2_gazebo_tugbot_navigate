@@ -1,0 +1,10 @@
+lane_detector_node:
+  ros__parameters:
+    input_topic: /camera/image_raw
+    error_topic: /lane_tracking/error
+    debug_image_topic: /lane_tracking/debug_image
+    blue_threshold: 80
+    blue_margin: 20
+    crop_top_ratio: 0.45
+    detection_hold_frames: 3
+    debug_image_enabled: true

@@ -1,0 +1,14 @@
+lane_controller_node:
+  ros__parameters:
+    error_topic: /lane_tracking/error
+    cmd_vel_topic: /cmd_vel
+    control_period: 0.1
+    error_timeout_sec: 0.4
+    kp: 1.2
+    ki: 0.08
+    kd: 0.05
+    integral_limit: 1.5
+    base_linear_speed: 0.25
+    min_linear_speed: 0.05
+    max_angular_speed: 1.2
+    speed_reduction_gain: 0.6
