@@ -75,6 +75,78 @@ def test_formal_world_contract_uses_packaged_model_and_closed_loop_blue_lane_wit
 
 
 
+def test_zeroerr_world_contract_uses_textured_ground_and_preserves_closed_loop_lane():
+    world_path = WORKSPACE_ROOT / 'src' / 'tugbot_gazebo' / 'worlds' / 'tugbot_lane_world_zeroerr.sdf'
+    texture_path = WORKSPACE_ROOT / 'src' / 'tugbot_gazebo' / 'worlds' / 'zeroerr.png'
+    assert world_path.exists(), 'tugbot_lane_world_zeroerr.sdf should exist'
+    assert texture_path.exists(), 'zeroerr.png should be packaged alongside worlds for install-time resolution'
+
+    content = world_path.read_text(encoding='utf-8')
+    root = ET.fromstring(content)
+
+    assert '<albedo_map>zeroerr.png</albedo_map>' in content
+    assert 'model://tugbot' in content
+    assert 'camera_diagnostic_target' not in content
+
+    ground_plane_visual = root.find("./world/model[@name='ground_plane']/link/visual[@name='visual']")
+    assert ground_plane_visual is not None
+    assert ground_plane_visual.find('./material/pbr/metal/albedo_map').text == 'zeroerr.png'
+
+    track_models = [
+        model for model in root.findall('./world/model')
+        if (model.get('name') or '').startswith('visual_track_')
+    ]
+    assert len(track_models) >= 10
+
+
+
+def test_zeroerr_outer_world_contract_uses_textured_ground_without_competing_inner_lane_and_spawns_on_outer_loop():
+    world_path = WORKSPACE_ROOT / 'src' / 'tugbot_gazebo' / 'worlds' / 'tugbot_lane_world_zeroerr_outer.sdf'
+    texture_path = WORKSPACE_ROOT / 'src' / 'tugbot_gazebo' / 'worlds' / 'zeroerr.png'
+    assert world_path.exists(), 'tugbot_lane_world_zeroerr_outer.sdf should exist'
+    assert texture_path.exists(), 'zeroerr.png should be packaged alongside worlds for install-time resolution'
+
+    content = world_path.read_text(encoding='utf-8')
+    root = ET.fromstring(content)
+
+    assert '<world name="tugbot_lane_world_zeroerr_outer">' in content
+    assert '<albedo_map>zeroerr.png</albedo_map>' in content
+    assert 'camera_diagnostic_target' not in content
+
+    track_models = [
+        model for model in root.findall('./world/model')
+        if (model.get('name') or '').startswith('visual_track_')
+    ]
+    assert len(track_models) == 0, 'outer-loop-only world must remove the competing inner visual_track lane'
+
+    tugbot_include = root.find("./world/include[name='tugbot']")
+    assert tugbot_include is not None
+    pose_text = tugbot_include.findtext('pose', default='')
+    pose = _pose_values(pose_text)
+    assert len(pose) == 6
+    assert pose[0] < -5.0, 'outer-loop spawn should move the robot onto the textured outer loop, not keep origin spawn'
+    assert pose[1] < -10.0, 'outer-loop spawn should be on the lower outer arc of the zeroerr texture'
+    assert -1.40 < pose[5] < -0.35, 'outer-loop spawn yaw should align with the bottom-left outer-arc tangent toward clockwise travel'
+
+
+def test_zeroerr_outer_worlds_have_directional_sunlight_for_textured_lane_contrast():
+    for world_name in [
+        'tugbot_lane_world_zeroerr_outer.sdf',
+        'tugbot_lane_world_zeroerr_outer_probe_oldpose.sdf',
+    ]:
+        world_path = WORKSPACE_ROOT / 'src' / 'tugbot_gazebo' / 'worlds' / world_name
+        assert world_path.exists(), f'{world_name} should exist'
+        root = ET.fromstring(world_path.read_text(encoding='utf-8'))
+
+        sun = root.find("./world/light[@name='sun']")
+        assert sun is not None, f'{world_name} should define a directional sun light to brighten the textured ground'
+        assert sun.get('type') == 'directional', f'{world_name} should use directional sunlight instead of only ambient scene lighting'
+        direction = _xyz(sun.findtext('direction', default='0 0 0'))
+        assert direction[2] < -0.5, f'{world_name} sunlight should point downward onto the ground plane'
+        diffuse = _pose_values(sun.findtext('diffuse', default='0 0 0 0'))
+        assert min(diffuse[:3]) >= 0.8, f'{world_name} sunlight should materially increase textured-lane contrast'
+
+
 def test_debug_world_contract_contains_near_camera_diagnostic_target():
     world_path = WORKSPACE_ROOT / 'src' / 'tugbot_gazebo' / 'worlds' / 'tugbot_lane_world_debug.sdf'
     assert world_path.exists(), 'tugbot_lane_world_debug.sdf should exist'
@@ -103,6 +175,7 @@ def test_launch_layering_contracts_are_respected():
     bringup_root = WORKSPACE_ROOT / 'src' / 'tugbot_bringup'
     sim_minimal = (bringup_root / 'launch' / 'sim_minimal.launch.py').read_text(encoding='utf-8')
     full_system = (bringup_root / 'launch' / 'full_system.launch.py').read_text(encoding='utf-8')
+    full_system_zeroerr_outer = (bringup_root / 'launch' / 'full_system_zeroerr_outer.launch.py').read_text(encoding='utf-8')
     perception_debug = (bringup_root / 'launch' / 'perception_debug.launch.py').read_text(encoding='utf-8')
 
     assert 'ros_gz_sim' in sim_minimal
@@ -120,6 +193,11 @@ def test_launch_layering_contracts_are_respected():
     assert 'lane_controller_node' in full_system
     assert 'world_sdf' in full_system
     assert 'tugbot_lane_world.sdf' in full_system
+
+    assert 'full_system.launch.py' in full_system_zeroerr_outer
+    assert 'IncludeLaunchDescription' in full_system_zeroerr_outer
+    assert 'world_sdf' in full_system_zeroerr_outer
+    assert 'tugbot_lane_world_zeroerr_outer.sdf' in full_system_zeroerr_outer
 
     assert 'sim_minimal.launch.py' in perception_debug
     assert 'lane_detector_node' in perception_debug

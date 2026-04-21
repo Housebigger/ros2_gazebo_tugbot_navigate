@@ -1,0 +1,824 @@
+{
+  "attempt": 2,
+  "bridge_seen": true,
+  "launch_exit_code_before_cleanup": null,
+  "cmd_sample_count": 65,
+  "error_sample_count": 42,
+  "first_reacquire_t": 3.992,
+  "spin_seen": true,
+  "arc_seen": false,
+  "phase_sequence": [
+    {
+      "label": "spin",
+      "start_t": 1.582,
+      "end_t": 3.983,
+      "count": 25,
+      "first_sample": {
+        "t": 1.582,
+        "linear_x": 0.0,
+        "angular_z": 0.35
+      },
+      "last_sample": {
+        "t": 3.983,
+        "linear_x": 0.0,
+        "angular_z": 0.35
+      }
+    },
+    {
+      "label": "pid_or_other",
+      "start_t": 4.083,
+      "end_t": 7.982,
+      "count": 40,
+      "first_sample": {
+        "t": 4.083,
+        "linear_x": 0.234742,
+        "angular_z": 0.17374
+      },
+      "last_sample": {
+        "t": 7.982,
+        "linear_x": 0.247418,
+        "angular_z": -0.023174
+      }
+    }
+  ],
+  "cmd_head": [
+    {
+      "t": 1.582,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 1.682,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 1.783,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 1.882,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 1.982,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 2.082,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 2.183,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 2.283,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 2.382,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 2.482,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 2.584,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 2.683,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 2.783,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 2.882,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 2.982,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 3.083,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 3.185,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 3.283,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 3.382,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 3.483,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 3.582,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 3.683,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 3.783,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 3.884,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    },
+    {
+      "t": 3.983,
+      "linear_x": 0.0,
+      "angular_z": 0.35
+    }
+  ],
+  "cmd_tail": [
+    {
+      "t": 5.584,
+      "linear_x": 0.246009,
+      "angular_z": -0.028244
+    },
+    {
+      "t": 5.687,
+      "linear_x": 0.244601,
+      "angular_z": -0.044495
+    },
+    {
+      "t": 5.784,
+      "linear_x": 0.244601,
+      "angular_z": -0.040088
+    },
+    {
+      "t": 5.883,
+      "linear_x": 0.242723,
+      "angular_z": -0.061759
+    },
+    {
+      "t": 5.983,
+      "linear_x": 0.242723,
+      "angular_z": -0.055887
+    },
+    {
+      "t": 6.084,
+      "linear_x": 0.242254,
+      "angular_z": -0.061621
+    },
+    {
+      "t": 6.183,
+      "linear_x": 0.241784,
+      "angular_z": -0.065815
+    },
+    {
+      "t": 6.286,
+      "linear_x": 0.241784,
+      "angular_z": -0.064689
+    },
+    {
+      "t": 6.384,
+      "linear_x": 0.242254,
+      "angular_z": -0.059781
+    },
+    {
+      "t": 6.483,
+      "linear_x": 0.242254,
+      "angular_z": -0.061759
+    },
+    {
+      "t": 6.582,
+      "linear_x": 0.242254,
+      "angular_z": -0.062172
+    },
+    {
+      "t": 6.683,
+      "linear_x": 0.242254,
+      "angular_z": -0.062585
+    },
+    {
+      "t": 6.785,
+      "linear_x": 0.242723,
+      "angular_z": -0.057653
+    },
+    {
+      "t": 6.886,
+      "linear_x": 0.242723,
+      "angular_z": -0.059606
+    },
+    {
+      "t": 6.984,
+      "linear_x": 0.243662,
+      "angular_z": -0.049302
+    },
+    {
+      "t": 7.085,
+      "linear_x": 0.243662,
+      "angular_z": -0.05277
+    },
+    {
+      "t": 7.183,
+      "linear_x": 0.243662,
+      "angular_z": -0.053108
+    },
+    {
+      "t": 7.283,
+      "linear_x": 0.24507,
+      "angular_z": -0.037408
+    },
+    {
+      "t": 7.383,
+      "linear_x": 0.24507,
+      "angular_z": -0.042366
+    },
+    {
+      "t": 7.488,
+      "linear_x": 0.24507,
+      "angular_z": -0.042629
+    },
+    {
+      "t": 7.583,
+      "linear_x": 0.24507,
+      "angular_z": -0.042892
+    },
+    {
+      "t": 7.683,
+      "linear_x": 0.246948,
+      "angular_z": -0.021772
+    },
+    {
+      "t": 7.783,
+      "linear_x": 0.246948,
+      "angular_z": -0.028194
+    },
+    {
+      "t": 7.886,
+      "linear_x": 0.246948,
+      "angular_z": -0.028357
+    },
+    {
+      "t": 7.982,
+      "linear_x": 0.247418,
+      "angular_z": -0.023174
+    }
+  ],
+  "err_head": [
+    {
+      "t": 3.992,
+      "error": 0.101721
+    },
+    {
+      "t": 4.326,
+      "error": 0.098592
+    },
+    {
+      "t": 4.331,
+      "error": 0.092332
+    },
+    {
+      "t": 4.338,
+      "error": 0.076682
+    },
+    {
+      "t": 4.401,
+      "error": 0.064163
+    },
+    {
+      "t": 4.529,
+      "error": 0.048513
+    },
+    {
+      "t": 4.63,
+      "error": 0.032864
+    },
+    {
+      "t": 4.699,
+      "error": 0.020344
+    },
+    {
+      "t": 4.806,
+      "error": 0.007825
+    },
+    {
+      "t": 5.104,
+      "error": -0.001565
+    },
+    {
+      "t": 5.109,
+      "error": -0.004695
+    },
+    {
+      "t": 5.11,
+      "error": -0.010955
+    },
+    {
+      "t": 5.193,
+      "error": -0.020344
+    },
+    {
+      "t": 5.291,
+      "error": -0.026604
+    },
+    {
+      "t": 5.599,
+      "error": -0.032864
+    },
+    {
+      "t": 5.603,
+      "error": -0.035994
+    },
+    {
+      "t": 5.805,
+      "error": -0.039124
+    },
+    {
+      "t": 5.805,
+      "error": -0.045383
+    },
+    {
+      "t": 5.809,
+      "error": -0.048513
+    },
+    {
+      "t": 5.99,
+      "error": -0.051643
+    },
+    {
+      "t": 5.995,
+      "error": -0.051643
+    },
+    {
+      "t": 6.181,
+      "error": -0.054773
+    },
+    {
+      "t": 6.182,
+      "error": -0.054773
+    },
+    {
+      "t": 6.352,
+      "error": -0.054773
+    },
+    {
+      "t": 6.356,
+      "error": -0.051643
+    }
+  ],
+  "err_tail": [
+    {
+      "t": 5.805,
+      "error": -0.045383
+    },
+    {
+      "t": 5.809,
+      "error": -0.048513
+    },
+    {
+      "t": 5.99,
+      "error": -0.051643
+    },
+    {
+      "t": 5.995,
+      "error": -0.051643
+    },
+    {
+      "t": 6.181,
+      "error": -0.054773
+    },
+    {
+      "t": 6.182,
+      "error": -0.054773
+    },
+    {
+      "t": 6.352,
+      "error": -0.054773
+    },
+    {
+      "t": 6.356,
+      "error": -0.051643
+    },
+    {
+      "t": 6.437,
+      "error": -0.051643
+    },
+    {
+      "t": 6.542,
+      "error": -0.051643
+    },
+    {
+      "t": 6.639,
+      "error": -0.051643
+    },
+    {
+      "t": 6.742,
+      "error": -0.048513
+    },
+    {
+      "t": 6.927,
+      "error": -0.045383
+    },
+    {
+      "t": 6.94,
+      "error": -0.042254
+    },
+    {
+      "t": 7.205,
+      "error": -0.039124
+    },
+    {
+      "t": 7.207,
+      "error": -0.035994
+    },
+    {
+      "t": 7.21,
+      "error": -0.032864
+    },
+    {
+      "t": 7.597,
+      "error": -0.029734
+    },
+    {
+      "t": 7.601,
+      "error": -0.026604
+    },
+    {
+      "t": 7.603,
+      "error": -0.023474
+    },
+    {
+      "t": 7.606,
+      "error": -0.020344
+    },
+    {
+      "t": 7.979,
+      "error": -0.017214
+    },
+    {
+      "t": 7.985,
+      "error": -0.014085
+    },
+    {
+      "t": 7.992,
+      "error": -0.014085
+    },
+    {
+      "t": 7.995,
+      "error": -0.010955
+    }
+  ],
+  "log_tail": [
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;36m[GUI] [Dbg] [WorldControl.cc:237] \u001b[0m\u001b[1;36mUsing an event to share WorldControl msgs with the server\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mAdded plugin [\u001b[0m\u001b[1;32mWorld control\u001b[0m\u001b[1;32m] to main window\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mLoaded plugin [\u001b[0m\u001b[1;32mWorldControl\u001b[0m\u001b[1;32m] from path [\u001b[0m\u001b[1;32m/opt/ros/jazzy/opt/gz_gui_vendor/lib/gz-gui-8/plugins/libWorldControl.so\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;36m[GUI] [Dbg] [Application.cc:528] \u001b[0m\u001b[1;36mLoading plugin [\u001b[0m\u001b[1;36mWorldStats\u001b[0m\u001b[1;36m]\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mListening to stats on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer/stats\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mAdded plugin [\u001b[0m\u001b[1;32mWorld stats\u001b[0m\u001b[1;32m] to main window\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mLoaded plugin [\u001b[0m\u001b[1;32mWorldStats\u001b[0m\u001b[1;32m] from path [\u001b[0m\u001b[1;32m/opt/ros/jazzy/opt/gz_gui_vendor/lib/gz-gui-8/plugins/libWorldStats.so\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;36m[GUI] [Dbg] [Application.cc:528] \u001b[0m\u001b[1;36mLoading plugin [\u001b[0m\u001b[1;36mShapes\u001b[0m\u001b[1;36m]\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mAdded plugin [\u001b[0m\u001b[1;32mShapes\u001b[0m\u001b[1;32m] to main window\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mLoaded plugin [\u001b[0m\u001b[1;32mShapes\u001b[0m\u001b[1;32m] from path [\u001b[0m\u001b[1;32m/opt/ros/jazzy/opt/gz_sim_vendor/lib/gz-sim-8/plugins/gui/libShapes.so\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;36m[GUI] [Dbg] [Application.cc:528] \u001b[0m\u001b[1;36mLoading plugin [\u001b[0m\u001b[1;36mLights\u001b[0m\u001b[1;36m]\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mAdded plugin [\u001b[0m\u001b[1;32mLights\u001b[0m\u001b[1;32m] to main window\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mLoaded plugin [\u001b[0m\u001b[1;32mLights\u001b[0m\u001b[1;32m] from path [\u001b[0m\u001b[1;32m/opt/ros/jazzy/opt/gz_sim_vendor/lib/gz-sim-8/plugins/gui/libLights.so\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;36m[GUI] [Dbg] [Application.cc:528] \u001b[0m\u001b[1;36mLoading plugin [\u001b[0m\u001b[1;36mTransformControl\u001b[0m\u001b[1;36m]\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mAdded plugin [\u001b[0m\u001b[1;32mTransform control\u001b[0m\u001b[1;32m] to main window\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mLoaded plugin [\u001b[0m\u001b[1;32mTransformControl\u001b[0m\u001b[1;32m] from path [\u001b[0m\u001b[1;32m/opt/ros/jazzy/opt/gz_sim_vendor/lib/gz-sim-8/plugins/gui/libTransformControl.so\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;36m[GUI] [Dbg] [Application.cc:528] \u001b[0m\u001b[1;36mLoading plugin [\u001b[0m\u001b[1;36mScreenshot\u001b[0m\u001b[1;36m]\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mScreenshot service on [\u001b[0m\u001b[1;32m/gui/screenshot\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mAdded plugin [\u001b[0m\u001b[1;32mScreenshot\u001b[0m\u001b[1;32m] to main window\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mLoaded plugin [\u001b[0m\u001b[1;32mScreenshot\u001b[0m\u001b[1;32m] from path [\u001b[0m\u001b[1;32m/opt/ros/jazzy/opt/gz_gui_vendor/lib/gz-gui-8/plugins/libScreenshot.so\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;36m[GUI] [Dbg] [Application.cc:528] \u001b[0m\u001b[1;36mLoading plugin [\u001b[0m\u001b[1;36mCopyPaste\u001b[0m\u001b[1;36m]\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mAdded plugin [\u001b[0m\u001b[1;32mCopy/Paste\u001b[0m\u001b[1;32m] to main window\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mLoaded plugin [\u001b[0m\u001b[1;32mCopyPaste\u001b[0m\u001b[1;32m] from path [\u001b[0m\u001b[1;32m/opt/ros/jazzy/opt/gz_sim_vendor/lib/gz-sim-8/plugins/gui/libCopyPaste.so\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;36m[GUI] [Dbg] [Application.cc:528] \u001b[0m\u001b[1;36mLoading plugin [\u001b[0m\u001b[1;36mComponentInspector\u001b[0m\u001b[1;36m]\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mAdded plugin [\u001b[0m\u001b[1;32mComponent inspector\u001b[0m\u001b[1;32m] to main window\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001b[0m\u001b[1;32m[Msg] \u001b[0m\u001b[1;32mLoaded plugin [\u001b[0m\u001b[1;32mComponentInspector\u001b[0m\u001b[1;32m] from path [\u001b[0m\u001b[1;32m/opt/ros/jazzy/opt/gz_sim_vendor/lib/gz-sim-8/plugins/gui/libComponentInspector.so\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;36m[GUI] [Dbg] [Application.cc:528] \u001b[0m\u001b[1;36mLoading plugin [\u001b[0m\u001b[1;36mEntityTree\u001b[0m\u001b[1;36m]\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;33m[GUI] [Wrn] [Application.cc:908] \u001b[0m\u001b[1;33m[QT] file:///usr/lib/x86_64-linux-gnu/qt5/qml/QtQuick/Dialogs/DefaultFileDialog.qml:413:17: QML ToolButton: Binding loop detected for property \"implicitHeight\"\u001b[0m\u001b[1;33m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;33m[GUI] [Wrn] [Application.cc:908] \u001b[0m\u001b[1;33m[QT] file:///usr/lib/x86_64-linux-gnu/qt5/qml/QtQuick/Dialogs/DefaultFileDialog.qml:309:21: QML Button: Binding loop detected for property \"implicitHeight\"\u001b[0m\u001b[1;33m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;33m[GUI] [Wrn] [Application.cc:908] \u001b[0m\u001b[1;33m[QT] file:///usr/lib/x86_64-linux-gnu/qt5/qml/QtQuick/Dialogs/DefaultFileDialog.qml:309:21: QML Button: Binding loop detected for property \"implicitHeight\"\u001b[0m\u001b[1;33m\u001b[0m"
+    },
+    {
+      "t": 2.433,
+      "line": "[gazebo-1] \u001b[1;33m[GUI] [Wrn] [Application.cc:908] \u001b[0m\u001b[1;33m[QT] file::/WorldStats/WorldStats.qml:53:3: QML RowLayout: Binding loop detected for property \"x\"\u001b[0m\u001b[1;33m\u001b[0m"
+    },
+    {
+      "t": 2.584,
+      "line": "[gazebo-1] VMware: No 3D enabled (0, Success)."
+    },
+    {
+      "t": 2.834,
+      "line": "[gazebo-1] libEGL warning: egl: failed to create dri2 screen"
+    },
+    {
+      "t": 2.834,
+      "line": "[gazebo-1] VMware: No 3D enabled (0, Success)."
+    },
+    {
+      "t": 2.834,
+      "line": "[gazebo-1] libEGL warning: egl: failed to create dri2 screen"
+    },
+    {
+      "t": 2.834,
+      "line": "[gazebo-1] VMware: No 3D enabled (0, Success)."
+    },
+    {
+      "t": 2.834,
+      "line": "[gazebo-1] libEGL warning: egl: failed to create dri2 screen"
+    },
+    {
+      "t": 2.834,
+      "line": "[gazebo-1] \u001b[1;33m[GUI] [Wrn] [Ogre2RenderTarget.cc:668] \u001b[0m\u001b[1;33mAnti-aliasing level of '\u001b[0m\u001b[1;33m\b\u001b[0m\u001b[1;33m' \u001b[0m\u001b[1;33mis not supported; valid FSAA levels are: \u001b[0m\u001b[1;33m[ 0 4 ]\u001b[0m\u001b[1;33m. Setting to 1\u001b[0m\u001b[1;33m\u001b[0m"
+    },
+    {
+      "t": 3.334,
+      "line": "[gazebo-1] \u001b[1;32m[GUI] \u001bevel [\u001b[0m\u001b[1;32mdefault\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mServing world controls on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m/control], [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m/control/state] and [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m/playback/control]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mServing GUI information on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m/\u001b[0m\u001b[1;32mgui/info\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mWorld [\u001b[0m\u001b[1;32mtugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m] initialized with [\u001b[0m\u001b[1;32m1ms\u001b[0m\u001b[1;32m] physics profile.\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mServing world SDF generation service on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m/\u001b[0m\u001b[1;32mgenerate_world_sdf\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mServing world names on [\u001b[0m\u001b[1;32m/gazebo/worlds\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mResource path add service on [\u001b[0m\u001b[1;32m/gazebo/resource_paths/add\u001b[0m\u001b[1;32m].\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mResource path get service on [\u001b[0m\u001b[1;32m/gazebo/resource_paths/get\u001b[0m\u001b[1;32m].\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mResource path resolve service on [\u001b[0m\u001b[1;32m/gazebo/resource_paths/resolve\u001b[0m\u001b[1;32m].\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mResource paths published on [\u001b[0m\u001b[1;32m/gazebo/resource_paths\u001b[0m\u001b[1;32m].\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mServer control service on [\u001b[0m\u001b[1;32m/server_control\u001b[0m\u001b[1;32m].\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mFound no publishers on /stats, adding root stats topic\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mFound no publishers on /clock, adding root clock topic\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;36m[Dbg] [SimulationRunner.cc:533] \u001b[0m\u001b[1;36mCreating PostUpdate worker threads: \u001b[0m\u001b[1;36m4\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;36m[Dbg] [SimulationRunner.cc:544] \u001b[0m\u001b[1;36mCreating postupdate worker thread (\u001b[0m\u001b[1;36m0\u001b[0m\u001b[1;36m)\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;36m[Dbg] [SimulationRunner.cc:544] \u001b[0m\u001b[1;36mCreating postupdate worker thread (\u001b[0m\u001b[1;36m1\u001b[0m\u001b[1;36m)\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;36m[Dbg] [SimulationRunner.cc:544] \u001b[0m\u001b[1;36mCreating postupdate worker thread (\u001b[0m\u001b[1;36m2\u001b[0m\u001b[1;36m)\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;36m[Dbg] [SDFFeatures.cc:332] \u001b[0m\u001b[1;36mMesh construction from an SDF has not been implemented yet for \u001b[0m\u001b[1;36mdartsim. Use AttachMeshShapeFeature to use mesh shapes.\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;36m[Dbg] [SDFFeatures.cc:864] \u001b[0m\u001b[1;36mThe geometry element of collision [\u001b[0m\u001b[1;36mbase_link_collision\u001b[0m\u001b[1;36m] \u001b[0m\u001b[1;36mcouldn't be created\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;36m[Dbg] [Sensors.cc:953] \u001b[0m\u001b[1;36mInitialization needed\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mServing scene information on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m/\u001b[0m\u001b[1;32mscene/info\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;36m[Dbg] [Sensors.cc:349] \u001b[0m\u001b[1;36mInitializing render context\u001b[0m\u001b[1;36m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mServing graph information on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m/\u001b[0m\u001b[1;32mscene/graph\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mServing full state on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m/\u001b[0m\u001b[1;32mstate\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mServing full state (async) on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m/\u001b[0m\u001b[1;32mstate_async\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mLoading plugin [\u001b[0m\u001b[1;32mgz-rendering-ogre2\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mPublishing scene information on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer/scene/info\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mPublishing entity deletions on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer/scene/deletion\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mPublishing state changes on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer/state\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] \u001b[1;32m[Msg] \u001b[0m\u001b[1;32mPublishing pose messages on [\u001b[0m\u001b[1;32m/world/tugbot_lane_world_zeroerr_outer\u001b[0m\u001b[1;32m/\u001b[0m\u001b[1;32mpose/info\u001b[0m\u001b[1;32m]\u001b[0m\u001b[1;32m\u001b[0m"
+    },
+    {
+      "t": 3.382,
+      "line": "[gazebo-1] VMware: No 3D enabled (0, Success)."
+    },
+    {
+      "t": 3.834,
+      "line": "[gazebo-1] libEGL warning: egl: failed to create dri2 screen"
+    },
+    {
+      "t": 3.834,
+      "line": "[gazebo-1] VMware: No 3D enabled (0, Success)."
+    },
+    {
+      "t": 3.834,
+      "line": "[gazebo-1] libEGL warning: egl: failed to create dri2 screen"
+    },
+    {
+      "t": 3.834,
+      "line": "[gazebo-1] VMware: No 3D enabled (0, Success)."
+    },
+    {
+      "t": 3.834,
+      "line": "[gazebo-1] libEGL warning: egl: failed to create dri2 screen"
+    },
+    {
+      "t": 3.834,
+      "line": "[gazebo-1] \u001b[1;33m[Wrn] [Ogre2Camera.cc:421] \u001b[0m\u001b[1;33mOgre2Camera::SetVisibilityMask: Mask bits \u001b[0m\u001b[1;33mc0000000\u001b[0m\u001b[1;33m are set but will be ignored as they conflict with the \u001b[0m\u001b[1;33mreserved bits used internally by the ogre2 backend.\u001b[0m\u001b[1;33m\u001b[0m"
+    },
+    {
+      "t": 4.044,
+      "line": "[lane_detector_node-4] [INFO] [1776786144.251443709] [lane_detector_node]: lane_center=287 error=0.10172143974960876"
+    },
+    {
+      "t": 4.331,
+      "line": "[lane_detector_node-4] [INFO] [1776786144.572394796] [lane_detector_node]: lane_center=288 error=0.09859154929577464"
+    },
+    {
+      "t": 4.338,
+      "line": "[lane_detector_node-4] [INFO] [1776786144.578469110] [lane_detector_node]: lane_center=290 error=0.09233176838810642"
+    },
+    {
+      "t": 5.995,
+      "line": "[lane_detector_node-4] [INFO] [1776786146.237473944] [lane_detector_node]: lane_center=336 error=-0.051643192488262914"
+    },
+    {
+      "t": 7.985,
+      "line": "[lane_detector_node-4] [INFO] [1776786148.231145190] [lane_detector_node]: lane_center=324 error=-0.014084507042253521"
+    }
+  ]
+}

@@ -178,3 +178,136 @@ def test_compute_control_command_stops_when_error_is_missing():
     assert linear_x == 0.0
     assert angular_z == 0.0
     assert integral == 0.0
+
+
+def test_compute_control_output_enters_counterclockwise_spin_search_when_error_is_missing_and_search_enabled():
+    module = load_module(CONTROL_MODULE_PATH, 'lane_controller_under_test_search_spin')
+    linear_x, angular_z, integral, search_state = module.compute_control_output(
+        error=None,
+        prev_error=0.0,
+        integral=0.4,
+        dt=0.1,
+        config={
+            'kp': 1.2,
+            'ki': 0.1,
+            'kd': 0.05,
+            'integral_limit': 1.5,
+            'base_linear_speed': 0.25,
+            'min_linear_speed': 0.05,
+            'max_angular_speed': 1.2,
+            'speed_reduction_gain': 0.6,
+            'search_enabled': True,
+            'search_spin_angular_speed': 0.3,
+            'search_spin_revolution_target': 6.28318,
+            'search_arc_linear_speed': 0.08,
+            'search_arc_angular_speed': 0.2,
+            'search_arc_revolution_target': 6.28318,
+            'search_default_turn_direction': 1.0,
+        },
+        search_state=None,
+    )
+    assert linear_x == 0.0
+    assert angular_z > 0.0
+    assert integral == 0.0
+    assert search_state.mode == 'spin'
+    assert search_state.progress > 0.0
+
+
+def test_compute_control_output_transitions_from_spin_to_arc_after_full_rotation_without_detection():
+    module = load_module(CONTROL_MODULE_PATH, 'lane_controller_under_test_search_arc_transition')
+    linear_x, angular_z, integral, search_state = module.compute_control_output(
+        error=None,
+        prev_error=0.0,
+        integral=0.2,
+        dt=0.1,
+        config={
+            'kp': 1.2,
+            'ki': 0.1,
+            'kd': 0.05,
+            'integral_limit': 1.5,
+            'base_linear_speed': 0.25,
+            'min_linear_speed': 0.05,
+            'max_angular_speed': 1.2,
+            'speed_reduction_gain': 0.6,
+            'search_enabled': True,
+            'search_spin_angular_speed': 0.3,
+            'search_spin_revolution_target': 0.2,
+            'search_arc_linear_speed': 0.08,
+            'search_arc_angular_speed': 0.2,
+            'search_arc_revolution_target': 6.28318,
+            'search_default_turn_direction': 1.0,
+        },
+        search_state=module.SearchState(mode='spin', progress=0.19, arc_direction=1.0),
+    )
+    assert linear_x > 0.0
+    assert angular_z > 0.0
+    assert integral == 0.0
+    assert search_state.mode == 'arc'
+    assert search_state.progress == 0.0
+
+
+def test_compute_control_output_flips_arc_direction_after_full_loop_without_detection():
+    module = load_module(CONTROL_MODULE_PATH, 'lane_controller_under_test_search_arc_flip')
+    linear_x, angular_z, integral, search_state = module.compute_control_output(
+        error=None,
+        prev_error=0.0,
+        integral=0.2,
+        dt=0.1,
+        config={
+            'kp': 1.2,
+            'ki': 0.1,
+            'kd': 0.05,
+            'integral_limit': 1.5,
+            'base_linear_speed': 0.25,
+            'min_linear_speed': 0.05,
+            'max_angular_speed': 1.2,
+            'speed_reduction_gain': 0.6,
+            'search_enabled': True,
+            'search_spin_angular_speed': 0.3,
+            'search_spin_revolution_target': 6.28318,
+            'search_arc_linear_speed': 0.08,
+            'search_arc_angular_speed': 0.2,
+            'search_arc_revolution_target': 0.25,
+            'search_default_turn_direction': 1.0,
+        },
+        search_state=module.SearchState(mode='arc', progress=0.24, arc_direction=1.0),
+    )
+    assert linear_x > 0.0
+    assert angular_z < 0.0
+    assert integral == 0.0
+    assert search_state.mode == 'arc'
+    assert search_state.arc_direction == -1.0
+    assert search_state.progress == 0.0
+
+
+def test_compute_control_output_resets_search_and_returns_pid_when_detection_reappears():
+    module = load_module(CONTROL_MODULE_PATH, 'lane_controller_under_test_search_reset')
+    linear_x, angular_z, integral, search_state = module.compute_control_output(
+        error=0.2,
+        prev_error=0.0,
+        integral=0.0,
+        dt=0.1,
+        config={
+            'kp': 1.2,
+            'ki': 0.1,
+            'kd': 0.05,
+            'integral_limit': 1.5,
+            'base_linear_speed': 0.25,
+            'min_linear_speed': 0.05,
+            'max_angular_speed': 1.2,
+            'speed_reduction_gain': 0.6,
+            'search_enabled': True,
+            'search_spin_angular_speed': 0.3,
+            'search_spin_revolution_target': 6.28318,
+            'search_arc_linear_speed': 0.08,
+            'search_arc_angular_speed': 0.2,
+            'search_arc_revolution_target': 6.28318,
+            'search_default_turn_direction': 1.0,
+        },
+        search_state=module.SearchState(mode='arc', progress=1.0, arc_direction=-1.0),
+    )
+    assert linear_x > 0.0
+    assert angular_z > 0.0
+    assert integral > 0.0
+    assert search_state.mode == 'idle'
+    assert search_state.arc_direction == 1.0

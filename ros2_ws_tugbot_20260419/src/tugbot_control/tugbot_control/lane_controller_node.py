@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math
 
 try:  # pragma: no cover
@@ -14,6 +12,28 @@ except ImportError:  # pragma: no cover
 
     class Node:  # type: ignore[override]
         pass
+
+
+class SearchState:
+    def __init__(self, mode: str = 'idle', progress: float = 0.0, arc_direction: float = 1.0) -> None:
+        self.mode = mode
+        self.progress = float(progress)
+        self.arc_direction = float(arc_direction)
+
+def _sign(value: float, fallback: float = 1.0) -> float:
+    if value > 0:
+        return 1.0
+    if value < 0:
+        return -1.0
+    return 1.0 if fallback >= 0 else -1.0
+
+
+def _default_search_state(config: dict, mode: str = 'idle') -> SearchState:
+    return SearchState(
+        mode=mode,
+        progress=0.0,
+        arc_direction=_sign(float(config.get('search_default_turn_direction', 1.0))),
+    )
 
 
 def compute_control_command(error, prev_error: float, integral: float, dt: float, config: dict):
@@ -38,6 +58,51 @@ def compute_control_command(error, prev_error: float, integral: float, dt: float
     return float(linear_x), float(angular_z), float(integral)
 
 
+def _compute_search_command(dt: float, config: dict, search_state: SearchState | None):
+    state = search_state or _default_search_state(config)
+    spin_speed = abs(float(config['search_spin_angular_speed']))
+    spin_target = abs(float(config['search_spin_revolution_target']))
+    arc_linear_speed = abs(float(config['search_arc_linear_speed']))
+    arc_angular_speed = abs(float(config['search_arc_angular_speed']))
+    arc_target = abs(float(config['search_arc_revolution_target']))
+
+    if state.mode in ('idle', 'spin'):
+        progress = state.progress + spin_speed * dt
+        if progress >= spin_target:
+            next_state = SearchState(mode='arc', progress=0.0, arc_direction=state.arc_direction)
+            return arc_linear_speed, arc_angular_speed * next_state.arc_direction, next_state
+        return 0.0, spin_speed, SearchState(mode='spin', progress=progress, arc_direction=state.arc_direction)
+
+    progress = state.progress + arc_angular_speed * dt
+    if progress >= arc_target:
+        next_direction = -_sign(state.arc_direction)
+        next_state = SearchState(mode='arc', progress=0.0, arc_direction=next_direction)
+        return arc_linear_speed, arc_angular_speed * next_state.arc_direction, next_state
+    return arc_linear_speed, arc_angular_speed * state.arc_direction, SearchState(mode='arc', progress=progress, arc_direction=state.arc_direction)
+
+
+def compute_control_output(error, prev_error: float, integral: float, dt: float, config: dict, search_state: SearchState | None = None):
+    if error is not None:
+        linear_x, angular_z, integral = compute_control_command(
+            error=error,
+            prev_error=prev_error,
+            integral=integral,
+            dt=dt,
+            config=config,
+        )
+        return linear_x, angular_z, integral, _default_search_state(config)
+
+    if not bool(config.get('search_enabled', False)):
+        return 0.0, 0.0, 0.0, _default_search_state(config)
+
+    linear_x, angular_z, next_state = _compute_search_command(
+        dt=dt,
+        config=config,
+        search_state=search_state,
+    )
+    return float(linear_x), float(angular_z), 0.0, next_state
+
+
 if rclpy is not None:
     class LaneControllerNode(Node):
         def __init__(self) -> None:
@@ -54,6 +119,13 @@ if rclpy is not None:
             self.declare_parameter('min_linear_speed', 0.05)
             self.declare_parameter('max_angular_speed', 1.2)
             self.declare_parameter('speed_reduction_gain', 0.6)
+            self.declare_parameter('search_enabled', True)
+            self.declare_parameter('search_spin_angular_speed', 0.35)
+            self.declare_parameter('search_spin_revolution_target', 6.283185307179586)
+            self.declare_parameter('search_arc_linear_speed', 0.08)
+            self.declare_parameter('search_arc_angular_speed', 0.20)
+            self.declare_parameter('search_arc_revolution_target', 6.283185307179586)
+            self.declare_parameter('search_default_turn_direction', 1.0)
 
             error_topic = self.get_parameter('error_topic').value
             cmd_vel_topic = self.get_parameter('cmd_vel_topic').value
@@ -68,6 +140,7 @@ if rclpy is not None:
             self.prev_error = 0.0
             self.integral = 0.0
             self.last_error_time = None
+            self.search_state = _default_search_state(self.config_dict())
 
         def config_dict(self) -> dict:
             return {
@@ -79,6 +152,13 @@ if rclpy is not None:
                 'min_linear_speed': self.get_parameter('min_linear_speed').value,
                 'max_angular_speed': self.get_parameter('max_angular_speed').value,
                 'speed_reduction_gain': self.get_parameter('speed_reduction_gain').value,
+                'search_enabled': self.get_parameter('search_enabled').value,
+                'search_spin_angular_speed': self.get_parameter('search_spin_angular_speed').value,
+                'search_spin_revolution_target': self.get_parameter('search_spin_revolution_target').value,
+                'search_arc_linear_speed': self.get_parameter('search_arc_linear_speed').value,
+                'search_arc_angular_speed': self.get_parameter('search_arc_angular_speed').value,
+                'search_arc_revolution_target': self.get_parameter('search_arc_revolution_target').value,
+                'search_default_turn_direction': self.get_parameter('search_default_turn_direction').value,
             }
 
         def error_cb(self, msg: Float32) -> None:
@@ -94,12 +174,13 @@ if rclpy is not None:
                 if age > self.error_timeout_sec or not math.isfinite(self.latest_error):
                     error = None
 
-            linear_x, angular_z, self.integral = compute_control_command(
+            linear_x, angular_z, self.integral, self.search_state = compute_control_output(
                 error=error,
                 prev_error=self.prev_error,
                 integral=self.integral,
                 dt=self.control_period,
                 config=self.config_dict(),
+                search_state=self.search_state,
             )
             if error is not None:
                 self.prev_error = float(error)

@@ -1,161 +1,96 @@
-# ros2_ws_tugbot_20260419
+# Tugbot ROS 2 + Gazebo Visual Cruise
 
-面向 ROS 2 Jazzy + Gazebo Harmonic 的 tugbot 视觉巡航规范重构工程。
+一个面向 ROS 2 Jazzy + Gazebo Harmonic 的 tugbot 视觉巡航重构工程。
 
-本工程不是对旧工程做补丁式续修，而是从零重建的最小闭环母体，目标是：
-- 结构纯净
-- 命名统一
-- 模块边界清晰
-- 参数外置
-- launch 分层
-- 感知与控制解耦
-- 易于继续扩展到更强感知、更复杂控制、更多传感器与真机替换
+本项目从零重建了一个分层清晰、可持续演进的最小闭环母体，用于验证：
+- 相机图像感知
+- 蓝线误差提取
+- 控制输出 `/cmd_vel`
+- Gazebo 执行与 `/odom` 回传
+- formal / debug / textured / outer-loop 多场景联调
 
-## 工程目标
+当前状态：
+- 5 包分层架构稳定
+- `full_system_zeroerr_outer.launch.py` 已加入
+- `detection_hold_frames` 已加入感知层
+- search recovery 已加入控制层
+- `python3 -m pytest tests/ -q` -> `28 passed`
 
-建立一个最小但规范的视觉巡航联调工程，核心主链为：
+## 核心链路
 
 `/camera/image_raw -> lane_detector_node -> /lane_tracking/error -> lane_controller_node -> /cmd_vel`
 
-其中：
-- Gazebo 负责世界、机器人与相机数据生成
-- ROS 2 感知节点负责从图像中提取车道误差
-- ROS 2 控制节点负责根据误差生成 `/cmd_vel`
-- Gazebo DiffDrive 插件负责执行速度命令并产出 `/odom`
+## 特性
+
+- 清晰分层：description / gazebo / perception / control / bringup
+- 参数外置：感知与控制参数全部放在 YAML
+- launch 分层：最小仿真、完整系统、感知调试、zeroerr_outer 专用入口
+- 多场景 world：formal、debug、textured robustness、outer-loop-only
+- 感知稳态增强：
+  - 修复 numpy/uint8 蓝色阈值整数回绕误判
+  - 引入 `detection_hold_frames`
+  - 提供 `temporal_debug.py` 做逐帧摘要与转换窗口分析
+- 控制恢复策略：
+  - `spin -> arc -> alternating arc -> reacquire -> PID`
+- 已有 cold-start / repeat trace 产物，可直接复核搜索恢复证据链
 
 ## 工程结构
 
 ```text
 ros2_ws_tugbot_20260419/
 ├── README.md
+├── artifacts/
 ├── tests/
-│   ├── test_workspace_layout.py
-│   ├── test_architecture_contracts.py
-│   └── test_lane_logic.py
 └── src/
     ├── tugbot_description/
-    │   ├── models/tugbot/
-    │   │   ├── model.config
-    │   │   ├── model.sdf
-    │   │   └── meshes/
-    │   └── tugbot_description/package_layout.py
     ├── tugbot_gazebo/
-    │   ├── worlds/tugbot_lane_world.sdf
-    │   └── config/bridge.yaml
     ├── tugbot_perception/
-    │   ├── config/perception.yaml
-    │   └── tugbot_perception/lane_detector_node.py
     ├── tugbot_control/
-    │   ├── config/control.yaml
-    │   └── tugbot_control/lane_controller_node.py
     └── tugbot_bringup/
-        ├── launch/sim_minimal.launch.py
-        ├── launch/full_system.launch.py
-        ├── launch/perception_debug.launch.py
-        └── config/perception_debug.rviz
 ```
 
-## 各包职责
+### 各包职责
 
-### 1. tugbot_description
-职责：只负责机器人描述与资产打包。
+- `tugbot_description`
+  - 机器人模型、mesh 资产、模型安装布局
+- `tugbot_gazebo`
+  - Gazebo worlds 与 bridge 配置
+- `tugbot_perception`
+  - 图像 -> 车道误差
+- `tugbot_control`
+  - 误差 -> `/cmd_vel`
+- `tugbot_bringup`
+  - launch 编排与 RViz 调试入口
 
-内容：
-- 最小 tugbot `model.sdf`
-- `model.config`
-- 选择性迁移的 mesh 资源
-- `package_layout.py` 用于递归安装模型目录
+## World 与 Launch
 
-设计原则：
-- 保留最小底盘与前视相机
-- 保留 DiffDrive 插件
-- 保留 Sensors 插件
-- 不保留旧工程里的 back camera / lidar / imu / gripper 等冗余结构
+### World
 
-### 2. tugbot_gazebo
-职责：只负责 Gazebo world 与桥接配置。
-
-内容：
 - `tugbot_lane_world.sdf`
-- `bridge.yaml`
+  - formal baseline world
+- `tugbot_lane_world_debug.sdf`
+  - debug / perception inspection world
+- `tugbot_lane_world_zeroerr.sdf`
+  - textured robustness world，保留 `zeroerr.png` 与 formal 蓝色轨道
+- `tugbot_lane_world_zeroerr_outer.sdf`
+  - outer-loop-only world，保留 `zeroerr.png`，移除 competing `visual_track_*`
+- `tugbot_lane_world_zeroerr_outer_probe_oldpose.sdf`
+  - old-pose / old-mapping probe world
 
-设计原则：
-- world 中只保留 ground plane + blue lane segments + `model://tugbot`
-- `/cmd_vel` 与 `/odom` 用 `ros_gz_bridge`
-- 图像用 `ros_gz_image`
-- 不把业务逻辑塞进 Gazebo 层
+### Launch
 
-### 3. tugbot_perception
-职责：只做视觉感知。
+- `sim_minimal.launch.py`
+  - 最小仿真入口
+- `full_system.launch.py`
+  - 完整联调入口，默认使用 formal world
+- `perception_debug.launch.py`
+  - 感知调试入口，默认使用 debug world
+- `full_system_zeroerr_outer.launch.py`
+  - zeroerr_outer 专用完整联调入口
 
-输入：
-- `/camera/image_raw`
+## 快速开始
 
-输出：
-- `/lane_tracking/error`
-- `/lane_tracking/debug_image`
-
-设计原则：
-- 从图像中提取蓝色轨迹中心
-- 将中心位置变为归一化横向误差
-- 不直接发布 `/cmd_vel`
-- 感知参数全部外置
-
-### 4. tugbot_control
-职责：只做控制决策。
-
-输入：
-- `/lane_tracking/error`
-
-输出：
-- `/cmd_vel`
-
-设计原则：
-- PID 逻辑集中在控制层
-- 失去误差输入时立即停车
-- 控制参数全部外置
-
-### 5. tugbot_bringup
-职责：只做系统编排。
-
-包含三套 launch：
-- `sim_minimal.launch.py`：最小仿真启动
-- `full_system.launch.py`：完整联调启动
-- `perception_debug.launch.py`：感知调试启动
-
-设计原则：
-- bringup 只负责 include 与节点装配
-- 不在 launch 中写业务逻辑
-- launch 分层清晰，可独立验证
-
-## 参数化设计
-
-### 感知参数：`src/tugbot_perception/config/perception.yaml`
-当前已外置：
-- `input_topic`
-- `error_topic`
-- `debug_image_topic`
-- `blue_threshold`
-- `blue_margin`
-- `crop_top_ratio`
-- `debug_image_enabled`
-
-### 控制参数：`src/tugbot_control/config/control.yaml`
-当前已外置：
-- `error_topic`
-- `cmd_vel_topic`
-- `control_period`
-- `error_timeout_sec`
-- `kp`
-- `ki`
-- `kd`
-- `integral_limit`
-- `base_linear_speed`
-- `min_linear_speed`
-- `max_angular_speed`
-- `speed_reduction_gain`
-
-## 构建方法
+### 1. 构建
 
 ```bash
 cd ~/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_20260419
@@ -163,10 +98,7 @@ source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
 ```
 
-最近验证结果：
-- `5 packages finished`
-
-## source 方法
+### 2. Source
 
 ```bash
 cd ~/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_20260419
@@ -174,147 +106,149 @@ source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ```
 
-## 启动方法
+### 3. 启动
 
-### 1. 最小仿真启动
-只启动 Gazebo、桥接、图像桥。
+最小仿真：
 
 ```bash
 ros2 launch tugbot_bringup sim_minimal.launch.py
 ```
 
-### 2. 完整联调启动
-启动 Gazebo + bridge + perception + control。
+formal world 完整系统：
 
 ```bash
 ros2 launch tugbot_bringup full_system.launch.py
 ```
 
-### 3. 感知调试启动
-启动 Gazebo + bridge + perception + RViz。
+textured robustness world：
+
+```bash
+WORLD_PREFIX=$(ros2 pkg prefix tugbot_gazebo)/share/tugbot_gazebo/worlds
+ros2 launch tugbot_bringup full_system.launch.py \
+  world_sdf:=$WORLD_PREFIX/tugbot_lane_world_zeroerr.sdf
+```
+
+zeroerr_outer 专用入口：
+
+```bash
+ros2 launch tugbot_bringup full_system_zeroerr_outer.launch.py
+```
+
+感知调试：
 
 ```bash
 ros2 launch tugbot_bringup perception_debug.launch.py
 ```
 
-## 关键节点
+## 关键参数
 
-完整联调时的关键节点：
-- `ros_gz_bridge`
-- `ros_gz_image`
-- `lane_detector_node`
-- `lane_controller_node`
+### 感知层
+文件：`src/tugbot_perception/config/perception.yaml`
 
-感知调试时会额外启动：
-- `rviz2`
+- `blue_threshold: 80`
+- `blue_margin: 20`
+- `crop_top_ratio: 0.45`
+- `detection_hold_frames: 3`
+- `debug_image_enabled: true`
 
-## 关键话题
+### 控制层
+文件：`src/tugbot_control/config/control.yaml`
 
-- `/camera/image_raw`
-- `/camera/camera_info`
-- `/lane_tracking/error`
-- `/lane_tracking/debug_image`
-- `/cmd_vel`
-- `/odom`
+- `error_timeout_sec: 0.4`
+- `kp: 1.2`
+- `ki: 0.08`
+- `kd: 0.05`
+- `base_linear_speed: 0.25`
+- `min_linear_speed: 0.05`
+- `max_angular_speed: 1.2`
+- `search_enabled: true`
+- `search_spin_angular_speed: 0.35`
+- `search_spin_revolution_target: 6.283185307179586`
+- `search_arc_linear_speed: 0.08`
+- `search_arc_angular_speed: 0.20`
+- `search_arc_revolution_target: 6.283185307179586`
+- `search_default_turn_direction: 1.0`
 
-## 最小闭环验证结果
+## 测试
 
-本工程已完成以下 live 验证：
+运行：
 
-1. 构建通过
-- `colcon build --symlink-install` 成功
+```bash
+python3 -m pytest tests/ -q
+```
 
-2. 测试通过
-- `python3 -m pytest -q tests`
-- 结果：`14 passed`
+当前结果：
+- `28 passed`
 
-3. 最小仿真链路曾验证通过
-- `sim_minimal.launch.py` 启动后，ROS 侧曾观测到：
-  - `/camera/image_raw`
-  - `/camera/camera_info`
-  - `/cmd_vel`
-  - `/odom`
-- 说明最小 Gazebo + bridge + image bridge 主链曾成功拉起
+当前测试覆盖重点：
+- workspace / launch / world / config 契约
+- 蓝线检测与误差计算
+- uniform gray 不再误判为蓝线
+- `detection_hold_frames` 短时丢检保持
+- PID 输出方向与限幅
+- search recovery：spin / arc / arc 翻转 / reacquire 重置
+- `temporal_debug.py` 的帧级摘要与转换窗口提取
+- `full_system_zeroerr_outer.launch.py` 的存在与分层关系
 
-4. 完整联调链路曾验证通过
-- `full_system.launch.py` 启动后，ROS 侧曾观测到：
-  - `/lane_tracking/error`
-  - `/lane_tracking/debug_image`
-  - `/cmd_vel`
-  - `/odom`
-- 说明 perception + control + bridge 装配关系成立
+## 当前验证结论
 
-5. 感知与控制已解耦
-- `/lane_tracking/error` 的发布者为 `lane_detector_node`
-- `/cmd_vel` 的发布者为 `lane_controller_node`
-- 旧工程那种“单节点图像直出 /cmd_vel”的结构已拆开
+### 1. 结构层
+- 五包分层、参数外置、launch 分层均已稳定
+- formal world 未被 textured / robustness 场景覆盖
+- zeroerr_outer 已有独立 wrapper launch
 
-6. /cmd_vel 纯净发布已确认
-- 清理旧工程残留后，`/cmd_vel` 只有一个预期发布者：`lane_controller_node`
+### 2. 搜索恢复层
+- 代码、参数、测试均已覆盖 search recovery
+- live / cold-start 证据表明搜索恢复已真实接入控制链路
 
-7. /odom 回传已确认
-- `/odom` 可实时 `echo`
-- 已看到有效 `pose` 与 `twist` 数据
-- 说明 Gazebo DiffDrive 执行链路成立
+### 3. zeroerr_outer 层
+- zeroerr_outer 已不只是静态 world 文件
+- 已有可复核的 cold-start 与 live 产物
+- 可用于 textured outer-loop 验证与后续强制 arc 实验
 
-8. perception 误判缺陷已修复
-- 已修复 numpy/uint8 路径中的 blue margin 整数回绕问题
-- 已新增回归测试，防止均匀灰图被误判为蓝线
+## 验证产物
 
-9. 当前主阻塞问题：视觉输入层异常
-- 修复误判后，当前 live 验证中 `lane_detector_node` 输出为：
-  - `lane_center=None`
-  - `error=missing`
-- 当前 `/camera/image_raw` 统计结果表现为几乎整张图统一灰色
-- 因此系统目前处于“看不到线 -> 安全停车”的正确保护态，而不是稳定视觉巡航态
+目录：`artifacts/`
 
-结论：
-- 当前系统已经满足“结构规范 + 主链解耦 + 可构建 + 可启动 + 可联调基础成立”目标
-- perception 的关键误判 bug 已修复
-- 修复后的真实视觉闭环与动态纠偏验证，仍待视觉输入层恢复后完成
+重点文件：
+- `cold_start_search_trace.py`
+- `cold_start_search_trace.json`
+- `cold_start_search_launch.log`
+- `repeat_cold_start_search_trace.py`
+- `repeat_cold_start_search_summary.json`
 
-## 与旧工程相比的关键重构点
+这些产物用于：
+- 从冷启动瞬间记录 `/cmd_vel` 与 `/lane_tracking/error`
+- 压缩 phase sequence（如 `spin` / `arc` / `pid_or_other`）
+- 判断 search recovery 是否真正生效
 
-已完成的核心重构：
-- 从单包 demo 结构重构为 5 包分层结构
-- 从综合 world 重构为最小 lane world
-- 从综合多传感器模型重构为最小前视相机模型
-- 从单节点图像直控重构为 perception + control 两层
-- 从硬编码参数重构为 perception / control 参数文件
-- 从大耦合 launch 重构为三层 launch 体系
-- 从整包继承改为选择性迁移 mesh 资产
+## 已知边界
 
-## 后续扩展方向
+- 当前自然冷启动条件下，系统通常会在进入 arc 前先 reacquire
+- 因此常见真实路径是：
+  - `spin -> reacquire -> PID`
+- 若要强行补齐 `spin -> arc -> reacquire` 的完整证据链，需要受控实验：
+  - 临时减小 `search_spin_revolution_target`
+  - 或调整 spawn / framing，让系统在约 `17.95 s` 之前不提前 reacquire
 
-下一步可继续沿以下方向扩展：
+## 经验沉淀
 
-1. 感知增强
-- HSV 参数化
-- ROI 多段策略
-- 调试 mask / overlay 图像
-- 更鲁棒的轨迹中心估计
+阶段经验总结已单独沉淀到：
+- `doc/docexperience/zeroerr_outer_search_recovery_cold_start.md`
 
-2. 控制增强
-- 速度调度分层
-- 更稳定的 anti-windup
-- 停车 / 丢线恢复策略
-- 曲率相关速度限制
+其中包含：
+- zeroerr_outer 场景设计意图
+- search recovery 接入证据
+- cold-start 证据链与时间解释
+- 当前边界与下一步建议
 
-3. 传感器扩展
-- 增加 IMU
-- 增加 lidar
-- 增加 depth camera
-- 逐步桥接更多 ROS 标准接口
+## 路线图
 
-4. 系统级扩展
-- rosbag 录制脚本
-- 参数 profile
-- 自动化 launch 验证
-- CI 测试
+下一步建议：
+- 强制 arc 验证，补齐完整 `spin -> arc -> reacquire` 证据链
+- 针对 zeroerr_outer 继续做更正式的动态纠偏验证
+- 继续沉淀 world / threshold / spawn / recovery 经验到文档目录
 
-5. 上层能力扩展
-- 视觉巡航 + 避障融合
-- 里程计融合
-- 路径跟踪
-- Nav2 接入
-- 真机底盘替换
+## 许可
+
+当前仓库内未单独声明 LICENSE；如需开源发布，建议后续补充。

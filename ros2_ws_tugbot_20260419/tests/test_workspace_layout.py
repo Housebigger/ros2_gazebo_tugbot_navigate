@@ -28,6 +28,7 @@ def test_expected_workspace_files_exist():
         WORKSPACE_ROOT / 'src' / 'tugbot_bringup' / 'setup.py',
         WORKSPACE_ROOT / 'src' / 'tugbot_bringup' / 'launch' / 'sim_minimal.launch.py',
         WORKSPACE_ROOT / 'src' / 'tugbot_bringup' / 'launch' / 'full_system.launch.py',
+        WORKSPACE_ROOT / 'src' / 'tugbot_bringup' / 'launch' / 'full_system_zeroerr_outer.launch.py',
         WORKSPACE_ROOT / 'src' / 'tugbot_bringup' / 'launch' / 'perception_debug.launch.py',
         WORKSPACE_ROOT / 'src' / 'tugbot_bringup' / 'config' / 'perception_debug.rviz',
     ]
