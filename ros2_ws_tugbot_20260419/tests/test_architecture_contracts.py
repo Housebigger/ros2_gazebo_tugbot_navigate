@@ -232,6 +232,8 @@ def test_launch_layering_contracts_are_respected():
     full_system = (bringup_root / 'launch' / 'full_system.launch.py').read_text(encoding='utf-8')
     full_system_zeroerr_outer = (bringup_root / 'launch' / 'full_system_zeroerr_outer.launch.py').read_text(encoding='utf-8')
     perception_debug = (bringup_root / 'launch' / 'perception_debug.launch.py').read_text(encoding='utf-8')
+    perception_debug_zeroerr_outer = (bringup_root / 'launch' / 'perception_debug_zeroerr_outer.launch.py').read_text(encoding='utf-8')
+    full_system_rviz_zeroerr_outer = (bringup_root / 'launch' / 'full_system_rviz_zeroerr_outer.launch.py').read_text(encoding='utf-8')
 
     assert 'ros_gz_sim' in sim_minimal
     assert 'ros_gz_bridge' in sim_minimal
@@ -260,6 +262,17 @@ def test_launch_layering_contracts_are_respected():
     assert "package='rviz2'" in perception_debug
     assert 'world_sdf' in perception_debug
     assert 'tugbot_lane_world_debug.sdf' in perception_debug
+
+    assert 'perception_debug.launch.py' in perception_debug_zeroerr_outer
+    assert 'IncludeLaunchDescription' in perception_debug_zeroerr_outer
+    assert 'world_sdf' in perception_debug_zeroerr_outer
+    assert 'tugbot_lane_world_zeroerr_outer.sdf' in perception_debug_zeroerr_outer
+
+    assert 'full_system.launch.py' in full_system_rviz_zeroerr_outer
+    assert 'IncludeLaunchDescription' in full_system_rviz_zeroerr_outer
+    assert 'world_sdf' in full_system_rviz_zeroerr_outer
+    assert 'tugbot_lane_world_zeroerr_outer.sdf' in full_system_rviz_zeroerr_outer
+    assert "package='rviz2'" in full_system_rviz_zeroerr_outer
 
 
 def test_parameter_files_expose_perception_and_control_knobs():

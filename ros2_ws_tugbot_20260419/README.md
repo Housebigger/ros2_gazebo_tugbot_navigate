@@ -131,14 +131,22 @@ ros2_ws_tugbot_20260419/
 
 ### Launch 入口
 
-- `sim_minimal.launch.py`
-  - 仅启动 Gazebo、bridge、image bridge
-- `full_system.launch.py`
-  - 在最小仿真基础上再启动感知与控制
-- `perception_debug.launch.py`
-  - 启动 Gazebo + 感知 + RViz，不启动控制
-- `full_system_zeroerr_outer.launch.py`
-  - 对 `full_system.launch.py` 的 world 包装入口，默认切到 `tugbot_lane_world_zeroerr_outer.sdf`
+| Launch 文件 | 默认 World | 启动内容 | 典型用途 |
+|---|---|---|---|
+| `sim_minimal.launch.py` | `tugbot_lane_world.sdf` | Gazebo + `ros_gz_bridge` + `ros_gz_image` | 最小仿真底座验证；确认 world、模型、桥接、相机与 `/odom` 基础链路是否健康 |
+| `full_system.launch.py` | `tugbot_lane_world.sdf` | 最小仿真 + 感知节点 + 控制节点 | formal baseline 完整闭环运行；验证标准蓝线场景下的视觉巡航主链路 |
+| `perception_debug.launch.py` | `tugbot_lane_world_debug.sdf` | 最小仿真 + 感知节点 + RViz | 纯感知调试；观察 `/camera/image_raw`、`/lane_tracking/debug_image`、`/lane_tracking/error`，不让控制介入 |
+| `full_system_zeroerr_outer.launch.py` | `tugbot_lane_world_zeroerr_outer.sdf` | 最小仿真 + 感知节点 + 控制节点 | zeroerr_outer 场景下的完整闭环运行；用于 textured outer-loop 条件下的整链联调 |
+| `perception_debug_zeroerr_outer.launch.py` | `tugbot_lane_world_zeroerr_outer.sdf` | 最小仿真 + 感知节点 + RViz | zeroerr_outer 场景下的纯感知调试；适合只看相机、debug image 与误差输出，不启动控制 |
+| `full_system_rviz_zeroerr_outer.launch.py` | `tugbot_lane_world_zeroerr_outer.sdf` | 最小仿真 + 感知节点 + 控制节点 + RViz | zeroerr_outer 场景下最完整的联调入口；一边跑控制一边在 RViz 中看感知结果，适合现场联调与综合排查 |
+
+补充说明：
+
+- 如果你只想确认 Gazebo / bridge / image bridge 是否起来，用 `sim_minimal.launch.py`
+- 如果你要看标准 formal world 的完整视觉巡航闭环，用 `full_system.launch.py`
+- 如果你要专注看感知，不希望控制节点干扰，优先用 `perception_debug.launch.py` 或 `perception_debug_zeroerr_outer.launch.py`
+- 如果你要在 zeroerr_outer 下看真实控制行为，用 `full_system_zeroerr_outer.launch.py`
+- 如果你要在 zeroerr_outer 下同时看控制行为和 RViz 感知画面，用 `full_system_rviz_zeroerr_outer.launch.py`
 
 ## 6. 运行环境
 
@@ -204,6 +212,18 @@ ros2 launch tugbot_bringup full_system_zeroerr_outer.launch.py
 
 ```bash
 ros2 launch tugbot_bringup perception_debug.launch.py
+```
+
+### 7.8 启动 zeroerr_outer + RViz 感知调试
+
+```bash
+ros2 launch tugbot_bringup perception_debug_zeroerr_outer.launch.py
+```
+
+### 7.9 启动 zeroerr_outer + 感知 + 控制 + RViz 联调
+
+```bash
+ros2 launch tugbot_bringup full_system_rviz_zeroerr_outer.launch.py
 ```
 
 ## 8. 关键参数
