@@ -39,6 +39,61 @@ def _pose_values(text: str):
 
 
 
+def test_model_visual_detail_contract_restores_visual_meshes_without_reintroducing_legacy_sensors():
+    model_path = WORKSPACE_ROOT / 'src' / 'tugbot_description' / 'models' / 'tugbot' / 'model.sdf'
+    assert model_path.exists(), 'model.sdf should exist'
+    content = model_path.read_text(encoding='utf-8')
+
+    required_visual_tokens = [
+        'movai_logo_visual',
+        'beacon_led_visual',
+        'beacon_cover_visual',
+        'top_lidar_base_visual',
+        'top_lidar_sensor_visual',
+        'top_lidar_scan_visual',
+        'rear_gripper_visual',
+        'rear_gripper_hand_visual',
+        'meshes/base/movai_logo.dae',
+        'meshes/light_link/light_led.stl',
+        'meshes/light_link/light.stl',
+        'meshes/VLP16_base_1.dae',
+        'meshes/VLP16_base_2.dae',
+        'meshes/VLP16_scan.dae',
+        'meshes/gripper2/gripper2.dae',
+        'meshes/gripper2/gripper_hand.stl',
+    ]
+    for token in required_visual_tokens:
+        assert token in content, f'detailed model should restore visual asset/reference: {token}'
+
+    forbidden_legacy_sensor_tokens = [
+        '<sensor name="scan_front"',
+        '<sensor name="scan_back"',
+        '<sensor name="scan_omni"',
+        '<sensor name="sensor_contact"',
+        '<sensor name="depth"',
+        'camera_back',
+    ]
+    for token in forbidden_legacy_sensor_tokens:
+        assert token not in content, f'detailed model should stay visual-only for restored legacy parts: {token}'
+
+
+
+def test_model_mesh_assets_include_restored_detail_files():
+    mesh_root = WORKSPACE_ROOT / 'src' / 'tugbot_description' / 'models' / 'tugbot' / 'meshes'
+    expected_assets = [
+        mesh_root / 'light_link' / 'light.stl',
+        mesh_root / 'light_link' / 'light_led.stl',
+        mesh_root / 'VLP16_base_1.dae',
+        mesh_root / 'VLP16_base_2.dae',
+        mesh_root / 'VLP16_scan.dae',
+        mesh_root / 'gripper2' / 'gripper2.dae',
+        mesh_root / 'gripper2' / 'gripper_hand.stl',
+    ]
+    missing = [str(path.relative_to(mesh_root)) for path in expected_assets if not path.exists()]
+    assert not missing, f'restored visual mesh assets are missing: {missing}'
+
+
+
 def test_formal_world_contract_uses_packaged_model_and_closed_loop_blue_lane_without_debug_target():
     world_path = WORKSPACE_ROOT / 'src' / 'tugbot_gazebo' / 'worlds' / 'tugbot_lane_world.sdf'
     assert world_path.exists(), 'tugbot_lane_world.sdf should exist'

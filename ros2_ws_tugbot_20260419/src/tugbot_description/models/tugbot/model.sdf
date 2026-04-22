@@ -33,6 +33,139 @@
           </mesh>
         </geometry>
       </visual>
+      <visual name="movai_logo_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>meshes/base/movai_logo.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>1.0 1.0 1.0 1.0</diffuse>
+          <pbr>
+            <metal>
+              <albedo_map>meshes/base/movai-logo.png</albedo_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+      <visual name="beacon_led_visual">
+        <pose>-0.1 0 0.1945 0 1.57079632679 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1.0 1.0 1.0</scale>
+            <uri>meshes/light_link/light_led.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.0 0.0 0 1</ambient>
+          <diffuse>0.0 0.0 0 1</diffuse>
+          <specular>0 0 0 1</specular>
+          <emissive>0 1 0 1</emissive>
+        </material>
+      </visual>
+      <visual name="beacon_cover_visual">
+        <pose>-0.099 0 0.195 0 1.57079632679 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1.02 1.02 1.02</scale>
+            <uri>meshes/light_link/light.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.1 0.05 0 0.5</ambient>
+          <diffuse>1 0.5 0 0.5</diffuse>
+          <specular>1 0.5 0 0.5</specular>
+          <emissive>1 0.5 0 0.5</emissive>
+        </material>
+      </visual>
+      <visual name="top_lidar_base_cylinder_visual">
+        <pose>-0.1855 0 0.4968 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.06</radius>
+            <length>0.0015</length>
+          </cylinder>
+        </geometry>
+      </visual>
+      <visual name="top_lidar_support_1_visual">
+        <pose>-0.2205 0.035 0.4518 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.005</radius>
+            <length>0.09</length>
+          </cylinder>
+        </geometry>
+      </visual>
+      <visual name="top_lidar_support_2_visual">
+        <pose>-0.2205 -0.035 0.4518 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.005</radius>
+            <length>0.09</length>
+          </cylinder>
+        </geometry>
+      </visual>
+      <visual name="top_lidar_support_3_visual">
+        <pose>-0.136 0 0.4518 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.005</radius>
+            <length>0.09</length>
+          </cylinder>
+        </geometry>
+      </visual>
+      <visual name="top_lidar_base_visual">
+        <pose>-0.1855 0 0.4968 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>meshes/VLP16_base_1.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="top_lidar_sensor_visual">
+        <pose>-0.1855 0 0.4968 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>meshes/VLP16_base_2.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="top_lidar_scan_visual">
+        <pose>-0.1855 0 0.4968 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>meshes/VLP16_scan.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="rear_gripper_visual">
+        <pose>-0.35 0 0.1 -1.57079632679 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>meshes/gripper2/gripper2.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="rear_gripper_hand_visual">
+        <pose>-0.463 0 0.1 1.570796327 0 1.570796327</pose>
+        <geometry>
+          <mesh>
+            <scale>0.001 0.001 0.001</scale>
+            <uri>meshes/gripper2/gripper_hand.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.1 0.1 0.1 1</ambient>
+          <diffuse>0.3 0.3 0.3 1</diffuse>
+          <specular>1 1 1 1</specular>
+          <emissive>0 0 0 1</emissive>
+        </material>
+      </visual>
     </link>
 
     <link name="camera_front">
