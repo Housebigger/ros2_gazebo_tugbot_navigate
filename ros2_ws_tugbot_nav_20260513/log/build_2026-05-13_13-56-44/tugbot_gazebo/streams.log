@@ -1,0 +1,46 @@
+[0.028s] Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_gazebo -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo
+[0.373s] -- The C compiler identification is GNU 13.3.0
+[0.534s] -- The CXX compiler identification is GNU 13.3.0
+[0.566s] -- Detecting C compiler ABI info
+[0.709s] -- Detecting C compiler ABI info - done
+[0.715s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.716s] -- Detecting C compile features
+[0.717s] -- Detecting C compile features - done
+[0.732s] -- Detecting CXX compiler ABI info
+[0.891s] -- Detecting CXX compiler ABI info - done
+[0.899s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.899s] -- Detecting CXX compile features
+[0.899s] -- Detecting CXX compile features - done
+[1.019s] -- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+[1.053s] -- Found ament_cmake: 2.5.6 (/opt/ros/jazzy/share/ament_cmake/cmake)
+[1.185s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[1.423s] -- Configuring done (1.3s)
+[1.428s] -- Generating done (0.0s)
+[1.430s] -- Build files have been written to: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo
+[1.437s] Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_gazebo -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo
+[1.438s] Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo -- -j8 -l8
+[1.544s] Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo -- -j8 -l8
+[1.546s] Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo
+[1.562s] -- Install configuration: ""
+[1.562s] -- Execute custom install script
+[1.562s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/launch/tugbot_gazebo.launch.py
+[1.578s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/config/tugbot_bridge.yaml
+[1.596s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/worlds/tugbot_empty_world.sdf
+[1.615s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/worlds/tugbot_nav_world.sdf
+[1.633s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.xml
+[1.650s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/ament_index/resource_index/package_run_dependencies/tugbot_gazebo
+[1.668s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/ament_index/resource_index/parent_prefix_path/tugbot_gazebo
+[1.683s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/environment/ament_prefix_path.sh
+[1.702s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/environment/ament_prefix_path.dsv
+[1.720s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/environment/path.sh
+[1.736s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/environment/path.dsv
+[1.752s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/local_setup.bash
+[1.770s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/local_setup.sh
+[1.784s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/local_setup.zsh
+[1.803s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/local_setup.dsv
+[1.822s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.dsv
+[1.835s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/ament_index/resource_index/packages/tugbot_gazebo
+[1.853s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/cmake/tugbot_gazeboConfig.cmake
+[1.868s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/cmake/tugbot_gazeboConfig-version.cmake
+[1.919s] -- Up-to-date symlink: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.xml
+[1.928s] Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo

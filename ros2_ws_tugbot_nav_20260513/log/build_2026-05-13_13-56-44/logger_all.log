@@ -1,0 +1,417 @@
+[0.263s] DEBUG:colcon:Command line arguments: ['/usr/bin/colcon', 'build', '--symlink-install', '--cmake-force-configure']
+[0.263s] DEBUG:colcon:Parsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='build', build_base='build', install_base='install', merge_install=False, symlink_install=True, test_result_base=None, continue_on_error=False, executor='parallel', parallel_workers=8, event_handlers=None, ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['.'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=None, packages_skip=None, packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], cmake_args=None, cmake_target=None, cmake_target_skip_unavailable=False, cmake_clean_cache=False, cmake_clean_first=False, cmake_force_configure=True, ament_cmake_args=None, catkin_cmake_args=None, catkin_skip_building_tests=False, mixin_files=None, mixin=None, verb_parser=<colcon_mixin.mixin.mixin_argument.MixinArgumentDecorator object at 0x716cda9cb470>, verb_extension=<colcon_core.verb.build.BuildVerb object at 0x716cda945a60>, main=<bound method BuildVerb.main of <colcon_core.verb.build.BuildVerb object at 0x716cda945a60>>, mixin_verb=('build',))
+[0.307s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) check parameters
+[0.307s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) check parameters
+[0.307s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) check parameters
+[0.307s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) check parameters
+[0.307s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) discover
+[0.308s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) discover
+[0.308s] INFO:colcon.colcon_core.package_discovery:Crawling recursively for packages in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513'
+[0.308s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ignore', 'ignore_ament_install']
+[0.308s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore'
+[0.308s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore_ament_install'
+[0.308s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_pkg']
+[0.308s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_pkg'
+[0.308s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_meta']
+[0.308s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_meta'
+[0.308s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ros']
+[0.308s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ros'
+[0.328s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['cmake', 'python']
+[0.328s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'cmake'
+[0.328s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python'
+[0.328s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['python_setup_py']
+[0.328s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python_setup_py'
+[0.328s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extensions ['ignore', 'ignore_ament_install']
+[0.328s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extension 'ignore'
+[0.328s] Level 1:colcon.colcon_core.package_identification:_identify(build) ignored
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extensions ['ignore', 'ignore_ament_install']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extension 'ignore'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extension 'ignore_ament_install'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extensions ['colcon_pkg']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extension 'colcon_pkg'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extensions ['colcon_meta']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extension 'colcon_meta'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extensions ['ros']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extension 'ros'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extensions ['cmake', 'python']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extension 'cmake'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extension 'python'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extensions ['python_setup_py']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc) by extension 'python_setup_py'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extensions ['ignore', 'ignore_ament_install']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extension 'ignore'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extension 'ignore_ament_install'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extensions ['colcon_pkg']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extension 'colcon_pkg'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extensions ['colcon_meta']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extension 'colcon_meta'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extensions ['ros']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extension 'ros'
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extensions ['cmake', 'python']
+[0.329s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extension 'cmake'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extension 'python'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extensions ['python_setup_py']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_diagnosis) by extension 'python_setup_py'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extensions ['ignore', 'ignore_ament_install']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extension 'ignore'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extension 'ignore_ament_install'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extensions ['colcon_pkg']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extension 'colcon_pkg'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extensions ['colcon_meta']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extension 'colcon_meta'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extensions ['ros']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extension 'ros'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extensions ['cmake', 'python']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extension 'cmake'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extension 'python'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extensions ['python_setup_py']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_experience) by extension 'python_setup_py'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extensions ['ignore', 'ignore_ament_install']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extension 'ignore'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extension 'ignore_ament_install'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extensions ['colcon_pkg']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extension 'colcon_pkg'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extensions ['colcon_meta']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extension 'colcon_meta'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extensions ['ros']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extension 'ros'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extensions ['cmake', 'python']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extension 'cmake'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extension 'python'
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extensions ['python_setup_py']
+[0.330s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_proposal) by extension 'python_setup_py'
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extensions ['ignore', 'ignore_ament_install']
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extension 'ignore'
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extension 'ignore_ament_install'
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extensions ['colcon_pkg']
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extension 'colcon_pkg'
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extensions ['colcon_meta']
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extension 'colcon_meta'
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extensions ['ros']
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extension 'ros'
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extensions ['cmake', 'python']
+[0.331s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extension 'cmake'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extension 'python'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extensions ['python_setup_py']
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(doc/doc_report) by extension 'python_setup_py'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extensions ['ignore', 'ignore_ament_install']
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extension 'ignore'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(install) ignored
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extensions ['ignore', 'ignore_ament_install']
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extension 'ignore'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(log) ignored
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['ignore', 'ignore_ament_install']
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'ignore'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'ignore_ament_install'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['colcon_pkg']
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'colcon_pkg'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['colcon_meta']
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'colcon_meta'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['ros']
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'ros'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['cmake', 'python']
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'cmake'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'python'
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['python_setup_py']
+[0.332s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'python_setup_py'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['ignore', 'ignore_ament_install']
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ignore'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ignore_ament_install'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['colcon_pkg']
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'colcon_pkg'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['colcon_meta']
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'colcon_meta'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['ros']
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ros'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['cmake', 'python']
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'cmake'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'python'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['python_setup_py']
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'python_setup_py'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_bringup) by extensions ['ignore', 'ignore_ament_install']
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_bringup) by extension 'ignore'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_bringup) by extension 'ignore_ament_install'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_bringup) by extensions ['colcon_pkg']
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_bringup) by extension 'colcon_pkg'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_bringup) by extensions ['colcon_meta']
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_bringup) by extension 'colcon_meta'
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_bringup) by extensions ['ros']
+[0.333s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_bringup) by extension 'ros'
+[0.335s] DEBUG:colcon.colcon_core.package_identification:Package 'src/tugbot_bringup' with type 'ros.ament_cmake' and name 'tugbot_bringup'
+[0.335s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_description) by extensions ['ignore', 'ignore_ament_install']
+[0.335s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_description) by extension 'ignore'
+[0.335s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_description) by extension 'ignore_ament_install'
+[0.335s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_description) by extensions ['colcon_pkg']
+[0.335s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_description) by extension 'colcon_pkg'
+[0.335s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_description) by extensions ['colcon_meta']
+[0.335s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_description) by extension 'colcon_meta'
+[0.335s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_description) by extensions ['ros']
+[0.335s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_description) by extension 'ros'
+[0.336s] DEBUG:colcon.colcon_core.package_identification:Package 'src/tugbot_description' with type 'ros.ament_cmake' and name 'tugbot_description'
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_gazebo) by extensions ['ignore', 'ignore_ament_install']
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_gazebo) by extension 'ignore'
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_gazebo) by extension 'ignore_ament_install'
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_gazebo) by extensions ['colcon_pkg']
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_gazebo) by extension 'colcon_pkg'
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_gazebo) by extensions ['colcon_meta']
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_gazebo) by extension 'colcon_meta'
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_gazebo) by extensions ['ros']
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_gazebo) by extension 'ros'
+[0.336s] DEBUG:colcon.colcon_core.package_identification:Package 'src/tugbot_gazebo' with type 'ros.ament_cmake' and name 'tugbot_gazebo'
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_navigation) by extensions ['ignore', 'ignore_ament_install']
+[0.336s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_navigation) by extension 'ignore'
+[0.337s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_navigation) by extension 'ignore_ament_install'
+[0.337s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_navigation) by extensions ['colcon_pkg']
+[0.337s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_navigation) by extension 'colcon_pkg'
+[0.337s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_navigation) by extensions ['colcon_meta']
+[0.337s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_navigation) by extension 'colcon_meta'
+[0.337s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_navigation) by extensions ['ros']
+[0.337s] Level 1:colcon.colcon_core.package_identification:_identify(src/tugbot_navigation) by extension 'ros'
+[0.337s] DEBUG:colcon.colcon_core.package_identification:Package 'src/tugbot_navigation' with type 'ros.ament_cmake' and name 'tugbot_navigation'
+[0.337s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) using defaults
+[0.337s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) discover
+[0.337s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) using defaults
+[0.337s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) discover
+[0.337s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) using defaults
+[0.369s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) check parameters
+[0.369s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) discover
+[0.379s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 70 installed packages in /home/hyh/ws_moveit/install
+[0.382s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 516 installed packages in /opt/ros/jazzy
+[0.385s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) using defaults
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_bringup' build argument 'cmake_args' from command line to 'None'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_bringup' build argument 'cmake_target' from command line to 'None'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_bringup' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_bringup' build argument 'cmake_clean_cache' from command line to 'False'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_bringup' build argument 'cmake_clean_first' from command line to 'False'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_bringup' build argument 'cmake_force_configure' from command line to 'True'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_bringup' build argument 'ament_cmake_args' from command line to 'None'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_bringup' build argument 'catkin_cmake_args' from command line to 'None'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_bringup' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.540s] DEBUG:colcon.colcon_core.verb:Building package 'tugbot_bringup' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': True, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup', 'merge_install': False, 'path': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_bringup', 'symlink_install': True, 'test_result_base': None}
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_description' build argument 'cmake_args' from command line to 'None'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_description' build argument 'cmake_target' from command line to 'None'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_description' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_description' build argument 'cmake_clean_cache' from command line to 'False'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_description' build argument 'cmake_clean_first' from command line to 'False'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_description' build argument 'cmake_force_configure' from command line to 'True'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_description' build argument 'ament_cmake_args' from command line to 'None'
+[0.540s] Level 5:colcon.colcon_core.verb:set package 'tugbot_description' build argument 'catkin_cmake_args' from command line to 'None'
+[0.541s] Level 5:colcon.colcon_core.verb:set package 'tugbot_description' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.541s] DEBUG:colcon.colcon_core.verb:Building package 'tugbot_description' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': True, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description', 'merge_install': False, 'path': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_description', 'symlink_install': True, 'test_result_base': None}
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_gazebo' build argument 'cmake_args' from command line to 'None'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_gazebo' build argument 'cmake_target' from command line to 'None'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_gazebo' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_gazebo' build argument 'cmake_clean_cache' from command line to 'False'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_gazebo' build argument 'cmake_clean_first' from command line to 'False'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_gazebo' build argument 'cmake_force_configure' from command line to 'True'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_gazebo' build argument 'ament_cmake_args' from command line to 'None'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_gazebo' build argument 'catkin_cmake_args' from command line to 'None'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_gazebo' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.542s] DEBUG:colcon.colcon_core.verb:Building package 'tugbot_gazebo' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': True, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo', 'merge_install': False, 'path': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_gazebo', 'symlink_install': True, 'test_result_base': None}
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_navigation' build argument 'cmake_args' from command line to 'None'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_navigation' build argument 'cmake_target' from command line to 'None'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_navigation' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_navigation' build argument 'cmake_clean_cache' from command line to 'False'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_navigation' build argument 'cmake_clean_first' from command line to 'False'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_navigation' build argument 'cmake_force_configure' from command line to 'True'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_navigation' build argument 'ament_cmake_args' from command line to 'None'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_navigation' build argument 'catkin_cmake_args' from command line to 'None'
+[0.542s] Level 5:colcon.colcon_core.verb:set package 'tugbot_navigation' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.542s] DEBUG:colcon.colcon_core.verb:Building package 'tugbot_navigation' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': True, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation', 'merge_install': False, 'path': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_navigation', 'symlink_install': True, 'test_result_base': None}
+[0.542s] INFO:colcon.colcon_core.executor:Executing jobs using 'parallel' executor
+[0.544s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete
+[0.544s] INFO:colcon.colcon_ros.task.ament_cmake.build:Building ROS package in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_bringup' with build type 'ament_cmake'
+[0.544s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_bringup'
+[0.554s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
+[0.554s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.554s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.563s] INFO:colcon.colcon_ros.task.ament_cmake.build:Building ROS package in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_description' with build type 'ament_cmake'
+[0.563s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_description'
+[0.563s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.563s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.571s] INFO:colcon.colcon_ros.task.ament_cmake.build:Building ROS package in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_gazebo' with build type 'ament_cmake'
+[0.572s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_gazebo'
+[0.572s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.572s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.581s] INFO:colcon.colcon_ros.task.ament_cmake.build:Building ROS package in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_navigation' with build type 'ament_cmake'
+[0.581s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_navigation'
+[0.581s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.581s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.594s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_bringup -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup
+[0.598s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_description -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description
+[0.601s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_gazebo -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo
+[0.603s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_navigation -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation
+[2.010s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_gazebo -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo
+[2.011s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo -- -j8 -l8
+[2.012s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_navigation -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation
+[2.013s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation -- -j8 -l8
+[2.068s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_bringup -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup
+[2.069s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup -- -j8 -l8
+[2.082s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_description -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description
+[2.083s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description -- -j8 -l8
+[2.100s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation -- -j8 -l8
+[2.116s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation
+[2.117s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo -- -j8 -l8
+[2.118s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo
+[2.143s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup -- -j8 -l8
+[2.143s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup
+[2.152s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description -- -j8 -l8
+[2.154s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description
+[2.443s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(tugbot_navigation)
+[2.444s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_navigation
+[2.459s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation' for CMake module files
+[2.460s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation' for CMake config files
+[2.460s] Level 1:colcon.colcon_core.shell:create_environment_hook('tugbot_navigation', 'cmake_prefix_path')
+[2.461s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/hook/cmake_prefix_path.ps1'
+[2.464s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/hook/cmake_prefix_path.dsv'
+[2.466s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/hook/cmake_prefix_path.sh'
+[2.470s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/bin'
+[2.471s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/lib/pkgconfig/tugbot_navigation.pc'
+[2.471s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/lib/python3.12/site-packages'
+[2.471s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/bin'
+[2.471s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/package.ps1'
+[2.473s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/package.dsv'
+[2.474s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/package.sh'
+[2.475s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/package.bash'
+[2.476s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/package.zsh'
+[2.478s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/colcon-core/packages/tugbot_navigation)
+[2.479s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(tugbot_navigation)
+[2.479s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation' for CMake module files
+[2.480s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation' for CMake config files
+[2.480s] Level 1:colcon.colcon_core.shell:create_environment_hook('tugbot_navigation', 'cmake_prefix_path')
+[2.480s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/hook/cmake_prefix_path.ps1'
+[2.481s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/hook/cmake_prefix_path.dsv'
+[2.481s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/hook/cmake_prefix_path.sh'
+[2.482s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/bin'
+[2.482s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/lib/pkgconfig/tugbot_navigation.pc'
+[2.482s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/lib/python3.12/site-packages'
+[2.482s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/bin'
+[2.482s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/package.ps1'
+[2.483s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/package.dsv'
+[2.483s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/package.sh'
+[2.483s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/package.bash'
+[2.484s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/tugbot_navigation/package.zsh'
+[2.484s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation/share/colcon-core/packages/tugbot_navigation)
+[2.486s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(tugbot_bringup)
+[2.486s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup' for CMake module files
+[2.486s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup' for CMake config files
+[2.486s] Level 1:colcon.colcon_core.shell:create_environment_hook('tugbot_bringup', 'cmake_prefix_path')
+[2.487s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/hook/cmake_prefix_path.ps1'
+[2.487s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/hook/cmake_prefix_path.dsv'
+[2.487s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/hook/cmake_prefix_path.sh'
+[2.488s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/bin'
+[2.488s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/lib/pkgconfig/tugbot_bringup.pc'
+[2.488s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/lib/python3.12/site-packages'
+[2.489s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/bin'
+[2.489s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/package.ps1'
+[2.489s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/package.dsv'
+[2.489s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/package.sh'
+[2.490s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/package.bash'
+[2.491s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/package.zsh'
+[2.492s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_bringup
+[2.492s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/colcon-core/packages/tugbot_bringup)
+[2.493s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(tugbot_bringup)
+[2.493s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup' for CMake module files
+[2.493s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup' for CMake config files
+[2.494s] Level 1:colcon.colcon_core.shell:create_environment_hook('tugbot_bringup', 'cmake_prefix_path')
+[2.494s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/hook/cmake_prefix_path.ps1'
+[2.494s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/hook/cmake_prefix_path.dsv'
+[2.495s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/hook/cmake_prefix_path.sh'
+[2.496s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/bin'
+[2.496s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/lib/pkgconfig/tugbot_bringup.pc'
+[2.496s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/lib/python3.12/site-packages'
+[2.497s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/bin'
+[2.497s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/package.ps1'
+[2.497s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/package.dsv'
+[2.497s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/package.sh'
+[2.498s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/package.bash'
+[2.498s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/tugbot_bringup/package.zsh'
+[2.498s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup/share/colcon-core/packages/tugbot_bringup)
+[2.499s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(tugbot_gazebo)
+[2.499s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo' for CMake module files
+[2.500s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_gazebo
+[2.501s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo' for CMake config files
+[2.501s] Level 1:colcon.colcon_core.shell:create_environment_hook('tugbot_gazebo', 'cmake_prefix_path')
+[2.502s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/hook/cmake_prefix_path.ps1'
+[2.502s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/hook/cmake_prefix_path.dsv'
+[2.502s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/hook/cmake_prefix_path.sh'
+[2.503s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/bin'
+[2.503s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/lib/pkgconfig/tugbot_gazebo.pc'
+[2.503s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/lib/python3.12/site-packages'
+[2.503s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/bin'
+[2.503s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.ps1'
+[2.504s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.dsv'
+[2.504s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.sh'
+[2.504s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.bash'
+[2.505s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.zsh'
+[2.505s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/colcon-core/packages/tugbot_gazebo)
+[2.505s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(tugbot_gazebo)
+[2.505s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo' for CMake module files
+[2.506s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo' for CMake config files
+[2.506s] Level 1:colcon.colcon_core.shell:create_environment_hook('tugbot_gazebo', 'cmake_prefix_path')
+[2.506s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/hook/cmake_prefix_path.ps1'
+[2.507s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/hook/cmake_prefix_path.dsv'
+[2.507s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/hook/cmake_prefix_path.sh'
+[2.507s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/bin'
+[2.507s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/lib/pkgconfig/tugbot_gazebo.pc'
+[2.508s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/lib/python3.12/site-packages'
+[2.508s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/bin'
+[2.508s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.ps1'
+[2.508s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.dsv'
+[2.509s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.sh'
+[2.509s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.bash'
+[2.509s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/tugbot_gazebo/package.zsh'
+[2.510s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo/share/colcon-core/packages/tugbot_gazebo)
+[2.771s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(tugbot_description)
+[2.771s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description' for CMake module files
+[2.771s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description
+[2.772s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description' for CMake config files
+[2.772s] Level 1:colcon.colcon_core.shell:create_environment_hook('tugbot_description', 'cmake_prefix_path')
+[2.772s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/hook/cmake_prefix_path.ps1'
+[2.773s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/hook/cmake_prefix_path.dsv'
+[2.773s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/hook/cmake_prefix_path.sh'
+[2.773s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/bin'
+[2.773s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/lib/pkgconfig/tugbot_description.pc'
+[2.774s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/lib/python3.12/site-packages'
+[2.774s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/bin'
+[2.774s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.ps1'
+[2.774s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.dsv'
+[2.774s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.sh'
+[2.775s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.bash'
+[2.775s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.zsh'
+[2.775s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/colcon-core/packages/tugbot_description)
+[2.776s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(tugbot_description)
+[2.776s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description' for CMake module files
+[2.776s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description' for CMake config files
+[2.776s] Level 1:colcon.colcon_core.shell:create_environment_hook('tugbot_description', 'cmake_prefix_path')
+[2.777s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/hook/cmake_prefix_path.ps1'
+[2.777s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/hook/cmake_prefix_path.dsv'
+[2.777s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/hook/cmake_prefix_path.sh'
+[2.778s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/bin'
+[2.778s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/lib/pkgconfig/tugbot_description.pc'
+[2.778s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/lib/python3.12/site-packages'
+[2.778s] Level 1:colcon.colcon_core.environment:checking '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/bin'
+[2.778s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.ps1'
+[2.779s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.dsv'
+[2.779s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.sh'
+[2.780s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.bash'
+[2.780s] INFO:colcon.colcon_core.shell:Creating package script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.zsh'
+[2.780s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/colcon-core/packages/tugbot_description)
+[2.781s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:closing loop
+[2.781s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:loop closed
+[2.781s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete finished with '0'
+[2.781s] DEBUG:colcon.colcon_core.event_reactor:joining thread
+[2.794s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.terminal_notifier': Not used on non-Darwin systems
+[2.795s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.win32': Not used on non-Windows systems
+[2.795s] INFO:colcon.colcon_notification.desktop_notification:Sending desktop notification using 'notify2'
+[2.821s] DEBUG:colcon.colcon_core.event_reactor:joined thread
+[2.821s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/local_setup.ps1'
+[2.823s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/_local_setup_util_ps1.py'
+[2.824s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/setup.ps1'
+[2.830s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/local_setup.sh'
+[2.831s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/_local_setup_util_sh.py'
+[2.832s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/setup.sh'
+[2.835s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/local_setup.bash'
+[2.836s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/setup.bash'
+[2.839s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/local_setup.zsh'
+[2.840s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/setup.zsh'

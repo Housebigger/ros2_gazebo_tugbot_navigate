@@ -1,0 +1,61 @@
+[0.034s] Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_description -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description
+[0.359s] -- The C compiler identification is GNU 13.3.0
+[0.536s] -- The CXX compiler identification is GNU 13.3.0
+[0.575s] -- Detecting C compiler ABI info
+[0.727s] -- Detecting C compiler ABI info - done
+[0.733s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.733s] -- Detecting C compile features
+[0.733s] -- Detecting C compile features - done
+[0.746s] -- Detecting CXX compiler ABI info
+[0.885s] -- Detecting CXX compiler ABI info - done
+[0.893s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.893s] -- Detecting CXX compile features
+[0.893s] -- Detecting CXX compile features - done
+[1.041s] -- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+[1.062s] -- Found ament_cmake: 2.5.6 (/opt/ros/jazzy/share/ament_cmake/cmake)
+[1.192s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[1.506s] -- Configuring done (1.4s)
+[1.508s] -- Generating done (0.0s)
+[1.510s] -- Build files have been written to: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description
+[1.518s] Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/src/tugbot_description -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description
+[1.519s] Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description -- -j8 -l8
+[1.588s] Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description -- -j8 -l8
+[1.590s] Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description
+[1.605s] -- Install configuration: ""
+[1.606s] -- Execute custom install script
+[1.608s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/VLP16_base_1.dae
+[1.624s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/VLP16_base_2.dae
+[1.642s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/VLP16_scan.dae
+[1.658s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/base/logo-new.png
+[1.677s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/base/movai-logo.png
+[1.693s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/base/movai_logo.dae
+[1.711s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/base/tugbot_simp.dae
+[1.729s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/base/tugbot_simp.stl
+[1.744s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/gripper2/gripper2.dae
+[1.761s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/gripper2/gripper_hand.stl
+[1.775s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/light_link/light.stl
+[1.793s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/light_link/light_led.stl
+[1.812s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/meshes/wheel/wheel.dae
+[1.831s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/model.config
+[1.844s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/model.sdf
+[1.862s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/thumbnails/1.png
+[1.878s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/tugbot_plugin_diff_sensors_world_plugin_keypress_0713.sdf
+[1.928s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/tugbot_plugin_diff_world_plugin_keypress_0705.sdf
+[1.928s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/models/tugbot/tugbot_without_plugins_world.sdf
+[1.947s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.xml
+[1.955s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/ament_index/resource_index/package_run_dependencies/tugbot_description
+[1.975s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/ament_index/resource_index/parent_prefix_path/tugbot_description
+[1.991s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/environment/ament_prefix_path.sh
+[2.009s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/environment/ament_prefix_path.dsv
+[2.027s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/environment/path.sh
+[2.043s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/environment/path.dsv
+[2.057s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/local_setup.bash
+[2.077s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/local_setup.sh
+[2.101s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/local_setup.zsh
+[2.118s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/local_setup.dsv
+[2.137s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.dsv
+[2.154s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/ament_index/resource_index/packages/tugbot_description
+[2.173s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/cmake/tugbot_descriptionConfig.cmake
+[2.189s] -- Symlinking: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/cmake/tugbot_descriptionConfig-version.cmake
+[2.206s] -- Up-to-date symlink: /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description/share/tugbot_description/package.xml
+[2.207s] Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/hyh/ws_moveit/install/moveit_configs_utils:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/build/tugbot_description

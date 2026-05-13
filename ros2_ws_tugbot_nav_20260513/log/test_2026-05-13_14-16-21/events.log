@@ -1,0 +1,14 @@
+[0.000000] (-) TimerEvent: {}
+[0.000636] (tugbot_bringup) JobQueued: {'identifier': 'tugbot_bringup', 'dependencies': OrderedDict({'tugbot_bringup': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_bringup'})}
+[0.000724] (tugbot_description) JobQueued: {'identifier': 'tugbot_description', 'dependencies': OrderedDict({'tugbot_description': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_description'})}
+[0.000767] (tugbot_gazebo) JobQueued: {'identifier': 'tugbot_gazebo', 'dependencies': OrderedDict({'tugbot_gazebo': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_gazebo'})}
+[0.000981] (tugbot_navigation) JobQueued: {'identifier': 'tugbot_navigation', 'dependencies': OrderedDict({'tugbot_navigation': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260513/install/tugbot_navigation'})}
+[0.001014] (tugbot_bringup) JobStarted: {'identifier': 'tugbot_bringup'}
+[0.011147] (tugbot_description) JobStarted: {'identifier': 'tugbot_description'}
+[0.019006] (tugbot_gazebo) JobStarted: {'identifier': 'tugbot_gazebo'}
+[0.026270] (tugbot_navigation) JobStarted: {'identifier': 'tugbot_navigation'}
+[0.062035] (tugbot_gazebo) JobEnded: {'identifier': 'tugbot_gazebo', 'rc': 0}
+[0.062309] (tugbot_description) JobEnded: {'identifier': 'tugbot_description', 'rc': 0}
+[0.063396] (tugbot_navigation) JobEnded: {'identifier': 'tugbot_navigation', 'rc': 0}
+[0.064033] (tugbot_bringup) JobEnded: {'identifier': 'tugbot_bringup', 'rc': 0}
+[0.064219] (-) EventReactorShutdown: {}
