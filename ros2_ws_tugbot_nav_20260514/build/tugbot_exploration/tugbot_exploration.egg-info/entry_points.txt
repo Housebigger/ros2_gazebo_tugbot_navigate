@@ -1,0 +1,2 @@
+[console_scripts]
+frontier_explorer = tugbot_exploration.frontier_explorer:main

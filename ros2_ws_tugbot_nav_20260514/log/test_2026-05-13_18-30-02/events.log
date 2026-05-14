@@ -1,0 +1,6 @@
+[0.000000] (-) TimerEvent: {}
+[0.000060] (tugbot_bringup) JobQueued: {'identifier': 'tugbot_bringup', 'dependencies': OrderedDict({'tugbot_bringup': '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup'})}
+[0.000502] (tugbot_bringup) JobStarted: {'identifier': 'tugbot_bringup'}
+[0.100428] (-) TimerEvent: {}
+[0.121196] (tugbot_bringup) JobEnded: {'identifier': 'tugbot_bringup', 'rc': 0}
+[0.121799] (-) EventReactorShutdown: {}

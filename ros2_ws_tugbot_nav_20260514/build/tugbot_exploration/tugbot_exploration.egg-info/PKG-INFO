@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: tugbot-exploration
+Version: 0.1.0
+Summary: Frontier exploration node for Tugbot SLAM + Nav2 mapping.
+Maintainer: Housebigger
+Maintainer-email: housebigger@example.com
+License: MIT

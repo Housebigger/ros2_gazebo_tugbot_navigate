@@ -1,0 +1,17 @@
+[0.771s] Invoking command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/build/tugbot_exploration': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/build/tugbot_exploration/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_exploration/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/build/tugbot_exploration/build --no-deps symlink_data
+[1.142s] running develop
+[1.327s] running egg_info
+[1.344s] writing tugbot_exploration.egg-info/PKG-INFO
+[1.344s] writing dependency_links to tugbot_exploration.egg-info/dependency_links.txt
+[1.345s] writing entry points to tugbot_exploration.egg-info/entry_points.txt
+[1.345s] writing requirements to tugbot_exploration.egg-info/requires.txt
+[1.345s] writing top-level names to tugbot_exploration.egg-info/top_level.txt
+[1.378s] reading manifest file 'tugbot_exploration.egg-info/SOURCES.txt'
+[1.378s] writing manifest file 'tugbot_exploration.egg-info/SOURCES.txt'
+[1.395s] running build_ext
+[1.395s] Creating /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_exploration/lib/python3.12/site-packages/tugbot-exploration.egg-link (link to .)
+[1.396s] Installing frontier_explorer script to /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_exploration/lib/tugbot_exploration
+[1.396s] 
+[1.396s] Installed /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/build/tugbot_exploration
+[1.396s] running symlink_data
+[1.426s] Invoked command in '/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/build/tugbot_exploration' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/build/tugbot_exploration/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_exploration/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/build/tugbot_exploration/build --no-deps symlink_data
