@@ -1,10 +1,14 @@
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/__pycache__/tugbot_explore.launch.cpython-312.pyc
+/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/__pycache__/tugbot_gazebo.launch.cpython-312.pyc
+/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/__pycache__/tugbot_nav.launch.cpython-312.pyc
+/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/__pycache__/tugbot_nav_phase14_map.launch.cpython-312.pyc
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/__pycache__/tugbot_nav_phase6_map.launch.cpython-312.pyc
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/__pycache__/tugbot_slam.launch.cpython-312.pyc
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/__pycache__/tugbot_slam_nav.launch.cpython-312.pyc
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/tugbot_explore.launch.py
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/tugbot_gazebo.launch.py
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/tugbot_nav.launch.py
+/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/tugbot_nav_phase14_map.launch.py
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/tugbot_nav_phase6_map.launch.py
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/tugbot_slam.launch.py
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_bringup/share/tugbot_bringup/launch/tugbot_slam_nav.launch.py

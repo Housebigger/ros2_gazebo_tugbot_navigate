@@ -1,3 +1,4 @@
+/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_gazebo/share/tugbot_gazebo/launch/__pycache__/tugbot_gazebo.launch.cpython-312.pyc
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_gazebo/share/tugbot_gazebo/launch/tugbot_gazebo.launch.py
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_gazebo/share/tugbot_gazebo/config/tugbot_bridge.yaml
 /home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/install/tugbot_gazebo/share/tugbot_gazebo/worlds/tugbot_empty_world.sdf

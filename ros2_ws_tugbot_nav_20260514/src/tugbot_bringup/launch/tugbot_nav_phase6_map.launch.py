@@ -22,7 +22,7 @@ def generate_launch_description():
         'explored',
         'tugbot_nav_world_slam_phase6_cleanup.yaml',
     )
-    default_params = os.path.join(navigation_share, 'config', 'nav2_params.yaml')
+    default_params = os.path.join(navigation_share, 'config', 'nav2_phase6_map_params.yaml')
     default_rviz = os.path.join(bringup_share, 'rviz', 'tugbot_nav.rviz')
 
     world_sdf = LaunchConfiguration('world_sdf')
@@ -57,6 +57,9 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'params_file': params_file,
             'autostart': autostart,
+            'use_composition': 'False',
+            'slam': 'False',
+            'use_localization': 'True',
         }.items(),
     )
 
@@ -72,8 +75,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('world_sdf', default_value=default_world, description='Gazebo world SDF for Phase 6 static-map replay.'),
-        DeclareLaunchArgument('map', default_value=default_phase6_map, description='Phase 6 cleanup static map YAML.'),
-        DeclareLaunchArgument('params_file', default_value=default_params, description='Nav2 params YAML with map_server and AMCL enabled by Nav2 bringup.'),
+        DeclareLaunchArgument('map', default_value=default_phase6_map, description='Phase 6 static map YAML.'),
+        DeclareLaunchArgument('params_file', default_value=default_params, description='Phase 6 static replay Nav2 params YAML with safer obstacle inflation.'),
         DeclareLaunchArgument('rviz_config', default_value=default_rviz, description='RViz config.'),
         DeclareLaunchArgument('use_sim_time', default_value='true', description='Use Gazebo simulation clock.'),
         DeclareLaunchArgument('autostart', default_value='true', description='Autostart Nav2 and localization lifecycle nodes.'),

@@ -5,7 +5,7 @@ set(Python3_EXECUTABLE /usr/bin/python3 CACHE FILEPATH "System python for ROS bu
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY launch config worlds models maps rviz urdf
+install(DIRECTORY launch config worlds models maps rviz urdf behavior_trees
   DESTINATION share/${PROJECT_NAME}
 )
 

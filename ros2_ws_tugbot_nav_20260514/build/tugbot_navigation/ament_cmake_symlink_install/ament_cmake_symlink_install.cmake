@@ -315,8 +315,8 @@ message(STATUS "Execute custom install script")
 
 # begin of custom install code
 
-# install(DIRECTORY "launch" "config" "worlds" "models" "maps" "rviz" "urdf" "DESTINATION" "share/tugbot_navigation")
-ament_cmake_symlink_install_directory("/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/src/tugbot_navigation" DIRECTORY "launch" "config" "worlds" "models" "maps" "rviz" "urdf" "DESTINATION" "share/tugbot_navigation")
+# install(DIRECTORY "launch" "config" "worlds" "models" "maps" "rviz" "urdf" "behavior_trees" "DESTINATION" "share/tugbot_navigation")
+ament_cmake_symlink_install_directory("/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/src/tugbot_navigation" DIRECTORY "launch" "config" "worlds" "models" "maps" "rviz" "urdf" "behavior_trees" "DESTINATION" "share/tugbot_navigation")
 
 # install(FILES "package.xml" "DESTINATION" "share/tugbot_navigation")
 ament_cmake_symlink_install_files("/home/hyh/Desktop/playground_hermes/tugbot_ros2_gazebo/ros2_ws_tugbot_nav_20260514/src/tugbot_navigation" FILES "package.xml" "DESTINATION" "share/tugbot_navigation")
