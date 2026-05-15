@@ -41,6 +41,18 @@ def generate_launch_description():
     goal_timeout_sec = LaunchConfiguration('goal_timeout_sec')
     blacklist_radius_m = LaunchConfiguration('blacklist_radius_m')
     exploration_rate_hz = LaunchConfiguration('exploration_rate_hz')
+    exploration_strategy = LaunchConfiguration('exploration_strategy')
+    perimeter_enable_initial_spin = LaunchConfiguration('perimeter_enable_initial_spin')
+    perimeter_spin_angle = LaunchConfiguration('perimeter_spin_angle')
+    perimeter_wall_min_cluster_size = LaunchConfiguration('perimeter_wall_min_cluster_size')
+    perimeter_wall_min_length_m = LaunchConfiguration('perimeter_wall_min_length_m')
+    perimeter_wall_aspect_ratio_min = LaunchConfiguration('perimeter_wall_aspect_ratio_min')
+    perimeter_wall_offset_m = LaunchConfiguration('perimeter_wall_offset_m')
+    perimeter_waypoint_spacing_m = LaunchConfiguration('perimeter_waypoint_spacing_m')
+    perimeter_max_waypoints = LaunchConfiguration('perimeter_max_waypoints')
+    perimeter_direction = LaunchConfiguration('perimeter_direction')
+    perimeter_switch_to_frontier_after_done = LaunchConfiguration('perimeter_switch_to_frontier_after_done')
+    perimeter_goal_timeout_sec = LaunchConfiguration('perimeter_goal_timeout_sec')
     finish_no_frontier_cycles = LaunchConfiguration('finish_no_frontier_cycles')
     max_goals = LaunchConfiguration('max_goals')
     min_goals_before_finish = LaunchConfiguration('min_goals_before_finish')
@@ -109,6 +121,18 @@ def generate_launch_description():
             'goal_timeout_sec': ParameterValue(goal_timeout_sec, value_type=float),
             'blacklist_radius_m': ParameterValue(blacklist_radius_m, value_type=float),
             'exploration_rate_hz': ParameterValue(exploration_rate_hz, value_type=float),
+            'exploration_strategy': exploration_strategy,
+            'perimeter_enable_initial_spin': ParameterValue(perimeter_enable_initial_spin, value_type=bool),
+            'perimeter_spin_angle': ParameterValue(perimeter_spin_angle, value_type=float),
+            'perimeter_wall_min_cluster_size': ParameterValue(perimeter_wall_min_cluster_size, value_type=int),
+            'perimeter_wall_min_length_m': ParameterValue(perimeter_wall_min_length_m, value_type=float),
+            'perimeter_wall_aspect_ratio_min': ParameterValue(perimeter_wall_aspect_ratio_min, value_type=float),
+            'perimeter_wall_offset_m': ParameterValue(perimeter_wall_offset_m, value_type=float),
+            'perimeter_waypoint_spacing_m': ParameterValue(perimeter_waypoint_spacing_m, value_type=float),
+            'perimeter_max_waypoints': ParameterValue(perimeter_max_waypoints, value_type=int),
+            'perimeter_direction': perimeter_direction,
+            'perimeter_switch_to_frontier_after_done': ParameterValue(perimeter_switch_to_frontier_after_done, value_type=bool),
+            'perimeter_goal_timeout_sec': ParameterValue(perimeter_goal_timeout_sec, value_type=float),
             'finish_no_frontier_cycles': ParameterValue(finish_no_frontier_cycles, value_type=int),
             'max_goals': ParameterValue(max_goals, value_type=int),
             'min_goals_before_finish': ParameterValue(min_goals_before_finish, value_type=int),
@@ -167,6 +191,18 @@ def generate_launch_description():
         DeclareLaunchArgument('goal_timeout_sec', default_value='60.0', description='Goal timeout in seconds.'),
         DeclareLaunchArgument('blacklist_radius_m', default_value='0.5', description='Radius around failed goals to avoid.'),
         DeclareLaunchArgument('exploration_rate_hz', default_value='0.5', description='Explorer decision rate.'),
+        DeclareLaunchArgument('exploration_strategy', default_value='frontier', description='Exploration strategy: frontier or perimeter_then_frontier.'),
+        DeclareLaunchArgument('perimeter_enable_initial_spin', default_value='false', description='Run an initial spin before perimeter wall detection; Phase 14 default is disabled for SLAM map stability.'),
+        DeclareLaunchArgument('perimeter_spin_angle', default_value='1.57', description='Initial perimeter scan spin angle in radians when explicitly enabled.'),
+        DeclareLaunchArgument('perimeter_wall_min_cluster_size', default_value='80', description='Minimum occupied-cell cluster size for wall detection.'),
+        DeclareLaunchArgument('perimeter_wall_min_length_m', default_value='1.5', description='Minimum suspected wall bbox length in meters.'),
+        DeclareLaunchArgument('perimeter_wall_aspect_ratio_min', default_value='4.0', description='Minimum suspected wall bbox aspect ratio.'),
+        DeclareLaunchArgument('perimeter_wall_offset_m', default_value='0.75', description='Waypoint offset from detected wall toward map interior.'),
+        DeclareLaunchArgument('perimeter_waypoint_spacing_m', default_value='1.0', description='Approximate spacing between generated perimeter waypoints.'),
+        DeclareLaunchArgument('perimeter_max_waypoints', default_value='20', description='Maximum perimeter waypoints before switching to frontier.'),
+        DeclareLaunchArgument('perimeter_direction', default_value='ccw', description='Perimeter waypoint order: ccw or cw.'),
+        DeclareLaunchArgument('perimeter_switch_to_frontier_after_done', default_value='true', description='Switch to frontier/cleanup after perimeter pass.'),
+        DeclareLaunchArgument('perimeter_goal_timeout_sec', default_value='60.0', description='Timeout for each perimeter waypoint.'),
         DeclareLaunchArgument('finish_no_frontier_cycles', default_value='5', description='No-frontier cycles before declaring complete.'),
         DeclareLaunchArgument('max_goals', default_value='20', description='Maximum successful goals before stopping.'),
         DeclareLaunchArgument('min_goals_before_finish', default_value='8', description='Minimum completed goals before strict completion may finish, unless raw frontiers are few and map is stable.'),
@@ -176,8 +212,8 @@ def generate_launch_description():
         DeclareLaunchArgument('map_stable_cycles_before_finish', default_value='3', description='Map stable cycles required before completion.'),
         DeclareLaunchArgument('map_change_free_threshold', default_value='50', description='Maximum free-cell count delta considered stable.'),
         DeclareLaunchArgument('map_change_unknown_threshold', default_value='50', description='Maximum unknown-cell count delta considered stable.'),
-        DeclareLaunchArgument('enable_recovery_scan', default_value='true', description='Enable Nav2 Spin recovery scan when raw frontiers remain but no candidate is valid.'),
-        DeclareLaunchArgument('recovery_spin_angle', default_value='6.28', description='Recovery spin angle in radians.'),
+        DeclareLaunchArgument('enable_recovery_scan', default_value='false', description='Enable Nav2 Spin recovery scan when raw frontiers remain but no candidate is valid; disabled by default for SLAM map stability.'),
+        DeclareLaunchArgument('recovery_spin_angle', default_value='1.57', description='Recovery spin angle in radians when recovery scan is explicitly enabled.'),
         DeclareLaunchArgument('recovery_wait_after_scan_sec', default_value='2.0', description='Wait after recovery scan for map updates.'),
         DeclareLaunchArgument('enable_cleanup_mode', default_value='true', description='Enable residual unknown coverage cleanup mode.'),
         DeclareLaunchArgument('cleanup_unknown_cluster_min_size', default_value='30', description='Minimum residual unknown cluster size in cells.'),
@@ -186,8 +222,8 @@ def generate_launch_description():
         DeclareLaunchArgument('cleanup_search_radius_max_m', default_value='2.0', description='Maximum observation-goal search radius around unknown cluster center.'),
         DeclareLaunchArgument('cleanup_min_obstacle_distance_m', default_value='0.35', description='Minimum cleanup goal clearance from occupied cells.'),
         DeclareLaunchArgument('cleanup_goal_timeout_sec', default_value='60.0', description='Cleanup NavigateToPose timeout in seconds.'),
-        DeclareLaunchArgument('cleanup_spin_after_goal', default_value='true', description='Run Nav2 Spin after a successful cleanup goal.'),
-        DeclareLaunchArgument('cleanup_spin_angle', default_value='6.28', description='Cleanup spin angle in radians.'),
+        DeclareLaunchArgument('cleanup_spin_after_goal', default_value='false', description='Run Nav2 Spin after a successful cleanup goal; disabled by default for SLAM map stability.'),
+        DeclareLaunchArgument('cleanup_spin_angle', default_value='1.57', description='Cleanup spin angle in radians when cleanup spin is explicitly enabled.'),
         DeclareLaunchArgument('cleanup_wait_after_spin_sec', default_value='2.0', description='Wait after cleanup spin for map updates.'),
         DeclareLaunchArgument('target_unknown_ratio', default_value='0.03', description='Unknown-cell ratio target before cleanup can stop.'),
         DeclareLaunchArgument('max_cleanup_goals', default_value='5', description='Maximum cleanup observation goals.'),

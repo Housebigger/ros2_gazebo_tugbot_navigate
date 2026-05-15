@@ -16,13 +16,13 @@ def generate_launch_description():
     nav2_bringup_share = get_package_share_directory('nav2_bringup')
 
     default_world = os.path.join(gazebo_share, 'worlds', 'tugbot_nav_world.sdf')
-    default_phase6_map = os.path.join(
+    default_phase14_map = os.path.join(
         navigation_share,
         'maps',
         'explored',
-        'tugbot_nav_world_slam_phase6_cleanup.yaml',
+        'tugbot_nav_world_slam_phase14_perimeter_no_spin.yaml',
     )
-    default_params = os.path.join(navigation_share, 'config', 'nav2_phase6_map_params.yaml')
+    default_params = os.path.join(navigation_share, 'config', 'nav2_phase14_map_params.yaml')
     default_rviz = os.path.join(bringup_share, 'rviz', 'tugbot_nav.rviz')
 
     world_sdf = LaunchConfiguration('world_sdf')
@@ -46,8 +46,8 @@ def generate_launch_description():
         }.items(),
     )
 
-    # Static-map replay navigation for Phase 8 intentionally uses Nav2 bringup_launch.py.
-    # This starts map_server + AMCL + the Nav2 navigation stack from the Phase 6 map.
+    # Static-map replay navigation for Phase 16 intentionally uses Nav2 bringup_launch.py.
+    # This starts map_server + AMCL + the Nav2 navigation stack from the Phase 14 recommended map.
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(nav2_bringup_share, 'launch', 'bringup_launch.py')
@@ -74,9 +74,9 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument('world_sdf', default_value=default_world, description='Gazebo world SDF for Phase 6 static-map replay.'),
-        DeclareLaunchArgument('map', default_value=default_phase6_map, description='Phase 6 static map YAML.'),
-        DeclareLaunchArgument('params_file', default_value=default_params, description='Phase 6 static replay Nav2 params YAML with safer obstacle inflation.'),
+        DeclareLaunchArgument('world_sdf', default_value=default_world, description='Gazebo world SDF for Phase 14 recommended static-map replay.'),
+        DeclareLaunchArgument('map', default_value=default_phase14_map, description='Phase 14 recommended static map YAML.'),
+        DeclareLaunchArgument('params_file', default_value=default_params, description='Phase 14 static replay Nav2 params YAML, copied from the Phase 6 static replay safety profile for clearer open-source semantics.'),
         DeclareLaunchArgument('rviz_config', default_value=default_rviz, description='RViz config.'),
         DeclareLaunchArgument('use_sim_time', default_value='true', description='Use Gazebo simulation clock.'),
         DeclareLaunchArgument('autostart', default_value='true', description='Autostart Nav2 and localization lifecycle nodes.'),

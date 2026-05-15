@@ -8,8 +8,8 @@ required before final completion.
 
 Phase 6 adds coverage cleanup mode for residual unknown regions: when normal
 frontier exploration is nearly done, the node detects residual unknown cluster
-regions near known free space, sends safe cleanup observation goals, and performs
-spin-based supplemental scans before saving the final map.
+regions near known free space and sends safe cleanup observation goals. Phase 14
+defaults avoid spin-based supplemental scans to protect SLAM map consistency.
 """
 
 from __future__ import annotations
@@ -78,6 +78,28 @@ class CleanupCandidate:
     free_neighbor_count: int
 
 
+@dataclass
+class WallCluster:
+    cells: List[Cell]
+    bbox: Tuple[int, int, int, int]
+    center_cell: Cell
+    center_xy: Point
+    length_m: float
+    thickness_m: float
+    aspect_ratio: float
+    orientation: str
+
+
+@dataclass
+class PerimeterWaypoint:
+    target_cell: Cell
+    target_xy: Point
+    yaw: float
+    source_cluster_index: int
+    clearance_cells: int
+    score: float
+
+
 class FrontierExplorer(Node):
     def __init__(self) -> None:
         super().__init__('frontier_explorer')
@@ -109,8 +131,8 @@ class FrontierExplorer(Node):
         self.map_stable_cycles_before_finish = int(self.declare_parameter('map_stable_cycles_before_finish', 3).value)
         self.map_change_free_threshold = int(self.declare_parameter('map_change_free_threshold', 50).value)
         self.map_change_unknown_threshold = int(self.declare_parameter('map_change_unknown_threshold', 50).value)
-        self.enable_recovery_scan = bool(self.declare_parameter('enable_recovery_scan', True).value)
-        self.recovery_spin_angle = float(self.declare_parameter('recovery_spin_angle', 6.28).value)
+        self.enable_recovery_scan = bool(self.declare_parameter('enable_recovery_scan', False).value)
+        self.recovery_spin_angle = float(self.declare_parameter('recovery_spin_angle', 1.57).value)
         self.recovery_wait_after_scan_sec = float(self.declare_parameter('recovery_wait_after_scan_sec', 2.0).value)
 
         self.enable_cleanup_mode = bool(self.declare_parameter('enable_cleanup_mode', True).value)
@@ -120,11 +142,32 @@ class FrontierExplorer(Node):
         self.cleanup_search_radius_max_m = float(self.declare_parameter('cleanup_search_radius_max_m', 2.0).value)
         self.cleanup_min_obstacle_distance_m = float(self.declare_parameter('cleanup_min_obstacle_distance_m', 0.35).value)
         self.cleanup_goal_timeout_sec = float(self.declare_parameter('cleanup_goal_timeout_sec', 60.0).value)
-        self.cleanup_spin_after_goal = bool(self.declare_parameter('cleanup_spin_after_goal', True).value)
-        self.cleanup_spin_angle = float(self.declare_parameter('cleanup_spin_angle', 6.28).value)
+        self.cleanup_spin_after_goal = bool(self.declare_parameter('cleanup_spin_after_goal', False).value)
+        self.cleanup_spin_angle = float(self.declare_parameter('cleanup_spin_angle', 1.57).value)
         self.cleanup_wait_after_spin_sec = float(self.declare_parameter('cleanup_wait_after_spin_sec', 2.0).value)
         self.target_unknown_ratio = float(self.declare_parameter('target_unknown_ratio', 0.03).value)
         self.max_cleanup_goals = int(self.declare_parameter('max_cleanup_goals', 5).value)
+
+        self.exploration_strategy = str(self.declare_parameter('exploration_strategy', 'frontier').value)
+        if self.exploration_strategy not in ('frontier', 'perimeter_then_frontier'):
+            self.get_logger().warn(
+                "Unsupported exploration_strategy=%s; falling back to frontier" % self.exploration_strategy
+            )
+            self.exploration_strategy = 'frontier'
+        self.perimeter_enable_initial_spin = bool(self.declare_parameter('perimeter_enable_initial_spin', False).value)
+        self.perimeter_spin_angle = float(self.declare_parameter('perimeter_spin_angle', 1.57).value)
+        self.perimeter_wall_min_cluster_size = int(self.declare_parameter('perimeter_wall_min_cluster_size', 80).value)
+        self.perimeter_wall_min_length_m = float(self.declare_parameter('perimeter_wall_min_length_m', 1.5).value)
+        self.perimeter_wall_aspect_ratio_min = float(self.declare_parameter('perimeter_wall_aspect_ratio_min', 4.0).value)
+        self.perimeter_wall_offset_m = float(self.declare_parameter('perimeter_wall_offset_m', 0.75).value)
+        self.perimeter_waypoint_spacing_m = float(self.declare_parameter('perimeter_waypoint_spacing_m', 1.0).value)
+        self.perimeter_max_waypoints = int(self.declare_parameter('perimeter_max_waypoints', 20).value)
+        self.perimeter_direction = str(self.declare_parameter('perimeter_direction', 'ccw').value).lower()
+        if self.perimeter_direction not in ('cw', 'ccw'):
+            self.get_logger().warn('Unsupported perimeter_direction=%s; falling back to ccw' % self.perimeter_direction)
+            self.perimeter_direction = 'ccw'
+        self.perimeter_switch_to_frontier_after_done = bool(self.declare_parameter('perimeter_switch_to_frontier_after_done', True).value)
+        self.perimeter_goal_timeout_sec = float(self.declare_parameter('perimeter_goal_timeout_sec', 60.0).value)
 
         self.goal_settle_sec = float(self.declare_parameter('goal_settle_sec', 2.0).value)
         self.save_map = bool(self.declare_parameter('save_map', False).value)
@@ -173,6 +216,20 @@ class FrontierExplorer(Node):
         self.last_cleanup_candidate_count = 0
         self.cleanup_mode = False
         self.recovery_mode = False
+        self.perimeter_phase = 'pending_initial_spin'
+        if self.exploration_strategy != 'perimeter_then_frontier':
+            self.perimeter_phase = 'frontier'
+        elif not self.perimeter_enable_initial_spin:
+            self.perimeter_phase = 'detect_walls'
+        self.perimeter_initial_spin_started = False
+        self.perimeter_waypoints: List[PerimeterWaypoint] = []
+        self.perimeter_waypoint_index = 0
+        self.perimeter_success_count = 0
+        self.perimeter_failure_count = 0
+        self.perimeter_rejected_waypoint_count = 0
+        self.perimeter_wall_cluster_count = 0
+        self.perimeter_detection_attempted = False
+        self.perimeter_initial_spin_skip_logged = False
 
         self.tf_buffer = tf2_ros.Buffer(cache_time=Duration(seconds=20.0))
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
@@ -194,7 +251,13 @@ class FrontierExplorer(Node):
             'enable_cleanup_mode=%s cleanup_unknown_cluster_min_size=%d cleanup_max_unknown_clusters=%d '
             'cleanup_search_radius_min_m=%.2f cleanup_search_radius_max_m=%.2f cleanup_min_obstacle_distance_m=%.2f '
             'cleanup_goal_timeout_sec=%.1f cleanup_spin_after_goal=%s cleanup_spin_angle=%.2f cleanup_wait_after_spin_sec=%.1f '
-            'target_unknown_ratio=%.3f max_cleanup_goals=%d save_map=%s map_save_path=%s'
+            'target_unknown_ratio=%.3f max_cleanup_goals=%d exploration_strategy=%s '
+            'perimeter_enable_initial_spin=%s perimeter_spin_angle=%.2f perimeter_wall_min_cluster_size=%d '
+            'perimeter_wall_min_length_m=%.2f perimeter_wall_aspect_ratio_min=%.2f perimeter_wall_offset_m=%.2f '
+            'perimeter_waypoint_spacing_m=%.2f perimeter_max_waypoints=%d perimeter_direction=%s '
+            'perimeter_switch_to_frontier_after_done=%s perimeter_goal_timeout_sec=%.1f '
+            'max_vel_theta limited by Nav2 params_file (MPPI wz_max / velocity_smoother theta defaults) '
+            'save_map=%s map_save_path=%s'
             % (
                 self.map_topic,
                 self.action_name,
@@ -229,10 +292,30 @@ class FrontierExplorer(Node):
                 self.cleanup_wait_after_spin_sec,
                 self.target_unknown_ratio,
                 self.max_cleanup_goals,
+                self.exploration_strategy,
+                self.perimeter_enable_initial_spin,
+                self.perimeter_spin_angle,
+                self.perimeter_wall_min_cluster_size,
+                self.perimeter_wall_min_length_m,
+                self.perimeter_wall_aspect_ratio_min,
+                self.perimeter_wall_offset_m,
+                self.perimeter_waypoint_spacing_m,
+                self.perimeter_max_waypoints,
+                self.perimeter_direction,
+                self.perimeter_switch_to_frontier_after_done,
+                self.perimeter_goal_timeout_sec,
                 self.save_map,
                 self.map_save_path,
             )
         )
+        self.get_logger().info(
+            'perimeter initial spin enabled/disabled: enabled=%s angle=%.2f'
+            % (self.perimeter_enable_initial_spin, self.perimeter_spin_angle)
+        )
+        if self.exploration_strategy == 'perimeter_then_frontier' and not self.perimeter_enable_initial_spin:
+            self.get_logger().warn(
+                'initial spin disabled; skipping; spin skipped because disabled; perimeter_then_frontier will use current map and fallback to frontier if insufficient map'
+            )
 
 
     @staticmethod
@@ -271,6 +354,10 @@ class FrontierExplorer(Node):
             self.get_logger().info('Waiting for NavigateToPose action server %s' % self.action_name)
             self.action_client.wait_for_server(timeout_sec=0.1)
             return
+
+        if self.exploration_strategy == 'perimeter_then_frontier' and self.perimeter_phase != 'frontier':
+            if self._run_perimeter_then_frontier(robot_pose):
+                return
 
         counts, deltas = self._update_map_stability(self.map_msg)
         strict_candidates, raw_cluster_count = self._find_frontier_candidates(self.map_msg, robot_xy, mode='strict')
@@ -512,7 +599,11 @@ class FrontierExplorer(Node):
                     self.recovery_scan_attempts,
                 )
             )
-            if self._should_start_recovery_scan(raw_cluster_count):
+            if not self.enable_recovery_scan:
+                self.get_logger().warn(
+                    'recovery scan disabled; not spinning; valid_candidates == 0 will continue with map-stability/frontier gates'
+                )
+            elif self._should_start_recovery_scan(raw_cluster_count):
                 self._start_recovery_scan()
                 return
 
@@ -842,6 +933,10 @@ class FrontierExplorer(Node):
                         'cleanup goal failed (%s); blacklisting x=%.3f y=%.3f radius=%.2f'
                         % (reason, self.last_goal_xy[0], self.last_goal_xy[1], self.blacklist_radius_m)
                     )
+        elif goal_kind == 'perimeter':
+            # Perimeter goals are a Phase 13 perimeter-first pre-pass and must not consume
+            # the existing frontier max_goals budget.
+            pass
         elif success:
             self.goal_count += 1
             self.goal_success_count += 1
@@ -860,13 +955,373 @@ class FrontierExplorer(Node):
         self.active_goal_timeout_sec = self.goal_timeout_sec
         self.active_goal_kind = 'frontier'
         self.last_goal_xy = None
+        if goal_kind == 'perimeter':
+            if success:
+                self.perimeter_success_count += 1
+                self.get_logger().info(
+                    'perimeter waypoint succeeded: success=%d failure=%d current_index=%d/%d'
+                    % (
+                        self.perimeter_success_count,
+                        self.perimeter_failure_count,
+                        self.perimeter_waypoint_index,
+                        len(self.perimeter_waypoints),
+                    )
+                )
+            else:
+                self.perimeter_failure_count += 1
+                self.get_logger().warn(
+                    'perimeter waypoint failed (%s); success=%d failure=%d current_index=%d/%d'
+                    % (
+                        reason,
+                        self.perimeter_success_count,
+                        self.perimeter_failure_count,
+                        self.perimeter_waypoint_index,
+                        len(self.perimeter_waypoints),
+                    )
+                )
+            self.wait_until = self.get_clock().now() + Duration(seconds=self.goal_settle_sec)
+            return
         if goal_kind == 'cleanup' and success and self.cleanup_spin_after_goal:
             self.wait_until = self.get_clock().now() + Duration(seconds=1.0)
             self.get_logger().warn('cleanup spin will start after cleanup goal settle: cleanup_spin_angle=%.2f' % self.cleanup_spin_angle)
             self._start_cleanup_spin()
         else:
             wait = self.cleanup_wait_after_spin_sec if goal_kind == 'cleanup' else self.goal_settle_sec
+            if goal_kind == 'cleanup' and success and not self.cleanup_spin_after_goal:
+                self.get_logger().warn(
+                    'cleanup spin disabled; skipping; waiting %.1fs for map update from observation goal' % wait
+                )
             self.wait_until = self.get_clock().now() + Duration(seconds=wait)
+
+    def _run_perimeter_then_frontier(self, robot_pose: RobotPose) -> bool:
+        # Phase 13 perimeter_then_frontier state machine:
+        # initial spin -> perimeter wall cluster detection -> generated perimeter waypoints
+        # -> NavigateToPose waypoints -> frontier/cleanup fallback.
+        if self.perimeter_phase == 'pending_initial_spin':
+            if self.perimeter_initial_spin_started:
+                return True
+            self.perimeter_initial_spin_started = True
+            self.perimeter_phase = 'initial_spin'
+            self.get_logger().warn(
+                'perimeter_then_frontier initial spin starting: perimeter_spin_angle=%.2f; visual sensors remain outside navigation control'
+                % self.perimeter_spin_angle
+            )
+            self._start_spin(
+                kind='perimeter_initial',
+                target_yaw=self.perimeter_spin_angle,
+                wait_after_sec=self.recovery_wait_after_scan_sec,
+                timeout_sec=self.perimeter_goal_timeout_sec,
+                attempt_index=1,
+                attempt_limit=1,
+            )
+            if not self.recovery_active:
+                self.perimeter_phase = 'detect_walls'
+            return True
+
+        if self.perimeter_phase == 'initial_spin':
+            # _finish_recovery_scan flips recovery_active off after Spin result. Once the
+            # wait gate has elapsed, continue to wall extraction.
+            if self.recovery_active:
+                return True
+            self.perimeter_phase = 'detect_walls'
+
+        if self.perimeter_phase == 'detect_walls':
+            if not self.perimeter_enable_initial_spin and not self.perimeter_initial_spin_skip_logged:
+                self.perimeter_initial_spin_skip_logged = True
+                self.get_logger().warn(
+                    'initial spin disabled; skipping; spin skipped because disabled before wall cluster detection'
+                )
+            self.perimeter_detection_attempted = True
+            wall_clusters = self._detect_perimeter_wall_clusters(self.map_msg)
+            self.perimeter_wall_cluster_count = len(wall_clusters)
+            self.get_logger().warn(
+                'wall cluster detection result: detected=%d min_cluster_size=%d; fallback to frontier if insufficient map'
+                % (len(wall_clusters), self.perimeter_wall_min_cluster_size)
+            )
+            waypoints, rejected = self._generate_perimeter_waypoints(self.map_msg, robot_pose, wall_clusters)
+            self.perimeter_rejected_waypoint_count = rejected
+            self.perimeter_waypoints = self._sort_perimeter_waypoints(waypoints, robot_pose)
+            self.perimeter_waypoint_index = 0
+            self.get_logger().warn(
+                'generated perimeter waypoints: generated=%d accepted perimeter waypoints=%d rejected perimeter waypoints=%d direction=%s max=%d'
+                % (
+                    len(waypoints),
+                    len(self.perimeter_waypoints),
+                    rejected,
+                    self.perimeter_direction,
+                    self.perimeter_max_waypoints,
+                )
+            )
+            if not self.perimeter_waypoints:
+                self.get_logger().warn(
+                    'Perimeter wall cluster detection produced no usable waypoints; fallback to frontier if insufficient map; switching to frontier fallback now'
+                )
+                self._switch_perimeter_to_frontier('no perimeter waypoints generated')
+                return False
+            self.perimeter_phase = 'execute_waypoints'
+
+        if self.perimeter_phase == 'execute_waypoints':
+            if self.perimeter_waypoint_index >= len(self.perimeter_waypoints):
+                self._switch_perimeter_to_frontier('all perimeter waypoints processed')
+                return False
+            waypoint = self.perimeter_waypoints[self.perimeter_waypoint_index]
+            self.perimeter_waypoint_index += 1
+            self.active_goal_timeout_sec = self.perimeter_goal_timeout_sec
+            self.get_logger().warn(
+                'Executing perimeter waypoint %d/%d: x=%.3f y=%.3f yaw=%.3f source_cluster=%d clearance_cells=%d success=%d failure=%d'
+                % (
+                    self.perimeter_waypoint_index,
+                    len(self.perimeter_waypoints),
+                    waypoint.target_xy[0],
+                    waypoint.target_xy[1],
+                    waypoint.yaw,
+                    waypoint.source_cluster_index,
+                    waypoint.clearance_cells,
+                    self.perimeter_success_count,
+                    self.perimeter_failure_count,
+                )
+            )
+            self._send_goal(waypoint.target_xy, yaw=waypoint.yaw, goal_kind='perimeter')
+            self.active_goal_timeout_sec = self.perimeter_goal_timeout_sec
+            return True
+
+        return False
+
+    def _switch_perimeter_to_frontier(self, reason: str) -> None:
+        self.perimeter_phase = 'frontier'
+        self.get_logger().warn(
+            'Perimeter phase complete; switching to frontier: reason=%s detected wall clusters=%d generated perimeter waypoints=%d '
+            'accepted perimeter waypoints=%d rejected perimeter waypoints=%d success=%d failure=%d switch_to_frontier=%s'
+            % (
+                reason,
+                self.perimeter_wall_cluster_count,
+                len(self.perimeter_waypoints) + self.perimeter_rejected_waypoint_count,
+                len(self.perimeter_waypoints),
+                self.perimeter_rejected_waypoint_count,
+                self.perimeter_success_count,
+                self.perimeter_failure_count,
+                self.perimeter_switch_to_frontier_after_done,
+            )
+        )
+        if not self.perimeter_switch_to_frontier_after_done:
+            self._mark_exploration_done('perimeter phase finished and perimeter_switch_to_frontier_after_done=false')
+
+    def _detect_perimeter_wall_clusters(self, msg: OccupancyGrid) -> List[WallCluster]:
+        width = int(msg.info.width)
+        height = int(msg.info.height)
+        resolution = float(msg.info.resolution)
+        if width <= 0 or height <= 0 or resolution <= 0.0:
+            self.get_logger().warn('perimeter wall cluster detection skipped: invalid map geometry')
+            return []
+
+        occupied_cells: Set[Cell] = set()
+        data = msg.data
+        for y in range(1, height - 1):
+            row = y * width
+            for x in range(1, width - 1):
+                if self._is_occupied(data[row + x]):
+                    occupied_cells.add((x, y))
+
+        bridge_radius_cells = max(1, int(round(0.20 / max(resolution, 1e-6))))
+        bridged_cells: Set[Cell] = set()
+        for cell in occupied_cells:
+            for expanded in self._cells_in_radius(cell, bridge_radius_cells, width, height):
+                bridged_cells.add(expanded)
+        raw_clusters = self._cluster_cells(bridged_cells, width, height)
+        wall_clusters: List[WallCluster] = []
+        for cluster in raw_clusters:
+            if len(cluster) < self.perimeter_wall_min_cluster_size:
+                continue
+            xs = [cell[0] for cell in cluster]
+            ys = [cell[1] for cell in cluster]
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
+            span_x = (max_x - min_x + 1) * resolution
+            span_y = (max_y - min_y + 1) * resolution
+            length_m = max(span_x, span_y)
+            thickness_m = max(resolution, min(span_x, span_y))
+            aspect_ratio = length_m / max(thickness_m, resolution)
+            if length_m < self.perimeter_wall_min_length_m:
+                continue
+            if aspect_ratio < self.perimeter_wall_aspect_ratio_min:
+                continue
+            cx = int(round(sum(xs) / len(cluster)))
+            cy = int(round(sum(ys) / len(cluster)))
+            orientation = 'vertical' if span_y >= span_x else 'horizontal'
+            wall_clusters.append(
+                WallCluster(
+                    cells=cluster,
+                    bbox=(min_x, min_y, max_x, max_y),
+                    center_cell=(cx, cy),
+                    center_xy=self._cell_to_world(cx, cy, msg.info.origin.position.x, msg.info.origin.position.y, resolution),
+                    length_m=length_m,
+                    thickness_m=thickness_m,
+                    aspect_ratio=aspect_ratio,
+                    orientation=orientation,
+                )
+            )
+
+        wall_clusters.sort(key=lambda item: (item.length_m, len(item.cells)), reverse=True)
+        top = wall_clusters[0] if wall_clusters else None
+        self.get_logger().warn(
+            'perimeter wall cluster detection: occupied_cells=%d bridged_cells=%d raw_clusters=%d detected wall clusters=%d min_cluster_size=%d '
+            'min_length=%.2f aspect_min=%.2f top_length=%.2f top_aspect=%.2f'
+            % (
+                len(occupied_cells),
+                len(bridged_cells),
+                len(raw_clusters),
+                len(wall_clusters),
+                self.perimeter_wall_min_cluster_size,
+                self.perimeter_wall_min_length_m,
+                self.perimeter_wall_aspect_ratio_min,
+                top.length_m if top else 0.0,
+                top.aspect_ratio if top else 0.0,
+            )
+        )
+        return wall_clusters
+
+    def _generate_perimeter_waypoints(
+        self,
+        msg: OccupancyGrid,
+        robot_pose: RobotPose,
+        wall_clusters: List[WallCluster],
+    ) -> Tuple[List[PerimeterWaypoint], int]:
+        if not wall_clusters:
+            return [], 0
+        width = int(msg.info.width)
+        height = int(msg.info.height)
+        resolution = float(msg.info.resolution)
+        data = msg.data
+        origin_x = msg.info.origin.position.x
+        origin_y = msg.info.origin.position.y
+        offset_cells = max(1, int(round(self.perimeter_wall_offset_m / max(resolution, 1e-6))))
+        min_clearance_cells = max(1, int(math.ceil(0.45 / max(resolution, 1e-6))))
+        spacing_cells = max(1, int(round(self.perimeter_waypoint_spacing_m / max(resolution, 1e-6))))
+        accepted: List[PerimeterWaypoint] = []
+        accepted_cells: List[Cell] = []
+        rejected = 0
+        map_center_x = width / 2.0
+        map_center_y = height / 2.0
+
+        for cluster_index, cluster in enumerate(wall_clusters):
+            if len(accepted) >= self.perimeter_max_waypoints:
+                break
+            min_x, min_y, max_x, max_y = cluster.bbox
+            samples: List[Cell]
+            if cluster.orientation == 'vertical':
+                step = max(1, spacing_cells)
+                samples = [(cluster.center_cell[0], y) for y in range(min_y, max_y + 1, step)]
+            else:
+                step = max(1, spacing_cells)
+                samples = [(x, cluster.center_cell[1]) for x in range(min_x, max_x + 1, step)]
+
+            for sx, sy in samples:
+                if len(accepted) >= self.perimeter_max_waypoints:
+                    break
+                if cluster.orientation == 'vertical':
+                    direction = 1 if cluster.center_cell[0] < map_center_x else -1
+                    target = (sx + direction * offset_cells, sy)
+                else:
+                    direction = 1 if cluster.center_cell[1] < map_center_y else -1
+                    target = (sx, sy + direction * offset_cells)
+                tx, ty = target
+                if tx <= 0 or ty <= 0 or tx >= width - 1 or ty >= height - 1:
+                    rejected += 1
+                    continue
+                if not self._is_free(data[ty * width + tx]):
+                    target = self._nearest_free_offset_cell(data, width, height, target, min_clearance_cells, offset_cells)
+                    if target is None:
+                        rejected += 1
+                        continue
+                    tx, ty = target
+                if not self._is_far_from_occupied(data, width, height, tx, ty, min_clearance_cells):
+                    rejected += 1
+                    continue
+                if any(math.hypot(tx - ax, ty - ay) < max(1, spacing_cells * 0.65) for ax, ay in accepted_cells):
+                    rejected += 1
+                    continue
+                wx, wy = self._cell_to_world(tx, ty, origin_x, origin_y, resolution)
+                if self._is_blacklisted((wx, wy)):
+                    rejected += 1
+                    continue
+                yaw = math.atan2(cluster.center_xy[1] - wy, cluster.center_xy[0] - wx)
+                clearance_cells = self._nearest_occupied_distance_cells(
+                    data,
+                    width,
+                    height,
+                    tx,
+                    ty,
+                    max(min_clearance_cells + 6, min_clearance_cells),
+                )
+                dist = math.hypot(wx - robot_pose[0], wy - robot_pose[1])
+                score = cluster.length_m + 0.05 * len(cluster.cells) + clearance_cells * resolution - 0.05 * dist
+                accepted.append(
+                    PerimeterWaypoint(
+                        target_cell=(tx, ty),
+                        target_xy=(wx, wy),
+                        yaw=yaw,
+                        source_cluster_index=cluster_index,
+                        clearance_cells=clearance_cells,
+                        score=score,
+                    )
+                )
+                accepted_cells.append((tx, ty))
+
+        self.get_logger().warn(
+            'accepted perimeter waypoints=%d rejected perimeter waypoints=%d wall_clusters=%d offset_m=%.2f spacing_m=%.2f clearance_min_m=0.45'
+            % (len(accepted), rejected, len(wall_clusters), self.perimeter_wall_offset_m, self.perimeter_waypoint_spacing_m)
+        )
+        return accepted, rejected
+
+    def _nearest_free_offset_cell(
+        self,
+        data: Sequence[int],
+        width: int,
+        height: int,
+        target: Cell,
+        min_clearance_cells: int,
+        search_radius_cells: int,
+    ) -> Optional[Cell]:
+        tx, ty = target
+        best: Optional[Tuple[int, Cell]] = None
+        max_radius = max(1, search_radius_cells)
+        for radius in range(1, max_radius + 1):
+            for y in range(max(1, ty - radius), min(height - 1, ty + radius + 1)):
+                for x in range(max(1, tx - radius), min(width - 1, tx + radius + 1)):
+                    d2 = (x - tx) * (x - tx) + (y - ty) * (y - ty)
+                    if d2 > radius * radius:
+                        continue
+                    if not self._is_free(data[y * width + x]):
+                        continue
+                    if not self._is_far_from_occupied(data, width, height, x, y, min_clearance_cells):
+                        continue
+                    if best is None or d2 < best[0]:
+                        best = (d2, (x, y))
+            if best is not None:
+                return best[1]
+        return None
+
+    def _sort_perimeter_waypoints(self, waypoints: List[PerimeterWaypoint], robot_pose: RobotPose) -> List[PerimeterWaypoint]:
+        if not waypoints:
+            return []
+        cx = sum(item.target_xy[0] for item in waypoints) / len(waypoints)
+        cy = sum(item.target_xy[1] for item in waypoints) / len(waypoints)
+        reverse = self.perimeter_direction == 'cw'
+        ordered = sorted(
+            waypoints,
+            key=lambda item: math.atan2(item.target_xy[1] - cy, item.target_xy[0] - cx),
+            reverse=reverse,
+        )
+        robot_xy = (robot_pose[0], robot_pose[1])
+        start_index = min(range(len(ordered)), key=lambda i: math.hypot(ordered[i].target_xy[0] - robot_xy[0], ordered[i].target_xy[1] - robot_xy[1]))
+        ordered = ordered[start_index:] + ordered[:start_index]
+        if len(ordered) > self.perimeter_max_waypoints:
+            ordered = ordered[: self.perimeter_max_waypoints]
+        self.get_logger().warn(
+            'generated perimeter waypoints sorted: accepted=%d direction=%s start_index=%d center=(%.3f, %.3f)'
+            % (len(ordered), self.perimeter_direction, start_index, cx, cy)
+        )
+        return ordered
 
     def _find_frontier_candidates(
         self,
