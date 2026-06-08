@@ -1,0 +1,17 @@
+/camera/camera_info
+/camera/image_raw
+/clicked_point
+/clock
+/cmd_vel
+/goal_pose
+/initialpose
+/map
+/map_updates
+/odom
+/parameter_events
+/plan
+/robot_description
+/rosout
+/scan
+/tf
+/tf_static

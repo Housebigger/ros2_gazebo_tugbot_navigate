@@ -1,0 +1,51 @@
+# Maze instance metadata for the 20260522 Tugbot maze workspace.
+# The source image is an illustrative 3D/shadowed JPEG, not a clean occupancy map.
+# First framework stage treats it as a reference asset and uses manual entrance/exit metadata.
+
+source_image: package://tugbot_maze/assets/maze_20260522.jpg
+source_image_sha256: null
+source_image_width_px: 1000
+source_image_height_px: 1000
+source_image_kind: reference_3d_illustration
+
+conversion:
+  mode: manual_simplified_first_pass
+  notes:
+    - Do not use the JPEG directly as a runtime global path.
+    - Use the JPEG to derive or validate a Gazebo maze world only.
+    - A later phase may replace the initial simplified world with a cleaned occupancy extraction.
+  resolution_m_per_pixel: 0.02
+  wall_height_m: 1.2
+  wall_thickness_m: 0.18
+  tugbot_turning_outer_diameter_m: 0.738
+  min_corridor_width_policy: at_least_twice_tugbot_turning_outer_diameter
+  min_corridor_width_m: 1.6
+  measured_min_wall_gap_m: 1.76
+
+frames:
+  world_frame: map
+  robot_base_frame: base_link
+
+entrance:
+  description: Manual first-pass entrance near the left-lower side, based on visual inspection of the reference image.
+  x_m: -4.0
+  y_m: -3.0
+  yaw_rad: 0.0
+
+exit:
+  description: Manual first-pass exit region near the right-upper side, based on visual inspection of the reference image.
+  x_m: 4.0
+  y_m: 3.0
+  radius_m: 0.6
+  success_log_token: MAZE_EXIT_REACHED
+
+runtime_policy:
+  image_allowed_for_world_generation: true
+  image_allowed_for_exit_truth: true
+  image_allowed_for_runtime_path_planning: false
+  online_navigation_inputs:
+    - /scan
+    - /odom
+    - /tf
+    - /map from slam_toolbox
+    - Nav2 NavigateToPose feedback

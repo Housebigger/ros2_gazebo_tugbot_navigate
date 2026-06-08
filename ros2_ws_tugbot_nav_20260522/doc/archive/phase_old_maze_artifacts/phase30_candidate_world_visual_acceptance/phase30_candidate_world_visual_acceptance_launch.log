@@ -1,0 +1,126 @@
+Phase30 visual-only candidate world run
+2026-05-28T10:50:31+08:00
+ROOT=/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522
+WORLD_SDF=/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf
+BASELINE_WORLD=/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world.sdf
+DISPLAY=:1
+5867385cd3eb72202c25e8bdd16c63591df6b947facada139d8fa8bab403d3a5  /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world.sdf
+b4ced2a422fd976f2a9a12455e06d6626526b1cebfc748b0c4820f5149c423dc  /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf
+Command: ros2 launch tugbot_gazebo tugbot_gazebo.launch.py world_sdf:=/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf headless:=false use_sim_time:=true
+[INFO] [launch]: All log files can be found below /home/hyh/.ros/log/2026-05-28-10-50-31-690573-hyh-ASUS-TUF-Ubuntu-129939
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [gazebo-1]: process started with pid [129979]
+[INFO] [bridge_node-2]: process started with pid [129980]
+[INFO] [static_transform_publisher-3]: process started with pid [129981]
+[INFO] [static_transform_publisher-4]: process started with pid [129983]
+[INFO] [static_transform_publisher-5]: process started with pid [129984]
+[static_transform_publisher-4] [INFO] [1779936631.959061519] [camera_link_static_tf]: Spinning until stopped - publishing transform
+[static_transform_publisher-4] translation: ('0.300000', '0.000000', '0.550000')
+[static_transform_publisher-4] rotation: ('0.000000', '0.000000', '0.000000', '1.000000')
+[static_transform_publisher-4] from 'base_link' to 'camera_link'
+[static_transform_publisher-3] [INFO] [1779936631.959116543] [scan_omni_static_tf]: Spinning until stopped - publishing transform
+[static_transform_publisher-3] translation: ('-0.185500', '0.000000', '0.531800')
+[static_transform_publisher-3] rotation: ('0.000000', '0.000000', '0.000000', '1.000000')
+[static_transform_publisher-3] from 'base_link' to 'tugbot/scan_omni/scan_omni'
+[static_transform_publisher-5] [INFO] [1779936631.959221811] [camera_optical_frame_static_tf]: Spinning until stopped - publishing transform
+[static_transform_publisher-5] translation: ('0.000000', '0.000000', '0.000000')
+[static_transform_publisher-5] rotation: ('-0.500000', '0.500000', '-0.500000', '0.500000')
+[static_transform_publisher-5] from 'camera_link' to 'camera_optical_frame'
+[bridge_node-2] [INFO] [1779936633.010707983] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/clock (gz.msgs.Clock) -> /clock (rosgraph_msgs/msg/Clock)] (Lazy 0)
+[bridge_node-2] [INFO] [1779936633.012106390] [ros_gz_bridge]: Creating ROS->GZ Bridge: [/cmd_vel (geometry_msgs/msg/Twist) -> /cmd_vel (gz.msgs.Twist)] (Lazy 0)
+[bridge_node-2] [INFO] [1779936633.013685979] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/odom (gz.msgs.Odometry) -> /odom (nav_msgs/msg/Odometry)] (Lazy 0)
+[bridge_node-2] [INFO] [1779936633.015048588] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/scan (gz.msgs.LaserScan) -> /scan (sensor_msgs/msg/LaserScan)] (Lazy 0)
+[bridge_node-2] [INFO] [1779936633.016077098] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/tf (gz.msgs.Pose_V) -> /tf (tf2_msgs/msg/TFMessage)] (Lazy 0)
+[bridge_node-2] [INFO] [1779936633.017314050] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/camera/image_raw (gz.msgs.Image) -> /camera/image_raw (sensor_msgs/msg/Image)] (Lazy 0)
+[bridge_node-2] [INFO] [1779936633.017755282] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/camera/camera_info (gz.msgs.CameraInfo) -> /camera/camera_info (sensor_msgs/msg/CameraInfo)] (Lazy 0)
+[gazebo-1] libEGL warning: pci id for fd 89: 10de:2860, driver (null)
+[gazebo-1] 
+[gazebo-1] pci id for fd 90: 10de:2860, driver (null)
+[gazebo-1] pci id for fd 91: 10de:2860, driver (null)
+[gazebo-1] libEGL warning: egl: failed to create dri2 screen
+[gazebo-1] libEGL warning: pci id for fd 89: 10de:2860, driver (null)
+[gazebo-1] 
+[gazebo-1] pci id for fd 90: 10de:2860, driver (null)
+[gazebo-1] pci id for fd 91: 10de:2860, driver (null)
+[gazebo-1] libEGL warning: egl: failed to create dri2 screen
+[gazebo-1] libEGL warning: pci id for fd 89: 10de:2860, driver (null)
+[gazebo-1] 
+[gazebo-1] libEGL warning: pci id for fd 57: 10de:2860, driver (null)
+[gazebo-1] 
+[gazebo-1] pci id for fd 58: 10de:2860, driver (null)
+[gazebo-1] pci id for fd 59: 10de:2860, driver (null)
+[gazebo-1] libEGL warning: egl: failed to create dri2 screen
+[gazebo-1] libEGL warning: pci id for fd 57: 10de:2860, driver (null)
+[gazebo-1] 
+[gazebo-1] pci id for fd 58: 10de:2860, driver (null)
+[gazebo-1] pci id for fd 59: 10de:2860, driver (null)
+[gazebo-1] libEGL warning: egl: failed to create dri2 screen
+[gazebo-1] libEGL warning: pci id for fd 57: 10de:2860, driver (null)
+[gazebo-1] 
+
+Post-start snapshots
+ROS nodes:
+/camera_link_static_tf
+/camera_optical_frame_static_tf
+/ros_gz_bridge
+/rviz
+/scan_omni_static_tf
+/transform_listener_impl_5e4e0033fac0
+ROS topics:
+/camera/camera_info
+/camera/image_raw
+/clicked_point
+/clock
+/cmd_vel
+/goal_pose
+/initialpose
+/map
+/map_updates
+/odom
+/parameter_events
+/plan
+/robot_description
+/rosout
+/scan
+/tf
+/tf_static
+GZ topics:
+/camera/camera_info
+/camera/image_raw
+/clock
+/cmd_vel
+/gazebo/resource_paths
+/gui/camera/pose
+/gui/currently_tracked
+/gui/track
+/odom
+/scan
+/scan/points
+/sensors/marker
+/stats
+/tf
+/world/tugbot_maze_world_image_faithful/clock
+/world/tugbot_maze_world_image_faithful/dynamic_pose/info
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/gripper/sensor/sensor_contact/scan
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/gripper/sensor/sensor_contact/scan/points
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/imu_link/sensor/imu/imu
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/scan_back/sensor/scan_back/scan
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/scan_back/sensor/scan_back/scan/points
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/scan_front/sensor/scan_front/scan
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/scan_front/sensor/scan_front/scan/points
+/world/tugbot_maze_world_image_faithful/pose/info
+/world/tugbot_maze_world_image_faithful/scene/deletion
+/world/tugbot_maze_world_image_faithful/scene/info
+/world/tugbot_maze_world_image_faithful/state
+/world/tugbot_maze_world_image_faithful/stats
+/model/tugbot/enable
+/world/tugbot_maze_world_image_faithful/light_config
+/world/tugbot_maze_world_image_faithful/material_color
+Processes:
+129939 /usr/bin/python3 /opt/ros/jazzy/bin/ros2 launch tugbot_gazebo tugbot_gazebo.launch.py world_sdf:=/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf headless:=false use_sim_time:=true
+129979 /bin/sh -c ruby /opt/ros/jazzy/opt/gz_tools_vendor/bin/gz sim -r /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf --force-version 8
+129980 /opt/ros/jazzy/lib/ros_gz_bridge/bridge_node --ros-args --log-level info --ros-args -r __node:=ros_gz_bridge -r __ns:=/ --params-file /tmp/launch_params_lr8ssc9x
+129982 gz sim -r /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf
+130061 gz sim server
+130063 gz sim gui
+130868 rviz2 -d /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/install/tugbot_bringup/share/tugbot_bringup/rviz/tugbot_nav.rviz

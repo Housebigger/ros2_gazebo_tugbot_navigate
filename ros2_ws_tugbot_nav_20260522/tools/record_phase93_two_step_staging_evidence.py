@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""Phase93 raw/fresh evidence recorder for bounded two-step staging validation.
+
+Captures a short read-only snapshot of /maze/goal_events, /scan,
+/local_costmap/costmap, /local_costmap/published_footprint, /odom and TF at
+the bounded Phase93 scene. It sends no goals and changes no runtime parameters.
+The output explicitly preserves fresh evidence timestamps used to verify that a
+second-step forward goal was generated only after fresh scan/local-costmap/TF
+evidence following corridor_alignment_staging success.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import time
+from pathlib import Path
+from typing import Any
+
+import rclpy
+from geometry_msgs.msg import PolygonStamped, TransformStamped
+from nav_msgs.msg import OccupancyGrid, Odometry
+from rclpy.node import Node
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import String
+from tf2_ros import Buffer, TransformException, TransformListener
+
+RUN_ID = 'phase93_two_step_staging_bounded_goal2_validation'
+FRAME_PAIRS = [
+    ('map', 'base_link'),
+    ('odom', 'base_link'),
+    ('map', 'odom'),
+    ('base_link', 'scan_omni'),
+    ('base_link', 'base_scan'),
+]
+
+
+def quat_to_yaw(q: Any) -> float:
+    siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+    cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+    return math.atan2(siny_cosp, cosy_cosp)
+
+
+def stamp_to_sec(msg: Any) -> float:
+    stamp = msg.header.stamp
+    return float(stamp.sec) + float(stamp.nanosec) / 1e9
+
+
+def summarize_transform(msg: TransformStamped) -> dict[str, Any]:
+    t = msg.transform.translation
+    return {
+        'available': True,
+        'parent': msg.header.frame_id,
+        'child': msg.child_frame_id,
+        'stamp_sec': stamp_to_sec(msg),
+        'translation': {'x': float(t.x), 'y': float(t.y), 'z': float(t.z)},
+        'yaw': quat_to_yaw(msg.transform.rotation),
+    }
+
+
+def transform_pose_xy_yaw(msg: TransformStamped) -> list[float]:
+    t = msg.transform.translation
+    return [float(t.x), float(t.y), quat_to_yaw(msg.transform.rotation)]
+
+
+def scan_to_dict(msg: LaserScan | None) -> dict[str, Any] | None:
+    if msg is None:
+        return None
+    return {
+        'topic': '/scan',
+        'frame_id': msg.header.frame_id,
+        'stamp_sec': stamp_to_sec(msg),
+        'angle_min': float(msg.angle_min),
+        'angle_max': float(msg.angle_max),
+        'angle_increment': float(msg.angle_increment),
+        'range_min': float(msg.range_min),
+        'range_max': float(msg.range_max),
+        'ranges': [float(v) for v in msg.ranges],
+    }
+
+
+def costmap_to_dict(msg: OccupancyGrid | None) -> dict[str, Any] | None:
+    if msg is None:
+        return None
+    origin = msg.info.origin
+    return {
+        'topic': '/local_costmap/costmap',
+        'frame_id': msg.header.frame_id,
+        'stamp_sec': stamp_to_sec(msg),
+        'info': {
+            'resolution': float(msg.info.resolution),
+            'width': int(msg.info.width),
+            'height': int(msg.info.height),
+            'origin': {
+                'position': {'x': float(origin.position.x), 'y': float(origin.position.y), 'z': float(origin.position.z)},
+                'orientation_yaw': quat_to_yaw(origin.orientation),
+            },
+        },
+        'data': [int(v) for v in msg.data],
+    }
+
+
+def footprint_to_dict(msg: PolygonStamped | None) -> dict[str, Any] | None:
+    if msg is None:
+        return None
+    return {
+        'topic': '/local_costmap/published_footprint',
+        'frame_id': msg.header.frame_id,
+        'stamp_sec': stamp_to_sec(msg),
+        'points': [[float(p.x), float(p.y), float(p.z)] for p in msg.polygon.points],
+    }
+
+
+def odom_to_dict(msg: Odometry | None) -> dict[str, Any] | None:
+    if msg is None:
+        return None
+    pose = msg.pose.pose
+    twist = msg.twist.twist
+    return {
+        'topic': '/odom',
+        'frame_id': msg.header.frame_id,
+        'child_frame_id': msg.child_frame_id,
+        'stamp_sec': stamp_to_sec(msg),
+        'pose': {'x': float(pose.position.x), 'y': float(pose.position.y), 'z': float(pose.position.z), 'yaw': quat_to_yaw(pose.orientation)},
+        'twist': {'linear_x': float(twist.linear.x), 'linear_y': float(twist.linear.y), 'angular_z': float(twist.angular.z)},
+    }
+
+
+def goal_event_to_dict(msg: String | None) -> dict[str, Any] | None:
+    if msg is None:
+        return None
+    try:
+        payload = json.loads(msg.data)
+    except Exception:
+        payload = {'raw': msg.data}
+    return {'topic': '/maze/goal_events', 'payload': payload}
+
+
+class Phase93Recorder(Node):
+    def __init__(self, duration: float, source_analysis: dict[str, Any]) -> None:
+        super().__init__('phase93_two_step_staging_raw_fresh_evidence_recorder')
+        self.duration = duration
+        self.started = time.time()
+        self.source_analysis = source_analysis
+        self.goal_event_msg: String | None = None
+        self.scan_msg: LaserScan | None = None
+        self.costmap_msg: OccupancyGrid | None = None
+        self.footprint_msg: PolygonStamped | None = None
+        self.odom_msg: Odometry | None = None
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.create_subscription(String, '/maze/goal_events', self._on_goal_event, 10)
+        self.create_subscription(LaserScan, '/scan', self._on_scan, 10)
+        self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self._on_costmap, 10)
+        self.create_subscription(PolygonStamped, '/local_costmap/published_footprint', self._on_footprint, 10)
+        self.create_subscription(Odometry, '/odom', self._on_odom, 10)
+
+    def _on_goal_event(self, msg: String) -> None:
+        self.goal_event_msg = msg
+
+    def _on_scan(self, msg: LaserScan) -> None:
+        self.scan_msg = msg
+
+    def _on_costmap(self, msg: OccupancyGrid) -> None:
+        self.costmap_msg = msg
+
+    def _on_footprint(self, msg: PolygonStamped) -> None:
+        self.footprint_msg = msg
+
+    def _on_odom(self, msg: Odometry) -> None:
+        self.odom_msg = msg
+
+    def snapshot(self) -> dict[str, Any]:
+        transforms: dict[str, Any] = {}
+        robot_pose_by_frame: dict[str, list[float]] = {}
+        frame_pairs = list(FRAME_PAIRS)
+        if self.scan_msg is not None and self.scan_msg.header.frame_id:
+            scan_frame = self.scan_msg.header.frame_id.lstrip('/')
+            if ('base_link', scan_frame) not in frame_pairs:
+                frame_pairs.append(('base_link', scan_frame))
+        for parent, child in frame_pairs:
+            key = f'{parent}->{child}'
+            try:
+                transform = self.tf_buffer.lookup_transform(parent, child, rclpy.time.Time())
+                transforms[key] = summarize_transform(transform)
+                if child == 'base_link':
+                    robot_pose_by_frame[parent] = transform_pose_xy_yaw(transform)
+            except TransformException as exc:
+                transforms[key] = {'available': False, 'error': str(exc)}
+        odom = odom_to_dict(self.odom_msg)
+        if odom:
+            robot_pose_by_frame.setdefault('odom', [odom['pose']['x'], odom['pose']['y'], odom['pose']['yaw']])
+        scan = scan_to_dict(self.scan_msg)
+        costmap = costmap_to_dict(self.costmap_msg)
+        latest_tf_stamp = None
+        for value in transforms.values():
+            if isinstance(value, dict) and value.get('available') and value.get('stamp_sec') is not None:
+                latest_tf_stamp = value.get('stamp_sec')
+                break
+        return {
+            'run_id': RUN_ID,
+            'capture_wall_time': time.time(),
+            'elapsed_sec': time.time() - self.started,
+            'goal_event': goal_event_to_dict(self.goal_event_msg),
+            'robot_pose_by_frame': robot_pose_by_frame,
+            'scan': scan,
+            'local_costmap': costmap,
+            'footprint': footprint_to_dict(self.footprint_msg),
+            'odom': odom,
+            'tf': transforms,
+            'fresh_evidence_timestamps': {
+                'after_staging_success_scan_sec': scan.get('stamp_sec') if isinstance(scan, dict) else None,
+                'after_staging_success_local_costmap_sec': costmap.get('stamp_sec') if isinstance(costmap, dict) else None,
+                'after_staging_success_tf_sec': latest_tf_stamp,
+                'capture_wall_time_sec': time.time(),
+            },
+            'source_analysis_classification': self.source_analysis.get('classification'),
+            'source_analysis_json': self.source_analysis.get('_path'),
+            'guardrails': [
+                'recording-only; sends no goals',
+                'fresh evidence recorder for scan/local costmap/TF timestamps',
+                'No maze_explorer strategy changed',
+                'No Phase92 staging logic changed',
+                'No branch scoring changed',
+                'No exploration order changed',
+                'No centerline gate changed',
+                'No directional readiness changed',
+                'No fallback/terminal acceptance changed',
+                'No Nav2/MPPI/controller tuning',
+                'No inflation/robot_radius/clearance_radius_m/map threshold tuning',
+                'No autonomous exploration success claimed',
+                'No exit success claimed',
+                'Phase94 not entered',
+            ],
+        }
+
+
+def load_json(path: Path | None) -> dict[str, Any]:
+    if path and path.exists() and path.stat().st_size:
+        data = json.loads(path.read_text(encoding='utf-8', errors='replace'))
+        data['_path'] = str(path)
+        return data
+    return {}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--duration-sec', type=float, default=5.0)
+    parser.add_argument('--source-analysis-json', type=Path, default=None)
+    parser.add_argument('--output-json', type=Path, required=True)
+    args = parser.parse_args()
+
+    source = load_json(args.source_analysis_json)
+    rclpy.init()
+    node = Phase93Recorder(args.duration_sec, source)
+    deadline = time.time() + args.duration_sec
+    while rclpy.ok() and time.time() < deadline:
+        rclpy.spin_once(node, timeout_sec=0.1)
+    evidence = node.snapshot()
+    args.output_json.parent.mkdir(parents=True, exist_ok=True)
+    args.output_json.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+    print(json.dumps({
+        'output_json': str(args.output_json),
+        'goal_event_available': evidence.get('goal_event') is not None,
+        'scan_available': evidence.get('scan') is not None,
+        'local_costmap_available': evidence.get('local_costmap') is not None,
+        'footprint_available': evidence.get('footprint') is not None,
+        'odom_available': evidence.get('odom') is not None,
+        'tf_available': bool(evidence.get('tf')),
+        'fresh_evidence_timestamps': evidence.get('fresh_evidence_timestamps'),
+    }, sort_keys=True))
+    node.destroy_node()
+    rclpy.shutdown()
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

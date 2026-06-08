@@ -1,0 +1,131 @@
+# Phase29 hybrid/manual-reviewed wall segment candidate for maze_20260522.jpg.
+#
+# This is intentionally NOT an automatic detector dump. It is a human-editable
+# candidate distilled from Phase28 artifacts plus manual visual review of the
+# reference image. Coordinates are normalized source-image percentages with
+# origin at top-left. The generator maps them into a candidate 12 m x 12 m world.
+#
+# Do not overwrite src/tugbot_gazebo/worlds/tugbot_maze_world.sdf with this file's
+# generated output until a later human acceptance phase explicitly promotes it.
+
+schema_version: 1
+review_status: hybrid_manual_reviewed_candidate
+source_image: src/tugbot_maze/assets/maze_20260522.jpg
+phase28_report: doc/doc_report/phase28_maze_world_fidelity_audit_report.md
+phase28_overlay_reference: log/phase28_maze_world_fidelity/08_generated_wall_segments_overlay_static_detected.png
+
+transform:
+  image_width_px: 1000
+  image_height_px: 1000
+  coordinate_origin: top_left
+  percent_coordinates: true
+  world_bounds_m:
+    xmin: -6.0
+    xmax: 6.0
+    ymin: -6.0
+    ymax: 6.0
+  mapping:
+    x_m: xmin + x_pct / 100.0 * (xmax - xmin)
+    y_m: ymax - y_pct / 100.0 * (ymax - ymin)
+  notes:
+    - Phase28 showed metadata 0.02 m/px implied 20 m, while scaffold spans 12 m.
+    - Phase29 keeps a 12 m candidate extent for continuity with entrance/exit and existing launch assumptions.
+    - This transform is explicit and reversible but still a candidate, not promoted ground truth.
+
+wall_defaults:
+  thickness_m: 0.24
+  height_m: 1.2
+  z_center_m: 0.6
+  material_rgba: [0.92, 0.92, 0.90, 1.0]
+
+generation_policy:
+  do_not_overwrite_scaffold_world: true
+  candidate_world_name: tugbot_maze_world_image_faithful
+  candidate_output: src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf
+  baseline_scaffold_world: src/tugbot_gazebo/worlds/tugbot_maze_world.sdf
+  source_type: hybrid_manual_reviewed_vectorization
+  automatic_detector_dump_used_directly: false
+
+entrance:
+  description: Candidate mapping of existing manual scaffold entrance near lower-left image opening.
+  pixel_pct: [16.666666666666668, 75.0]
+  x_m: -4.0
+  y_m: -3.0
+  yaw_rad: 0.0
+
+exit:
+  description: Candidate mapping of existing manual scaffold exit near upper-right image opening.
+  pixel_pct: [83.33333333333333, 25.0]
+  x_m: 4.0
+  y_m: 3.0
+  radius_m: 0.6
+
+segments:
+  # Outer frame approximated from the source image's visible square maze border.
+  - {id: outer_bottom, orientation: horizontal, p0_pct: [14.0, 85.0], p1_pct: [87.0, 85.0], outer: true}
+  - {id: outer_top, orientation: horizontal, p0_pct: [14.0, 15.0], p1_pct: [81.0, 15.0], outer: true}
+  - {id: outer_left, orientation: vertical, p0_pct: [14.0, 15.0], p1_pct: [14.0, 80.0], outer: true}
+  - {id: outer_right, orientation: vertical, p0_pct: [85.0, 15.0], p1_pct: [85.0, 86.0], outer: true}
+
+  # Major manually reviewed horizontal interior runs.
+  - {id: h02_upper_left, orientation: horizontal, p0_pct: [19.0, 20.0], p1_pct: [40.0, 20.0]}
+  - {id: h03_upper_right, orientation: horizontal, p0_pct: [48.0, 20.0], p1_pct: [78.0, 20.0]}
+  - {id: h04_left_upper_shelf, orientation: horizontal, p0_pct: [22.0, 24.0], p1_pct: [38.0, 24.0]}
+  - {id: h05_upper_center_shelf, orientation: horizontal, p0_pct: [45.0, 24.0], p1_pct: [60.0, 24.0]}
+  - {id: h06_upper_right_shelf, orientation: horizontal, p0_pct: [64.0, 24.0], p1_pct: [80.0, 24.0]}
+  - {id: h08_upper_right_mid, orientation: horizontal, p0_pct: [55.0, 28.0], p1_pct: [75.0, 28.0]}
+  - {id: h10_left_center_short, orientation: horizontal, p0_pct: [28.0, 33.0], p1_pct: [36.0, 33.0]}
+  - {id: h11_center_right_long, orientation: horizontal, p0_pct: [55.0, 33.0], p1_pct: [72.0, 33.0]}
+  - {id: h13_left_inner, orientation: horizontal, p0_pct: [21.0, 39.0], p1_pct: [31.0, 39.0]}
+  - {id: h14_center, orientation: horizontal, p0_pct: [51.0, 39.0], p1_pct: [65.0, 39.0]}
+  - {id: h15_right_inner_shelf, orientation: horizontal, p0_pct: [75.0, 39.0], p1_pct: [83.0, 39.0]}
+  - {id: h16_left_middle_shelf, orientation: horizontal, p0_pct: [21.0, 44.0], p1_pct: [31.0, 44.0]}
+  - {id: h17_central_long, orientation: horizontal, p0_pct: [37.0, 44.0], p1_pct: [60.0, 44.0]}
+  - {id: h18_right_middle_short, orientation: horizontal, p0_pct: [70.0, 44.0], p1_pct: [78.0, 44.0]}
+  - {id: h19_left_middle_short, orientation: horizontal, p0_pct: [25.0, 50.0], p1_pct: [33.0, 50.0]}
+  - {id: h20_main_central, orientation: horizontal, p0_pct: [35.0, 50.0], p1_pct: [63.0, 50.0]}
+  - {id: h21_right_middle, orientation: horizontal, p0_pct: [72.0, 50.0], p1_pct: [83.0, 50.0]}
+  - {id: h22_left_lower_middle, orientation: horizontal, p0_pct: [25.0, 55.0], p1_pct: [33.0, 55.0]}
+  - {id: h23_central_lower_shelf, orientation: horizontal, p0_pct: [38.0, 55.0], p1_pct: [63.0, 55.0]}
+  - {id: h24_right_lower_middle, orientation: horizontal, p0_pct: [72.0, 55.0], p1_pct: [83.0, 55.0]}
+  - {id: h25_lower_left_interior, orientation: horizontal, p0_pct: [26.0, 61.0], p1_pct: [43.0, 61.0]}
+  - {id: h26_center_short, orientation: horizontal, p0_pct: [49.0, 61.0], p1_pct: [58.0, 61.0]}
+  - {id: h27_lower_right_shelf, orientation: horizontal, p0_pct: [66.0, 61.0], p1_pct: [75.0, 61.0]}
+  - {id: h28_lower_left_short, orientation: horizontal, p0_pct: [28.0, 67.0], p1_pct: [38.0, 67.0]}
+  - {id: h30_lower_center_right, orientation: horizontal, p0_pct: [60.0, 67.0], p1_pct: [70.0, 67.0]}
+  - {id: h31_right_lower_short, orientation: horizontal, p0_pct: [75.0, 67.0], p1_pct: [83.0, 67.0]}
+  - {id: h32_long_lower_left, orientation: horizontal, p0_pct: [20.0, 73.0], p1_pct: [51.0, 73.0]}
+  - {id: h33_lower_right, orientation: horizontal, p0_pct: [72.0, 73.0], p1_pct: [83.0, 73.0]}
+  - {id: h35_lower_central, orientation: horizontal, p0_pct: [35.0, 79.0], p1_pct: [61.0, 79.0]}
+  - {id: h36_lower_right, orientation: horizontal, p0_pct: [63.0, 79.0], p1_pct: [80.0, 79.0]}
+
+  # Major manually reviewed vertical interior runs.
+  - {id: v02_left_upper_side, orientation: vertical, p0_pct: [19.0, 21.0], p1_pct: [19.0, 41.0]}
+  - {id: v03_long_left_middle, orientation: vertical, p0_pct: [19.0, 44.0], p1_pct: [19.0, 69.0]}
+  - {id: v04_upper_left_inner, orientation: vertical, p0_pct: [24.0, 25.0], p1_pct: [24.0, 37.0]}
+  - {id: v05_left_middle_inner, orientation: vertical, p0_pct: [24.0, 44.0], p1_pct: [24.0, 58.0]}
+  - {id: v06_lower_left_inner, orientation: vertical, p0_pct: [24.0, 64.0], p1_pct: [24.0, 75.0]}
+  - {id: v08_lower_left_middle, orientation: vertical, p0_pct: [31.0, 53.0], p1_pct: [31.0, 64.0]}
+  - {id: v09_central_left, orientation: vertical, p0_pct: [34.0, 31.0], p1_pct: [34.0, 48.0]}
+  - {id: v10_left_central_long, orientation: vertical, p0_pct: [36.0, 37.0], p1_pct: [36.0, 55.0]}
+  - {id: v11_upper_left_divider, orientation: vertical, p0_pct: [41.0, 18.0], p1_pct: [41.0, 26.0]}
+  - {id: v12_central_left_divider, orientation: vertical, p0_pct: [41.0, 28.0], p1_pct: [41.0, 43.0]}
+  - {id: v13_main_central_upper, orientation: vertical, p0_pct: [47.0, 21.0], p1_pct: [47.0, 41.0]}
+  - {id: v14_central_upper_spine, orientation: vertical, p0_pct: [51.0, 17.0], p1_pct: [51.0, 39.0]}
+  - {id: v15_upper_center, orientation: vertical, p0_pct: [55.0, 24.0], p1_pct: [55.0, 33.0]}
+  - {id: v16_central_drop, orientation: vertical, p0_pct: [56.0, 38.0], p1_pct: [56.0, 52.0]}
+  - {id: v17_lower_center, orientation: vertical, p0_pct: [56.0, 68.0], p1_pct: [56.0, 80.0]}
+  - {id: v18_central_right, orientation: vertical, p0_pct: [61.0, 41.0], p1_pct: [61.0, 63.0]}
+  - {id: v19_lower_center_right, orientation: vertical, p0_pct: [61.0, 69.0], p1_pct: [61.0, 80.0]}
+  - {id: v20_upper_right, orientation: vertical, p0_pct: [66.0, 20.0], p1_pct: [66.0, 29.0]}
+  - {id: v21_main_right_center, orientation: vertical, p0_pct: [66.0, 31.0], p1_pct: [66.0, 60.0]}
+  - {id: v22_right_center, orientation: vertical, p0_pct: [71.0, 28.0], p1_pct: [71.0, 44.0]}
+  - {id: v23_right_middle, orientation: vertical, p0_pct: [71.0, 49.0], p1_pct: [71.0, 58.0]}
+  - {id: v24_lower_right_inner, orientation: vertical, p0_pct: [71.0, 65.0], p1_pct: [71.0, 74.0]}
+  - {id: v25_upper_right_internal, orientation: vertical, p0_pct: [75.0, 32.0], p1_pct: [75.0, 43.0]}
+  - {id: v26_right_middle_internal, orientation: vertical, p0_pct: [75.0, 48.0], p1_pct: [75.0, 63.0]}
+  - {id: v27_lower_right_internal, orientation: vertical, p0_pct: [75.0, 66.0], p1_pct: [75.0, 78.0]}
+  - {id: v28_upper_right_corner, orientation: vertical, p0_pct: [81.0, 15.0], p1_pct: [81.0, 23.0]}
+  - {id: v29_right_upper_inner, orientation: vertical, p0_pct: [81.0, 31.0], p1_pct: [81.0, 40.0]}
+  - {id: v30_right_middle_inner, orientation: vertical, p0_pct: [81.0, 48.0], p1_pct: [81.0, 56.0]}
+  - {id: v31_right_lower_inner, orientation: vertical, p0_pct: [81.0, 58.0], p1_pct: [81.0, 72.0]}

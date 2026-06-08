@@ -1,0 +1,99 @@
+=== verification timestamp ===
+2026-05-28T10:51:33+08:00
+=== ROS nodes ===
+/camera_link_static_tf
+/camera_optical_frame_static_tf
+/ros_gz_bridge
+/rviz
+/scan_omni_static_tf
+/transform_listener_impl_5e4e0033fac0
+=== forbidden ROS nodes grep ===
+=== visual processes ===
+129939 /usr/bin/python3 /opt/ros/jazzy/bin/ros2 launch tugbot_gazebo tugbot_gazebo.launch.py world_sdf:=/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf headless:=false use_sim_time:=true
+129979 /bin/sh -c ruby /opt/ros/jazzy/opt/gz_tools_vendor/bin/gz sim -r /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf --force-version 8
+129980 /opt/ros/jazzy/lib/ros_gz_bridge/bridge_node --ros-args --log-level info --ros-args -r __node:=ros_gz_bridge -r __ns:=/ --params-file /tmp/launch_params_lr8ssc9x
+129981 /opt/ros/jazzy/lib/tf2_ros/static_transform_publisher --x -0.1855 --y 0.0 --z 0.5318 --roll 0.0 --pitch 0.0 --yaw 0.0 --frame-id base_link --child-frame-id tugbot/scan_omni/scan_omni --ros-args -r __node:=scan_omni_static_tf --params-file /tmp/launch_params_9vlsogij
+129982 gz sim -r /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf
+129983 /opt/ros/jazzy/lib/tf2_ros/static_transform_publisher --x 0.30 --y 0.0 --z 0.55 --roll 0.0 --pitch 0.0 --yaw 0.0 --frame-id base_link --child-frame-id camera_link --ros-args -r __node:=camera_link_static_tf --params-file /tmp/launch_params_jqi8ssqe
+129984 /opt/ros/jazzy/lib/tf2_ros/static_transform_publisher --x 0.0 --y 0.0 --z 0.0 --roll -1.57079632679 --pitch 0.0 --yaw -1.57079632679 --frame-id camera_link --child-frame-id camera_optical_frame --ros-args -r __node:=camera_optical_frame_static_tf --params-file /tmp/launch_params_d1yyot6t
+130061 gz sim server
+130063 gz sim gui
+130868 rviz2 -d /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/install/tugbot_bringup/share/tugbot_bringup/rviz/tugbot_nav.rviz
+=== forbidden processes ===
+=== GZ world services ===
+/gazebo/worlds
+/world/tugbot_maze_world_image_faithful/control
+/world/tugbot_maze_world_image_faithful/control/state
+/world/tugbot_maze_world_image_faithful/create
+/world/tugbot_maze_world_image_faithful/create/blocking
+/world/tugbot_maze_world_image_faithful/create_multiple
+/world/tugbot_maze_world_image_faithful/create_multiple/blocking
+/world/tugbot_maze_world_image_faithful/declare_parameter
+/world/tugbot_maze_world_image_faithful/disable_collision
+/world/tugbot_maze_world_image_faithful/disable_collision/blocking
+/world/tugbot_maze_world_image_faithful/enable_collision
+/world/tugbot_maze_world_image_faithful/enable_collision/blocking
+/world/tugbot_maze_world_image_faithful/entity/system/add
+/world/tugbot_maze_world_image_faithful/generate_world_sdf
+/world/tugbot_maze_world_image_faithful/get_parameter
+/world/tugbot_maze_world_image_faithful/gui/info
+/world/tugbot_maze_world_image_faithful/level/set_performer
+/world/tugbot_maze_world_image_faithful/light_config
+/world/tugbot_maze_world_image_faithful/light_config/blocking
+/world/tugbot_maze_world_image_faithful/list_parameters
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/gripper/sensor/sensor_contact/scan/set_rate
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/imu_link/sensor/imu/imu/set_rate
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/scan_back/sensor/scan_back/scan/set_rate
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/scan_front/sensor/scan_front/scan/set_rate
+/world/tugbot_maze_world_image_faithful/playback/control
+/world/tugbot_maze_world_image_faithful/remove
+/world/tugbot_maze_world_image_faithful/remove/blocking
+/world/tugbot_maze_world_image_faithful/scene/graph
+/world/tugbot_maze_world_image_faithful/scene/info
+/world/tugbot_maze_world_image_faithful/set_parameter
+/world/tugbot_maze_world_image_faithful/set_physics
+/world/tugbot_maze_world_image_faithful/set_physics/blocking
+/world/tugbot_maze_world_image_faithful/set_pose
+/world/tugbot_maze_world_image_faithful/set_pose/blocking
+/world/tugbot_maze_world_image_faithful/set_pose_vector
+/world/tugbot_maze_world_image_faithful/set_pose_vector/blocking
+/world/tugbot_maze_world_image_faithful/set_spherical_coordinates
+/world/tugbot_maze_world_image_faithful/set_spherical_coordinates/blocking
+/world/tugbot_maze_world_image_faithful/state
+/world/tugbot_maze_world_image_faithful/state_async
+/world/tugbot_maze_world_image_faithful/system/info
+/world/tugbot_maze_world_image_faithful/visual_config
+/world/tugbot_maze_world_image_faithful/visual_config/blocking
+/world/tugbot_maze_world_image_faithful/wheel_slip
+/world/tugbot_maze_world_image_faithful/wheel_slip/blocking
+=== GZ topics ===
+/camera/camera_info
+/camera/image_raw
+/clock
+/gui/camera/pose
+/odom
+/scan
+/scan/points
+/world/tugbot_maze_world_image_faithful/clock
+/world/tugbot_maze_world_image_faithful/dynamic_pose/info
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/gripper/sensor/sensor_contact/scan
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/gripper/sensor/sensor_contact/scan/points
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/imu_link/sensor/imu/imu
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/scan_back/sensor/scan_back/scan
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/scan_back/sensor/scan_back/scan/points
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/scan_front/sensor/scan_front/scan
+/world/tugbot_maze_world_image_faithful/model/tugbot/link/scan_front/sensor/scan_front/scan/points
+/world/tugbot_maze_world_image_faithful/pose/info
+/world/tugbot_maze_world_image_faithful/scene/deletion
+/world/tugbot_maze_world_image_faithful/scene/info
+/world/tugbot_maze_world_image_faithful/state
+/world/tugbot_maze_world_image_faithful/stats
+/world/tugbot_maze_world_image_faithful/light_config
+/world/tugbot_maze_world_image_faithful/material_color
+=== hashes ===
+5867385cd3eb72202c25e8bdd16c63591df6b947facada139d8fa8bab403d3a5  src/tugbot_gazebo/worlds/tugbot_maze_world.sdf
+b4ced2a422fd976f2a9a12455e06d6626526b1cebfc748b0c4820f5149c423dc  src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf
+=== scaffold diff ===
+=== nav config diff ===
+=== screenshot ===
+log/phase30_candidate_world_visual_acceptance/phase30_display_root.xwd: X-Window screen dump image data, version X11, "xwdump", 2560x1600x24, 256 colors 256 entries

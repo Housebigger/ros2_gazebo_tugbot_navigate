@@ -1,0 +1,7 @@
+129939 /usr/bin/python3 /opt/ros/jazzy/bin/ros2 launch tugbot_gazebo tugbot_gazebo.launch.py world_sdf:=/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf headless:=false use_sim_time:=true
+129979 /bin/sh -c ruby /opt/ros/jazzy/opt/gz_tools_vendor/bin/gz sim -r /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf --force-version 8
+129980 /opt/ros/jazzy/lib/ros_gz_bridge/bridge_node --ros-args --log-level info --ros-args -r __node:=ros_gz_bridge -r __ns:=/ --params-file /tmp/launch_params_lr8ssc9x
+129982 gz sim -r /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf
+130061 gz sim server
+130063 gz sim gui
+130868 rviz2 -d /home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/install/tugbot_bringup/share/tugbot_bringup/rviz/tugbot_nav.rviz

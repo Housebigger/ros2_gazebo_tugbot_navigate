@@ -1,0 +1,57 @@
+schema_version: 1
+source_image: package://tugbot_maze/assets/maze_20260528.png
+source_image_path: src/tugbot_maze/assets/maze_20260528.png
+source_image_kind: clean_2d_binary_maze
+source_image_sha256: 173704e201da6f60042f1f39cc84220d9ee7592a3b2934f933bdeeaf9d223c63
+source_image_dimensions_px:
+  width: 360
+  height: 360
+source_image_observation:
+  background: white
+  wall_color: black
+  wall_style: clean_orthogonal_2d_lines
+  known_ambiguity: entrance_exit_unlabeled_candidate_positions
+conversion:
+  mode: clean_binary_image_to_wall_segments
+  candidate_not_promoted: true
+  do_not_overwrite_scaffold_world: true
+  binary_threshold: 128
+  wall_pixels: dark_less_than_threshold
+  segment_extraction: run_length_horizontal_vertical_with_morphological_merge
+  min_segment_length_px: 12
+  wall_thickness_m: 0.24
+  wall_height_m: 1.2
+world_bounds_m:
+  xmin: -6.0
+  xmax: 6.0
+  ymin: -6.0
+  ymax: 6.0
+transform:
+  coordinate_origin: image_top_left
+  x_m: xmin + x_px / (image_width_px - 1) * (xmax - xmin)
+  y_m: ymax - y_px / (image_height_px - 1) * (ymax - ymin)
+  scale_policy: 12m_candidate_extent_for_continuity_pending_visual_acceptance
+entrance:
+  status: candidate
+  rationale: visually plausible left-side opening in the clean 2D maze; requires Phase32 visual acceptance
+  x_m: -6.0
+  y_m: -1.0
+  yaw_rad: 0.0
+exit:
+  status: candidate
+  rationale: visually plausible upper/top opening in the clean 2D maze; requires Phase32 visual acceptance
+  x_m: 0.0
+  y_m: 6.0
+  radius_m: 0.6
+runtime_policy:
+  image_allowed_for_world_generation: true
+  image_allowed_for_exit_truth: true
+  image_allowed_for_runtime_path_planning: false
+  autonomous_navigation_allowed_in_phase31: false
+generation_outputs:
+  wall_segments_yaml: src/tugbot_maze/config/maze_wall_segments_20260528.yaml
+  candidate_world_sdf: src/tugbot_gazebo/worlds/tugbot_maze_world_20260528_clean.sdf
+  artifact_dir: log/phase31_clean_maze_world_generation
+baseline_preservation:
+  scaffold_world: src/tugbot_gazebo/worlds/tugbot_maze_world.sdf
+  phase29_candidate_world: src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf

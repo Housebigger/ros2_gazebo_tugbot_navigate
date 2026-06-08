@@ -1,0 +1,59 @@
+{
+  "artifact_dir": "/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/log/phase29_maze_world_reconstruction",
+  "artifacts": [
+    "phase29_source_with_wall_segment_overlay.png",
+    "phase29_generated_sdf_plan_view.png",
+    "phase29_sdf_overlay_on_source_image.png",
+    "phase29_entrance_exit_overlay.png"
+  ],
+  "baseline_scaffold_preserved": true,
+  "baseline_scaffold_sha256_after": "5867385cd3eb72202c25e8bdd16c63591df6b947facada139d8fa8bab403d3a5",
+  "baseline_scaffold_sha256_before": "5867385cd3eb72202c25e8bdd16c63591df6b947facada139d8fa8bab403d3a5",
+  "baseline_scaffold_world": "/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world.sdf",
+  "entrance": {
+    "description": "Candidate mapping of existing manual scaffold entrance near lower-left image opening.",
+    "pixel_pct": [
+      16.666666666666668,
+      75.0
+    ],
+    "x_m": -4.0,
+    "y_m": -3.0,
+    "yaw_rad": 0.0
+  },
+  "exit": {
+    "description": "Candidate mapping of existing manual scaffold exit near upper-right image opening.",
+    "pixel_pct": [
+      83.33333333333333,
+      25.0
+    ],
+    "radius_m": 0.6,
+    "x_m": 4.0,
+    "y_m": 3.0
+  },
+  "guardrails": {
+    "candidate_not_promoted": true,
+    "fallback_terminal_acceptance_modified": false,
+    "nav2_mppi_params_modified": false,
+    "navigation_strategy_modified": false,
+    "runtime_navigation_started": false,
+    "scaffold_world_overwritten": false
+  },
+  "improvement_inner_wall_count_delta": 54,
+  "inner_wall_centerline_length_m": 103.8,
+  "inner_wall_count": 59,
+  "outer_wall_count": 4,
+  "output_world": "/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf",
+  "phase": "Phase29",
+  "scaffold_inner_wall_baseline_count": 5,
+  "segments_yaml": "/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_maze/config/maze_wall_segments_20260522.yaml",
+  "source_image": "/home/hyh/Desktop/agent_playground/playground_hermes/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260522/src/tugbot_maze/assets/maze_20260522.jpg",
+  "status": "candidate_generated_not_promoted",
+  "total_wall_centerline_length_m": 136.92000000000002,
+  "wall_model_count_total": 63,
+  "world_bounds_m": {
+    "xmax": 6.0,
+    "xmin": -6.0,
+    "ymax": 6.0,
+    "ymin": -6.0
+  }
+}

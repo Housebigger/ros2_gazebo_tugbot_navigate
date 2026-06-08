@@ -1,0 +1,717 @@
+<sdf version='1.10'>
+  <world name="tugbot_maze_world_20260528_clean">
+    <plugin name='gz::sim::systems::Physics' filename='gz-sim-physics-system'/>
+    <plugin name='gz::sim::systems::UserCommands' filename='gz-sim-user-commands-system'/>
+    <plugin name='gz::sim::systems::SceneBroadcaster' filename='gz-sim-scene-broadcaster-system'/>
+    <plugin name='gz::sim::systems::Sensors' filename='gz-sim-sensors-system'><render_engine>ogre2</render_engine></plugin>
+    <plugin name='gz::sim::systems::Imu' filename='gz-sim-imu-system'/>
+    <scene><shadows>false</shadows><ambient>0.55 0.55 0.55 1</ambient><background>0.70 0.72 0.74 1</background></scene>
+    <physics name='3ms' type='ode'><max_step_size>0.003</max_step_size><real_time_factor>1</real_time_factor><real_time_update_rate>1000</real_time_update_rate></physics>
+    <gravity>0 0 -9.8</gravity>
+    <atmosphere type='adiabatic'/>
+    <model name='ground_plane'>
+      <static>true</static>
+      <link name='link'>
+        <collision name='collision'><geometry><plane><normal>0 0 1</normal><size>1 1</size></plane></geometry></collision>
+        <visual name='visual'><geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry><material><ambient>0.55 0.55 0.55 1</ambient><diffuse>0.55 0.55 0.55 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name='maze_exit_marker'>
+      <static>true</static>
+      <pose>0.000 6.000 0.01 0 0 0</pose>
+      <link name='link'><visual name='visual'><geometry><cylinder><radius>0.600</radius><length>0.02</length></cylinder></geometry><material><ambient>0 0.8 0.2 0.7</ambient><diffuse>0 0.8 0.2 0.7</diffuse></material></visual></link>
+    </model>
+    <!-- Phase31 candidate clean 2D maze import. Not promoted; do not overwrite scaffold. -->
+    <model name='maze_wall_outer_001_outer_001'>
+      <static>true</static>
+      <pose>-0.017 4.997 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>10.028 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>10.028 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_002_h_001'>
+      <static>true</static>
+      <pose>-1.504 3.994 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_003_h_002'>
+      <static>true</static>
+      <pose>2.490 3.994 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.070 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.070 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_004_h_003'>
+      <static>true</static>
+      <pose>4.513 3.994 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_005_h_004'>
+      <static>true</static>
+      <pose>-3.476 2.992 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_006_h_005'>
+      <static>true</static>
+      <pose>0.518 2.992 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>3.008 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>3.008 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_007_h_006'>
+      <static>true</static>
+      <pose>3.493 2.992 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.070 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.070 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_008_h_007'>
+      <static>true</static>
+      <pose>-3.476 1.989 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_009_h_008'>
+      <static>true</static>
+      <pose>-1.504 1.989 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_010_h_009'>
+      <static>true</static>
+      <pose>0.518 1.989 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.003 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.003 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_011_h_010'>
+      <static>true</static>
+      <pose>-3.493 0.986 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.070 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.070 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_012_h_011'>
+      <static>true</static>
+      <pose>-0.986 0.986 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>2.072 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>2.072 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_013_h_012'>
+      <static>true</static>
+      <pose>1.504 0.986 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_014_h_013'>
+      <static>true</static>
+      <pose>3.994 0.986 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>2.072 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>2.072 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_015_h_014'>
+      <static>true</static>
+      <pose>-4.496 0.017 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.070 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.070 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_016_h_015'>
+      <static>true</static>
+      <pose>-2.006 0.017 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>2.039 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>2.039 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_017_h_016'>
+      <static>true</static>
+      <pose>2.006 0.017 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>4.045 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>4.045 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_018_h_017'>
+      <static>true</static>
+      <pose>-3.476 -0.986 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_019_h_018'>
+      <static>true</static>
+      <pose>1.019 -0.986 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>2.006 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>2.006 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_020_h_019'>
+      <static>true</static>
+      <pose>4.011 -0.986 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>2.039 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>2.039 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_021_h_020'>
+      <static>true</static>
+      <pose>-2.474 -1.989 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>3.042 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>3.042 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_022_h_021'>
+      <static>true</static>
+      <pose>4.513 -1.989 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_023_h_022'>
+      <static>true</static>
+      <pose>-2.474 -2.992 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>1.036 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_024_h_023'>
+      <static>true</static>
+      <pose>0.518 -2.992 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>3.008 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>3.008 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_outer_025_outer_002'>
+      <static>true</static>
+      <pose>0.017 -4.997 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>10.028 0.240 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>10.028 0.240 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_outer_026_outer_003'>
+      <static>true</static>
+      <pose>-4.997 0.518 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 9.025 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 9.025 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_027_v_001'>
+      <static>true</static>
+      <pose>-3.994 4.513 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_028_v_002'>
+      <static>true</static>
+      <pose>-3.994 0.501 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_029_v_003'>
+      <static>true</static>
+      <pose>-3.994 -4.011 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 2.039 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 2.039 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_030_v_004'>
+      <static>true</static>
+      <pose>-2.992 1.487 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 5.014 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 5.014 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_031_v_005'>
+      <static>true</static>
+      <pose>-2.992 -4.513 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_032_v_006'>
+      <static>true</static>
+      <pose>-1.989 4.496 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.070 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.070 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_033_v_007'>
+      <static>true</static>
+      <pose>-1.989 1.972 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 2.039 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 2.039 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_034_v_008'>
+      <static>true</static>
+      <pose>-1.989 -0.986 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 2.072 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 2.072 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_035_v_009'>
+      <static>true</static>
+      <pose>-1.989 -3.994 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 2.072 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 2.072 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_036_v_010'>
+      <static>true</static>
+      <pose>-0.986 -1.504 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_037_v_011'>
+      <static>true</static>
+      <pose>-0.986 -4.513 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_038_v_012'>
+      <static>true</static>
+      <pose>0.017 3.476 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_039_v_013'>
+      <static>true</static>
+      <pose>0.017 0.501 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_040_v_014'>
+      <static>true</static>
+      <pose>0.017 -3.510 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 3.042 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 3.042 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_041_v_015'>
+      <static>true</static>
+      <pose>0.986 2.975 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 2.039 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 2.039 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_042_v_016'>
+      <static>true</static>
+      <pose>0.986 -2.507 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_043_v_017'>
+      <static>true</static>
+      <pose>0.986 -4.513 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_044_v_018'>
+      <static>true</static>
+      <pose>1.989 4.496 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.070 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.070 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_045_v_019'>
+      <static>true</static>
+      <pose>1.989 0.518 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 5.014 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 5.014 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_046_v_020'>
+      <static>true</static>
+      <pose>1.989 -3.476 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_047_v_021'>
+      <static>true</static>
+      <pose>2.992 3.493 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.070 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.070 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_048_v_022'>
+      <static>true</static>
+      <pose>2.992 1.471 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_049_v_023'>
+      <static>true</static>
+      <pose>2.992 -3.510 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 3.042 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 3.042 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_050_v_024'>
+      <static>true</static>
+      <pose>3.994 2.507 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_051_v_025'>
+      <static>true</static>
+      <pose>3.994 0.501 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 1.036 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_seg_052_v_026'>
+      <static>true</static>
+      <pose>3.994 -4.011 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 2.039 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 2.039 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <model name='maze_wall_outer_053_outer_004'>
+      <static>true</static>
+      <pose>4.997 -0.501 0.600 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry><box><size>0.240 9.058 1.200</size></box></geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry><box><size>0.240 9.058 1.200</size></box></geometry>
+          <material><ambient>0.92 0.92 0.90 1</ambient><diffuse>0.92 0.92 0.90 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <light name='sun' type='directional'><cast_shadows>false</cast_shadows><pose>0 0 10 0 0 0</pose><diffuse>0.8 0.8 0.8 1</diffuse><specular>0.2 0.2 0.2 1</specular><attenuation><range>1000</range><constant>0.9</constant><linear>0.01</linear><quadratic>0.001</quadratic></attenuation><direction>-0.5 0.1 -0.9</direction></light>
+    <include><uri>model://tugbot</uri><name>tugbot</name><pose>-6.000 -1.000 0 0 0 0.000</pose></include>
+  </world>
+</sdf>

@@ -457,6 +457,39 @@ class MazeExplorer(Node):
 
         gate = self._dispatch_entry_readiness_gate(robot_pose)
         self.last_dispatch_readiness_gate = gate
+
+        # ENTRY_DIRECT uses a relaxed readiness gate: only requires Nav2 action
+        # server, basic TF, and scan. Does NOT require map_sufficient or
+        # local_costmap_sufficient because the first straight-line goal does
+        # not depend on topology analysis.
+        if (self.entry_direct_enabled
+                and not self.entry_direct_dispatched
+                and self.goal_count == 0):
+            nav2_active = bool(gate['checks'].get('nav2_lifecycle_active', False))
+            action_ready = bool(gate['checks'].get('navigate_to_pose_action_ready', False))
+            tf_ok = bool(gate['checks'].get('tf_sufficient', False))
+            scan_ok = bool(gate['checks'].get('scan_sufficient', False))
+            if nav2_active and action_ready and tf_ok and scan_ok:
+                self.get_logger().info(
+                    'ENTRY_DIRECT: relaxed readiness gate passed (nav2=%s action=%s tf=%s scan=%s); dispatching first goal'
+                    % (nav2_active, action_ready, tf_ok, scan_ok)
+                )
+                self.mode = ENTRY_DIRECT
+                self._dispatch_entry_direct_goal(robot_pose)
+                self._publish_state()
+                return
+            if self.goal_count == 0:
+                _tick = getattr(self, '_readiness_log_tick', 0) + 1
+                self._readiness_log_tick = _tick
+                if _tick % 10 == 1:
+                    self.get_logger().info(
+                        'ENTRY_DIRECT: relaxed readiness not yet passed (tick %d); nav2=%s action=%s tf=%s scan=%s'
+                        % (_tick, nav2_active, action_ready, tf_ok, scan_ok)
+                    )
+            self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
+            self._publish_state()
+            return
+
         if not gate['passed']:
             self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
             self._publish_state()
@@ -469,13 +502,6 @@ class MazeExplorer(Node):
             self._publish_state()
             return
 
-        if (self.entry_direct_enabled
-                and not self.entry_direct_dispatched
-                and self.goal_count == 0):
-            self.mode = ENTRY_DIRECT
-            self._dispatch_entry_direct_goal(robot_pose)
-            self._publish_state()
-            return
         self.mode = AT_NODE_ANALYZE
         if self._dispatch_second_step_after_corridor_alignment_staging(robot_pose):
             self._publish_state()

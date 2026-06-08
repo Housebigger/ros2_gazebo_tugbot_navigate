@@ -1,0 +1,198 @@
+[
+  {
+    "source": "src/tugbot_gazebo/worlds/tugbot_maze_world.sdf",
+    "archive": "archive/deprecated_maze_worlds/worlds/manual_simplified_first_pass_scaffold/tugbot_maze_world.sdf",
+    "reason": "manual_simplified_first_pass scaffold deprecated for navigation conclusions",
+    "sha256": "5867385cd3eb72202c25e8bdd16c63591df6b947facada139d8fa8bab403d3a5",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf",
+    "archive": "archive/deprecated_maze_worlds/worlds/phase29_decorative_image_candidate/tugbot_maze_world_image_faithful.sdf",
+    "reason": "Phase29 decorative image candidate deprecated",
+    "sha256": "b4ced2a422fd976f2a9a12455e06d6626526b1cebfc748b0c4820f5149c423dc",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_gazebo/worlds/tugbot_maze_world_20260528_clean.sdf",
+    "archive": "archive/deprecated_maze_worlds/worlds/unscaled_clean_candidate/tugbot_maze_world_20260528_clean.sdf",
+    "reason": "unscaled clean candidate superseded by scaled2x world",
+    "sha256": "da33e9e58c6c07089b6bb7156315759b4bceb989db2f1ace18f0b1af0b0c0301",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_maze/assets/maze_20260522.jpg",
+    "archive": "archive/deprecated_maze_worlds/assets/decorative_route_20260522/maze_20260522.jpg",
+    "reason": "decorative route deprecated",
+    "sha256": "2a34a3d871d64f440fd6fc8619241e7094a95abfa6025469d0a2abc7c8a72910",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_maze/config/maze_instance.yaml",
+    "archive": "archive/deprecated_maze_worlds/config/decorative_route_20260522/maze_instance.yaml",
+    "reason": "metadata for deprecated 20260522 decorative/manual scaffold route",
+    "sha256": "c2c1ddd27c75834a8b15c40b077796e2eccc1bd83f45f14e80b0c9c0158fd214",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_maze/config/maze_wall_segments_20260522.yaml",
+    "archive": "archive/deprecated_maze_worlds/config/decorative_route_20260522/maze_wall_segments_20260522.yaml",
+    "reason": "wall segments for deprecated 20260522 decorative/manual scaffold route",
+    "sha256": "c9ceef63fb6443183c75bcaa17d9f05908246e480a7c8690dea4b67f7b95a5eb",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_maze/config/maze_20260528_instance.yaml",
+    "archive": "archive/deprecated_maze_worlds/config/unscaled_clean_candidate/maze_20260528_instance.yaml",
+    "reason": "unscaled clean metadata superseded by scaled instance",
+    "sha256": "4de83434d4abebd6a37baf6f15a841552e35a80e1a614b9f45cb6727adaf207e",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/map_1725111373.yaml",
+    "archive": "archive/deprecated_maze_worlds/maps/static_legacy/map_1725111373.yaml",
+    "reason": "old static map superseded for current scaled-clean workflow",
+    "sha256": "eb71ab6ad8eb0178a1dca43224ffa091d93f965f95924c3c2d98a4ed857a49a5",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/map_1725111373.pgm",
+    "archive": "archive/deprecated_maze_worlds/maps/static_legacy/map_1725111373.pgm",
+    "reason": "old static map superseded for current scaled-clean workflow",
+    "sha256": "ba508624542f87daee85ac35498aeb3de526685a78eee83dafa3fc663cdef4f5",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam.yaml",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam.yaml",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "f0b32dd6cd132168d030e9677235e78ea6eac82d1f6384b8eab5088f85212e56",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_manual_camera_test.yaml",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_manual_camera_test.yaml",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "587375f4652fe754b64528ec7902524873eb00d4e685af24e2a65422355413c0",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_perimeter_test.yaml",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_perimeter_test.yaml",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "82ef26b4dfabdb26e329e2fe8e072b7c073f77bfbf19558f3e655b1ae566330b",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase14_perimeter_no_spin.yaml",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_phase14_perimeter_no_spin.yaml",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "278ac2e44022e6e95f354366709a277586f34637f6751bed6c8a034052499ca0",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase5.yaml",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_phase5.yaml",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "ecd462fd1c877193e62f0c5b3d1e447b3ccf3e79c56e1ac5516e2b7e79fc4185",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase5_manual.yaml",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_phase5_manual.yaml",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "081076ae7b13ecbb19b4355b9dec47cdb2d6449af6b6d725790156174e60ed96",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase6_cleanup.yaml",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_phase6_cleanup.yaml",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "06f3f5d1e1a7ce21e9848d6516c00701182cc647b58693836782bc0a446af20a",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase7_budget.yaml",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_phase7_budget.yaml",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "80615fddbbd1d1727c122571c369f66be27b2c76a20224470d7c58fea01baad3",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam.pgm",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam.pgm",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "00afdeda0db636bae64ab93469c16f4eda367231f0f40c38201f1e4d02a0941e",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_manual_camera_test.pgm",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_manual_camera_test.pgm",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "e382a811fd119388d6457f4390593b0e53d43a69b186b8aed03c9c8d64998aba",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_perimeter_test.pgm",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_perimeter_test.pgm",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "8d0ba6cc5a89f8c27d850beb301839a6f8ba2b87d942a5827e701ac71ab413a4",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase14_perimeter_no_spin.pgm",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_phase14_perimeter_no_spin.pgm",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "8d0ba6cc5a89f8c27d850beb301839a6f8ba2b87d942a5827e701ac71ab413a4",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase5.pgm",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_phase5.pgm",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "96dc0a383f94a45e06e9088c13c4b69102d31237d5102de4809901b35addc315",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase5_manual.pgm",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_phase5_manual.pgm",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "96dc0a383f94a45e06e9088c13c4b69102d31237d5102de4809901b35addc315",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase6_cleanup.pgm",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_phase6_cleanup.pgm",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "afb7f44e2960e05dec9149b6f25ecd9ccd69f661c7a4e2c49150c309d66ea2e7",
+    "status": "moved"
+  },
+  {
+    "source": "src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase7_budget.pgm",
+    "archive": "archive/deprecated_maze_worlds/maps/explored_legacy/tugbot_nav_world_slam_phase7_budget.pgm",
+    "reason": "old explored map superseded for current scaled-clean workflow",
+    "sha256": "649cef4fd76c2a703cdc817e8dfed9c8bb63f96de301e951c64af4e15bd0b4ef",
+    "status": "moved"
+  },
+  {
+    "source": "log/phase28_maze_world_fidelity",
+    "archive": "doc/archive/phase_old_maze_artifacts/phase28_maze_world_fidelity",
+    "reason": "Phase28 decorative/scaffold fidelity audit artifacts archived",
+    "sha256": null,
+    "status": "moved"
+  },
+  {
+    "source": "log/phase29_maze_world_reconstruction",
+    "archive": "doc/archive/phase_old_maze_artifacts/phase29_maze_world_reconstruction",
+    "reason": "Phase29 decorative candidate reconstruction artifacts archived",
+    "sha256": null,
+    "status": "moved"
+  },
+  {
+    "source": "log/phase30_candidate_world_visual_acceptance",
+    "archive": "doc/archive/phase_old_maze_artifacts/phase30_candidate_world_visual_acceptance",
+    "reason": "Phase30 deprecated candidate visual artifacts archived",
+    "sha256": null,
+    "status": "moved"
+  }
+]

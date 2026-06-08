@@ -1,0 +1,27 @@
+Phase30 candidate world visual acceptance checklist
+
+Observe Gazebo/RViz only. Do not send navigation goals.
+
+Check:
+- 迷宫整体是否接近原图；
+- 入口/出口是否位于期望位置；
+- 是否有明显断墙、漏墙、重叠墙；
+- Tugbot 是否比通道宽，是否无法通过；
+- 墙高、厚度、尺度是否合理；
+- 是否存在明显封死入口/出口的问题。
+
+Candidate world:
+src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf
+
+Entrance candidate:
+(-4.0, -3.0, yaw=0)
+
+Exit marker:
+(4.0, 3.0), radius=0.6
+
+Guardrails:
+- no maze_explorer
+- no SLAM
+- no Nav2 autonomous exploration
+- no candidate promotion
+- no scaffold overwrite

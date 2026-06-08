@@ -1,0 +1,223 @@
+{
+  "artifacts": [
+    "00_source_image.png",
+    "01_cropped_maze_region.png",
+    "02_grayscale.png",
+    "03_threshold_binary_otsu_dark.png",
+    "04_threshold_binary_otsu_light.png",
+    "05_threshold_binary_adaptive_dark.png",
+    "06_wall_mask_light_proxy.png",
+    "07_contour_overlay.png",
+    "08_generated_wall_segments_overlay_static_detected.png",
+    "09_final_world_footprint_overlay_on_source.png",
+    "10_current_sdf_wall_plan_view.png"
+  ],
+  "coordinate_metadata": {
+    "current_world_extent_m": [
+      -6.0,
+      6.0,
+      -6.0,
+      6.0
+    ],
+    "current_world_width_m": 12.0,
+    "entrance_m": [
+      -4.0,
+      -3.0
+    ],
+    "exit_m": [
+      4.0,
+      3.0
+    ],
+    "metadata_implied_full_image_width_m": 20.0,
+    "metadata_resolution_m_per_pixel": 0.02,
+    "source_to_world_scale_mismatch_note": "metadata 1000px at 0.02m/px implies 20m width, while current SDF maze walls span 12m; scaffold used manual scale rather than image-derived full-width scale"
+  },
+  "crop_dimensions_px": [
+    1000,
+    1000
+  ],
+  "crop_xyxy_px": [
+    0,
+    0,
+    1000,
+    1000
+  ],
+  "diagnostic_image_metrics": {
+    "adaptive_dark_connected_components": {
+      "component_area_max_px": 11082,
+      "component_area_median_px": 74.5,
+      "component_area_sum_px": 153332,
+      "component_count": 344
+    },
+    "contour_count_area_ge_100_px": 1,
+    "contour_count_total": 1,
+    "interior_wall_mask_area_ratio": 0.7578202947845805,
+    "orthogonal_hough_segment_count": 72,
+    "otsu_dark_connected_components": {
+      "component_area_max_px": 37345,
+      "component_area_median_px": 1077.0,
+      "component_area_sum_px": 174822,
+      "component_count": 68
+    },
+    "wall_mask_connected_components": {
+      "component_area_max_px": 828574,
+      "component_area_median_px": 828574.0,
+      "component_area_sum_px": 828574,
+      "component_count": 1
+    },
+    "wall_mask_light_proxy_area_ratio": 0.828574
+  },
+  "existing_generation_chain": {
+    "binarization_threshold_in_existing_chain": null,
+    "contour_or_skeleton_in_existing_chain": null,
+    "mask_in_existing_chain": null,
+    "maze_image_to_world": "placeholder_only",
+    "wall_segment_generation_in_existing_chain": null,
+    "world_authoring_mode": "manual_simplified_first_pass"
+  },
+  "fidelity_findings": {
+    "automated_extraction_missing": true,
+    "current_world_has_only_five_inner_walls": true,
+    "current_world_is_manual_scaffold": true,
+    "likely_reason_for_missing_walls": "current SDF was manually authored as simplified first-pass scaffold; maze_image_to_world is placeholder and never generated walls from image masks/contours",
+    "source_image_is_complex_maze": true,
+    "threshold_or_contour_filter_bug_found_in_existing_chain": false
+  },
+  "image_processing_chain_status": "diagnostic_static_only_no_existing_automated_generation_chain",
+  "phase": "Phase28",
+  "sdf_world_metrics": {
+    "inner_wall_count": 5,
+    "maze_wall_model_count_total": 9,
+    "outer_wall_count": 4,
+    "sdf_inner_wall_area_m2": 2.574,
+    "sdf_inner_wall_area_ratio_vs_12x12": 0.017875,
+    "sdf_outer_wall_area_m2": 8.64,
+    "sdf_wall_area_m2": 11.214,
+    "sdf_wall_area_ratio_vs_12x12": 0.077875,
+    "walls": [
+      {
+        "area_m2": 2.16,
+        "is_outer": true,
+        "name": "maze_wall_bottom",
+        "sx": 12.0,
+        "sy": 0.18,
+        "x": 0.0,
+        "xmax": 6.0,
+        "xmin": -6.0,
+        "y": -6.0,
+        "ymax": -5.91,
+        "ymin": -6.09
+      },
+      {
+        "area_m2": 2.16,
+        "is_outer": true,
+        "name": "maze_wall_top",
+        "sx": 12.0,
+        "sy": 0.18,
+        "x": 0.0,
+        "xmax": 6.0,
+        "xmin": -6.0,
+        "y": 6.0,
+        "ymax": 6.09,
+        "ymin": 5.91
+      },
+      {
+        "area_m2": 2.16,
+        "is_outer": true,
+        "name": "maze_wall_left",
+        "sx": 0.18,
+        "sy": 12.0,
+        "x": -6.0,
+        "xmax": -5.91,
+        "xmin": -6.09,
+        "y": 0.0,
+        "ymax": 6.0,
+        "ymin": -6.0
+      },
+      {
+        "area_m2": 2.16,
+        "is_outer": true,
+        "name": "maze_wall_right",
+        "sx": 0.18,
+        "sy": 12.0,
+        "x": 6.0,
+        "xmax": 6.09,
+        "xmin": 5.91,
+        "y": 0.0,
+        "ymax": 6.0,
+        "ymin": -6.0
+      },
+      {
+        "area_m2": 0.504,
+        "is_outer": false,
+        "name": "maze_wall_i01",
+        "sx": 0.18,
+        "sy": 2.8,
+        "x": -3.0,
+        "xmax": -2.91,
+        "xmin": -3.09,
+        "y": -2.75,
+        "ymax": -1.35,
+        "ymin": -4.15
+      },
+      {
+        "area_m2": 0.54,
+        "is_outer": false,
+        "name": "maze_wall_i02",
+        "sx": 3.0,
+        "sy": 0.18,
+        "x": -1.5,
+        "xmax": 0.0,
+        "xmin": -3.0,
+        "y": -1.35,
+        "ymax": -1.26,
+        "ymin": -1.4400000000000002
+      },
+      {
+        "area_m2": 0.576,
+        "is_outer": false,
+        "name": "maze_wall_i03",
+        "sx": 0.18,
+        "sy": 3.2,
+        "x": 0.0,
+        "xmax": 0.09,
+        "xmin": -0.09,
+        "y": 0.25,
+        "ymax": 1.85,
+        "ymin": -1.35
+      },
+      {
+        "area_m2": 0.54,
+        "is_outer": false,
+        "name": "maze_wall_i04",
+        "sx": 3.0,
+        "sy": 0.18,
+        "x": 1.5,
+        "xmax": 3.0,
+        "xmin": 0.0,
+        "y": 1.85,
+        "ymax": 1.9400000000000002,
+        "ymin": 1.76
+      },
+      {
+        "area_m2": 0.414,
+        "is_outer": false,
+        "name": "maze_wall_i05",
+        "sx": 0.18,
+        "sy": 2.3,
+        "x": 3.0,
+        "xmax": 3.09,
+        "xmin": 2.91,
+        "y": 3.0,
+        "ymax": 4.15,
+        "ymin": 1.85
+      }
+    ]
+  },
+  "source_dimensions_px": [
+    1000,
+    1000
+  ],
+  "source_image": "src/tugbot_maze/assets/maze_20260522.jpg",
+  "world": "src/tugbot_gazebo/worlds/tugbot_maze_world.sdf"
+}
