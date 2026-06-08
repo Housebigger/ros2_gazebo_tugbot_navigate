@@ -469,6 +469,13 @@ class MazeExplorer(Node):
             self._publish_state()
             return
 
+        if (self.entry_direct_enabled
+                and not self.entry_direct_dispatched
+                and self.goal_count == 0):
+            self.mode = ENTRY_DIRECT
+            self._dispatch_entry_direct_goal(robot_pose)
+            self._publish_state()
+            return
         self.mode = AT_NODE_ANALYZE
         if self._dispatch_second_step_after_corridor_alignment_staging(robot_pose):
             self._publish_state()
@@ -533,6 +540,30 @@ class MazeExplorer(Node):
             'local_costmap_directional_override': local_costmap.get('directional_override'),
             'robot_pose_map': self._pose_to_payload(robot_pose),
         }
+
+    def _dispatch_entry_direct_goal(self, robot_pose: RobotPose) -> None:
+        """Dispatch a straight-line goal from entrance into the maze.
+
+        This bypasses topology/staging/branch-detection for the very first
+        goal, avoiding the staging misfire that causes first-goal timeouts.
+        """
+        d = self.entry_direct_distance_m
+        target_x = self.entrance_x + math.cos(self.entrance_yaw) * d
+        target_y = self.entrance_y + math.sin(self.entrance_yaw) * d
+        target_yaw = self.entrance_yaw
+        self.entry_direct_dispatched = True
+        self.get_logger().info(
+            'ENTRY_DIRECT: dispatching straight-line goal from entrance '
+            '(%.3f, %.3f, yaw=%.3f) to (%.3f, %.3f, yaw=%.3f) distance=%.2f'
+            % (self.entrance_x, self.entrance_y, self.entrance_yaw,
+               target_x, target_y, target_yaw, d)
+        )
+        self._send_goal(
+            target_xy=(target_x, target_y),
+            yaw=target_yaw,
+            goal_kind='entry_direct',
+            skip_two_step_staging=True,
+        )
 
     def _nav2_lifecycle_sufficiency(self) -> dict[str, object]:
         node_states = {}
@@ -2613,6 +2644,10 @@ class MazeExplorer(Node):
         self.goal_handle = None
         self.goal_sent_time = None
         self.goal_success_count += 1
+        if completed_goal_kind == 'entry_direct':
+            self.get_logger().info(
+                'ENTRY_DIRECT goal succeeded; transitioning to AT_NODE_ANALYZE for normal DFS exploration'
+            )
         if completed_goal_kind == 'corridor_alignment_staging':
             if isinstance(self.pending_corridor_alignment_second_step, dict):
                 self.pending_corridor_alignment_second_step['staging_result_status_label'] = 'SUCCEEDED'
@@ -2654,6 +2689,10 @@ class MazeExplorer(Node):
         branch_failure_state = None
         caused_branch_failure = False
         caused_blacklist = False
+        if self.active_goal_kind == 'entry_direct':
+            self.get_logger().warn(
+                'ENTRY_DIRECT goal failed (reason=%s); falling back to AT_NODE_ANALYZE' % reason
+            )
         if self.active_goal_kind == 'backtrack':
             self.backtrack_failure_count += 1
             if self.active_goal_target is not None:
