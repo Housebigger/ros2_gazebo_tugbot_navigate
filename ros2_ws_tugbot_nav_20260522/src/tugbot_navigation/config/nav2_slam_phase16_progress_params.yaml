@@ -54,7 +54,7 @@ controller_server:
       plugin: "nav2_controller::SimpleProgressChecker"
       # Phase 16: require less translation over a longer window before declaring no progress.
       required_movement_radius: 0.25
-      movement_time_allowance: 15.0
+      movement_time_allowance: 20.0
     # Goal checker parameters
     #precise_goal_checker:
     #  plugin: "nav2_controller::SimpleGoalChecker"
