@@ -158,6 +158,7 @@ class MazeExplorer(Node):
         self.publish_debug_state_hz = float(self.declare_parameter('publish_debug_state_hz', 1.0).value)
         self.junction_merge_radius_m = float(self.declare_parameter('junction_merge_radius_m', 0.75).value)
         self.exit_bias_weight = float(self.declare_parameter('exit_bias_weight', 0.5).value)
+        self.exploration_bonus_weight = float(self.declare_parameter('exploration_bonus_weight', 0.0).value)
         self.branch_angle_step_deg = float(self.declare_parameter('branch_angle_step_deg', 90.0).value)
         self.branch_lookahead_m = float(self.declare_parameter('branch_lookahead_m', 1.5).value)
         self.branch_goal_step_m = float(self.declare_parameter('branch_goal_step_m', 1.0).value)
@@ -224,6 +225,7 @@ class MazeExplorer(Node):
         self.current_node_id: Optional[int] = None
         self.goal_count = 0
         self.entry_direct_dispatched = False
+        self.entry_direct_failed_time: Optional[Time] = None
         self.goal_success_count = 0
         self.goal_failure_count = 0
         self.nav2_failure_count = 0
@@ -304,6 +306,7 @@ class MazeExplorer(Node):
             max_failures_per_branch=self.max_failures_per_branch,
             max_backtrack_failures_per_node=self.max_backtrack_failures_per_node,
             backtrack_goal_tolerance_m=self.backtrack_goal_tolerance_m,
+            exploration_bonus_weight=self.exploration_bonus_weight,
         )
         entrance = self.topology.find_or_create_node(self.entrance_x, self.entrance_y, node_type='junction')
         self.topology.visit_node(entrance.node_id)
@@ -508,7 +511,62 @@ class MazeExplorer(Node):
             # essential infrastructure (action server, TF, scan).  Skip
             # map_sufficient / local_costmap_sufficient which can fail in
             # narrow corridors during normal DFS exploration.
-            if self.entry_direct_dispatched:
+            # When topology is established (nodes exist), always use relaxed gate.
+            # When ENTRY_DIRECT failed and no topology nodes exist yet, the map
+            # is likely still unknown.  Wait up to ENTRY_DIRECT_FAILED_GRACE_SEC
+            # for the full gate (map_sufficient).  If the grace period expires,
+            # fall back to relaxed gate — classify_local_topology will attempt
+            # analysis with whatever map data is available, which is better than
+            # being stuck forever.
+            use_relaxed = False
+            if self.entry_direct_dispatched and len(self.topology.nodes) > 0:
+                # Topology established: always use relaxed gate
+                use_relaxed = True
+            elif self.entry_direct_dispatched and len(self.topology.nodes) == 0:
+                # ENTRY_DIRECT failed, no topology yet.  Check grace period.
+                essential_keys = (
+                    'navigate_to_pose_action_ready',
+                    'tf_sufficient',
+                    'scan_sufficient',
+                )
+                essential_ok = all(
+                    gate['checks'].get(k, False) for k in essential_keys)
+                if essential_ok:
+                    grace_sec = 30.0
+                    if self.entry_direct_failed_time is not None:
+                        elapsed = (self.get_clock().now() - self.entry_direct_failed_time).nanoseconds / 1e9
+                    else:
+                        elapsed = 0.0
+                    if elapsed >= grace_sec:
+                        self.get_logger().warn(
+                            'ENTRY_DIRECT failed grace period expired (%.1fs / %.1fs); '
+                            'falling back to relaxed gate for first topology analysis'
+                            % (elapsed, grace_sec)
+                        )
+                        use_relaxed = True
+                    elif self.dispatch_readiness_first_pass_time is None:
+                        # First time essential checks passed — log once
+                        self.get_logger().info(
+                            'Waiting for full readiness gate after ENTRY_DIRECT failure '
+                            '(%.1fs / %.1fs grace period); map_sufficient=%s local_costmap_sufficient=%s'
+                            % (elapsed, grace_sec,
+                               gate['checks'].get('map_sufficient', False),
+                               gate['checks'].get('local_costmap_sufficient', False)))
+                    # Grace period not yet expired — keep waiting for full gate
+                    if not use_relaxed:
+                        self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
+                        self._publish_state()
+                        return
+                else:
+                    self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
+                    self._publish_state()
+                    return
+            else:
+                self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
+                self._publish_state()
+                return
+
+            if use_relaxed:
                 essential_keys = (
                     'navigate_to_pose_action_ready',
                     'tf_sufficient',
@@ -524,10 +582,6 @@ class MazeExplorer(Node):
                     self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
                     self._publish_state()
                     return
-            else:
-                self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
-                self._publish_state()
-                return
         if self.dispatch_readiness_first_pass_time is None:
             self.dispatch_readiness_first_pass_time = self.get_clock().now()
 
@@ -1176,26 +1230,12 @@ class MazeExplorer(Node):
                     self._send_goal(chosen.target_xy, yaw=chosen.angle_rad, goal_kind='explore', skip_two_step_staging=True)
                     return
             self.topology.mark_dead_end(node.node_id, incoming_edge_id=self.active_edge_id)
-            backtrack_target = self.topology.next_backtrack_target(node.node_id)
+            # Dijkstra smart backtracking: find nearest unexplored junction via shortest known path.
+            # Falls back to stack-based backtracking if topology graph is disconnected.
+            backtrack_target = self._dijkstra_backtrack_target(node.node_id)
             if backtrack_target is None:
-                self._mark_exhausted('dead end reached and no untried junction remains')
+                self._mark_exhausted('dead end reached and no unexplored junction reachable via known paths')
                 return
-            # Level-2 backtracking: if the backtrack target junction is fully-explored
-            # (all branches terminal), skip it and cascade to a higher-level junction.
-            bt_node = self.topology.nodes[backtrack_target.node_id]
-            if bt_node.all_branches_terminal():
-                self.get_logger().info(
-                    'level-2 backtrack: junction %d fully-explored (all branches terminal), cascading to higher-level junction'
-                    % backtrack_target.node_id
-                )
-                backtrack_target = self.topology.next_backtrack_target(backtrack_target.node_id)
-                if backtrack_target is None:
-                    self._mark_exhausted('dead end reached and no untried junction remains after level-2 backtrack')
-                    return
-                self.get_logger().info(
-                    'level-2 backtrack: selected higher-level junction %d at (%.3f, %.3f)'
-                    % (backtrack_target.node_id, backtrack_target.x, backtrack_target.y)
-                )
             self._send_goal(backtrack_target.xy, yaw=self._yaw_to_point(robot_pose[:2], backtrack_target.xy), goal_kind='backtrack')
             return
 
@@ -1282,22 +1322,7 @@ class MazeExplorer(Node):
             self._send_goal(chosen.target_xy, yaw=chosen.angle_rad, goal_kind='explore', skip_two_step_staging=True)
             return
 
-        backtrack_target = self.topology.next_backtrack_target(node.node_id)
-        if backtrack_target is not None:
-            # Level-2 backtracking: if the backtrack target junction is fully-explored
-            # (all branches terminal), skip it and cascade to a higher-level junction.
-            bt_node = self.topology.nodes[backtrack_target.node_id]
-            if bt_node.all_branches_terminal():
-                self.get_logger().info(
-                    'level-2 backtrack (no-candidate): junction %d fully-explored, cascading higher'
-                    % backtrack_target.node_id
-                )
-                backtrack_target = self.topology.next_backtrack_target(backtrack_target.node_id)
-            if backtrack_target is not None:
-                self.get_logger().info(
-                    'level-2 backtrack: selected junction %d at (%.3f, %.3f)'
-                    % (backtrack_target.node_id, backtrack_target.x, backtrack_target.y)
-                )
+        backtrack_target = self._dijkstra_backtrack_target(node.node_id)
         if backtrack_target is not None:
             self.phase56_open_direction_to_candidate_diagnostics['junction_or_dead_end_policy_filter'] = 'backtrack_selected_after_no_candidate'
             self.phase56_open_direction_to_candidate_diagnostics['branch_candidate_rejection_reason'] = self.phase56_open_direction_to_candidate_diagnostics.get('branch_candidate_rejection_reason') or 'node_policy_no_untried_branch'
@@ -1321,6 +1346,30 @@ class MazeExplorer(Node):
             self._publish_goal_event('topology_consistency_guard')
             return
         self._mark_exhausted('no untried branches remain')
+
+    def _dijkstra_backtrack_target(self, current_node_id: int):
+        """Find nearest unexplored junction via Dijkstra, with stack-based fallback.
+
+        Uses dijkstra_nearest_unexplored() for optimal target selection.
+        Falls back to next_backtrack_target() if the topology graph is disconnected
+        or Dijkstra finds no reachable unexplored junction.
+        """
+        dijkstra_result = self.topology.dijkstra_nearest_unexplored(current_node_id)
+        if dijkstra_result is not None:
+            path, target = dijkstra_result
+            self.get_logger().info(
+                'Dijkstra backtrack: selected junction %d at (%.3f, %.3f) via %d-hop path'
+                % (target.node_id, target.x, target.y, len(path) - 1)
+            )
+            return target
+        # Fallback: stack-based backtracking for disconnected topology or early exploration
+        fallback = self.topology.next_backtrack_target(current_node_id)
+        if fallback is not None:
+            self.get_logger().info(
+                'Dijkstra found no path; fallback stack-based backtrack to junction %d at (%.3f, %.3f)'
+                % (fallback.node_id, fallback.x, fallback.y)
+            )
+        return fallback
 
     def _post_ingress_single_open_context_active(self) -> bool:
         return bool(
@@ -2818,6 +2867,7 @@ class MazeExplorer(Node):
             self.get_logger().warn(
                 'ENTRY_DIRECT goal failed (reason=%s); falling back to AT_NODE_ANALYZE' % reason
             )
+            self.entry_direct_failed_time = self.get_clock().now()
         if self.active_goal_kind == 'backtrack':
             self.backtrack_failure_count += 1
             if self.active_goal_target is not None:
