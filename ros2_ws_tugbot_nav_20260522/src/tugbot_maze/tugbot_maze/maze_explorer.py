@@ -37,6 +37,7 @@ from tugbot_maze.maze_perception import (
     DEAD_END,
     JUNCTION,
     classify_local_topology,
+    compute_junction_center,
     filter_open_directions,
     generate_second_step_forward_goal_after_staging,
     make_branch_goal,
@@ -1078,9 +1079,28 @@ class MazeExplorer(Node):
             filtered_open_directions=None,
             branch_options=None,
         )
-        node = self.topology.find_or_create_node(robot_pose[0], robot_pose[1], node_type=node_type)
+
+        # Compute corrected junction position using Chebyshev center algorithm.
+        # This places the topology node at the geometric intersection center
+        # rather than the robot's position in the corridor entrance.
+        if node_type == 'junction' and local.kind == JUNCTION:
+            junction_xy = compute_junction_center(
+                robot_xy=(robot_pose[0], robot_pose[1]),
+                open_directions=local.open_directions,
+            )
+        else:
+            junction_xy = (robot_pose[0], robot_pose[1])
+
+        node = self.topology.find_or_create_node(junction_xy[0], junction_xy[1], node_type=node_type)
         self.current_node_id = node.node_id
         self.topology.visit_node(node.node_id)
+
+        junction_center_offset_m = math.hypot(junction_xy[0] - robot_pose[0], junction_xy[1] - robot_pose[1])
+        if junction_center_offset_m > 0.05:
+            self.get_logger().info(
+                'junction center corrected: (%.3f, %.3f) -> (%.3f, %.3f) offset=%.3fm'
+                % (robot_pose[0], robot_pose[1], junction_xy[0], junction_xy[1], junction_center_offset_m)
+            )
 
         if local.kind == DEAD_END:
             self.dead_end_count += 1

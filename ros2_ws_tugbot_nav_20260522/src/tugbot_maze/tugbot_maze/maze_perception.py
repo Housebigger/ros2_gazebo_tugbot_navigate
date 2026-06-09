@@ -95,6 +95,65 @@ def classify_local_topology(
     return LocalTopology(kind=kind, open_directions=open_directions)
 
 
+def compute_junction_center(
+    robot_xy: Point,
+    open_directions: List[OpenDirection],
+    search_radius_m: float = 1.0,
+    grid_resolution_m: float = 0.05,
+) -> Point:
+    """Compute junction center as the clearance-maximizing (Chebyshev) point.
+
+    For a candidate point (px, py), the clearance in direction theta_i is:
+        c_i = d_i - ((px - rx) * cos(theta_i) + (py - ry) * sin(theta_i))
+    The overall clearance at a candidate is min(c_i) across all directions.
+    Returns the candidate with the highest minimum clearance, which naturally
+    converges to the geometric intersection center in a junction.
+
+    Falls back to robot_xy if fewer than 3 directions or no improvement found.
+    """
+    if len(open_directions) < 3:
+        return robot_xy
+
+    rx, ry = float(robot_xy[0]), float(robot_xy[1])
+
+    # Precompute direction vectors and distances
+    dirs = [(math.cos(d.angle_rad), math.sin(d.angle_rad), d.distance_m) for d in open_directions]
+
+    # Grid search within search_radius_m
+    steps = int(math.ceil(search_radius_m / grid_resolution_m))
+    best_clearance = -float('inf')
+    best_dist_sq = float('inf')
+    best_xy = robot_xy
+
+    for ix in range(-steps, steps + 1):
+        for iy in range(-steps, steps + 1):
+            dx = ix * grid_resolution_m
+            dy = iy * grid_resolution_m
+            # Skip candidates outside the search radius
+            if dx * dx + dy * dy > search_radius_m * search_radius_m + 1e-9:
+                continue
+            px, py = rx + dx, ry + dy
+            min_c = float('inf')
+            valid = True
+            for cos_i, sin_i, d_i in dirs:
+                c_i = d_i - (dx * cos_i + dy * sin_i)
+                if c_i < 0.0:
+                    valid = False
+                    break
+                if c_i < min_c:
+                    min_c = c_i
+            if not valid:
+                continue
+            dist_sq = dx * dx + dy * dy
+            # Prefer higher clearance; on tie, prefer closer to robot
+            if min_c > best_clearance + 1e-9 or (min_c > best_clearance - 1e-9 and dist_sq < best_dist_sq):
+                best_clearance = min_c
+                best_dist_sq = dist_sq
+                best_xy = (px, py)
+
+    return best_xy
+
+
 def filter_open_directions(
     directions: List[OpenDirection],
     robot_yaw: float,
