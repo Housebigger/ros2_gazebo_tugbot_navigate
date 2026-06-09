@@ -252,7 +252,7 @@ def generate_launch_description():
         DeclareLaunchArgument('allow_reverse_branch_goals', default_value='true', description='Allow DFS to choose branch goals behind the current robot heading.'),
         DeclareLaunchArgument('reverse_branch_angle_threshold_deg', default_value='135.0', description='Directions beyond this yaw delta are treated as reverse when reverse goals are disabled.'),
         DeclareLaunchArgument('blacklist_radius_m', default_value='0.5', description='Radius for suppressing repeated bad goals.'),
-        DeclareLaunchArgument('max_failures_per_branch', default_value='4', description='Repeated Nav2 failures before a branch becomes blocked.'),
+        DeclareLaunchArgument('max_failures_per_branch', default_value='3', description='Repeated Nav2 failures before a branch becomes blocked.'),
         DeclareLaunchArgument('max_backtrack_failures_per_node', default_value='4', description='Repeated backtrack failures before skipping a junction.'),
         DeclareLaunchArgument('entry_direct_enabled', default_value='true', description='Enable ENTRY_DIRECT bypass for first goal dispatch from entrance.'),
         DeclareLaunchArgument('entry_direct_distance_m', default_value='1.5', description='Straight-line distance for ENTRY_DIRECT first goal into maze.'),

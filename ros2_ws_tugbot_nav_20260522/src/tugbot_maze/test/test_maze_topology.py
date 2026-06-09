@@ -16,6 +16,7 @@ from tugbot_maze.maze_topology import (
     BLACKLISTED,
     BLOCKED_NAV2,
     TRUE_DEAD_END,
+    TERMINAL_BRANCH_STATES,
 )
 
 
@@ -136,3 +137,147 @@ def test_choose_next_branch_returns_none_when_all_branches_terminal():
     )
 
     assert topology.choose_next_branch(node.node_id, exit_xy=(4.0, 0.0)) is None
+
+
+# ── Level-2 backtracking tests ──────────────────────────────────────────────
+
+
+def test_all_branches_terminal_true_when_all_dead_end():
+    topology = MazeTopology(junction_merge_radius_m=0.5)
+    node = topology.find_or_create_node(0.0, 0.0, node_type='junction')
+    topology.set_branch_options(
+        node.node_id,
+        [
+            BranchOption(angle_rad=0.0, target_xy=(1.0, 0.0), state=DEAD_END),
+            BranchOption(angle_rad=math.pi / 2.0, target_xy=(0.0, 1.0), state=DEAD_END),
+        ],
+    )
+
+    assert node.all_branches_terminal() is True
+
+
+def test_all_branches_terminal_true_with_mixed_terminal_states():
+    topology = MazeTopology(junction_merge_radius_m=0.5)
+    node = topology.find_or_create_node(0.0, 0.0, node_type='junction')
+    topology.set_branch_options(
+        node.node_id,
+        [
+            BranchOption(angle_rad=0.0, target_xy=(1.0, 0.0), state=EXPLORED),
+            BranchOption(angle_rad=math.pi / 2.0, target_xy=(0.0, 1.0), state=BLOCKED),
+            BranchOption(angle_rad=-math.pi / 2.0, target_xy=(0.0, -1.0), state=DEAD_END),
+        ],
+    )
+
+    assert node.all_branches_terminal() is True
+
+
+def test_all_branches_terminal_false_when_untried_remains():
+    topology = MazeTopology(junction_merge_radius_m=0.5)
+    node = topology.find_or_create_node(0.0, 0.0, node_type='junction')
+    topology.set_branch_options(
+        node.node_id,
+        [
+            BranchOption(angle_rad=0.0, target_xy=(1.0, 0.0), state=DEAD_END),
+            BranchOption(angle_rad=math.pi / 2.0, target_xy=(0.0, 1.0)),  # UNTRIED
+        ],
+    )
+
+    assert node.all_branches_terminal() is False
+
+
+def test_all_branches_terminal_false_for_empty_branches():
+    topology = MazeTopology(junction_merge_radius_m=0.5)
+    node = topology.find_or_create_node(0.0, 0.0, node_type='junction')
+    # No branches set
+
+    assert node.all_branches_terminal() is False
+
+
+def test_level2_backtrack_skips_fully_explored_junction():
+    topology = MazeTopology(junction_merge_radius_m=0.5)
+    a = topology.find_or_create_node(0.0, 0.0, node_type='junction')
+    b = topology.find_or_create_node(1.0, 0.0, node_type='junction')
+    c = topology.find_or_create_node(2.0, 0.0, node_type='dead_end')
+
+    # A has one UNTRIED branch (not fully explored)
+    topology.set_branch_options(a.node_id, [BranchOption(angle_rad=math.pi / 2.0, target_xy=(0.0, 1.0))])
+    # B has all branches terminal (fully explored)
+    topology.set_branch_options(
+        b.node_id,
+        [
+            BranchOption(angle_rad=0.0, target_xy=(2.0, 0.0), state=DEAD_END),
+            BranchOption(angle_rad=-math.pi / 2.0, target_xy=(1.0, -1.0), state=BLOCKED),
+        ],
+    )
+    topology.visit_node(a.node_id)
+    topology.visit_node(b.node_id)
+    topology.visit_node(c.node_id)
+
+    backtrack = topology.next_backtrack_target(c.node_id)
+
+    # Should skip B (all terminal) and return A
+    assert backtrack is not None
+    assert backtrack.node_id == a.node_id
+
+
+def test_multi_level_backtrack_cascades_through_two_fully_explored_junctions():
+    topology = MazeTopology(junction_merge_radius_m=0.5)
+    a = topology.find_or_create_node(0.0, 0.0, node_type='junction')
+    b = topology.find_or_create_node(1.0, 0.0, node_type='junction')
+    c = topology.find_or_create_node(2.0, 0.0, node_type='junction')
+    d = topology.find_or_create_node(3.0, 0.0, node_type='dead_end')
+
+    # A has one UNTRIED branch
+    topology.set_branch_options(a.node_id, [BranchOption(angle_rad=math.pi / 2.0, target_xy=(0.0, 1.0))])
+    # B fully explored
+    topology.set_branch_options(
+        b.node_id,
+        [
+            BranchOption(angle_rad=0.0, target_xy=(2.0, 0.0), state=EXPLORED),
+            BranchOption(angle_rad=-math.pi / 2.0, target_xy=(1.0, -1.0), state=DEAD_END),
+        ],
+    )
+    # C fully explored
+    topology.set_branch_options(
+        c.node_id,
+        [
+            BranchOption(angle_rad=0.0, target_xy=(3.0, 0.0), state=DEAD_END),
+            BranchOption(angle_rad=math.pi / 2.0, target_xy=(2.0, 1.0), state=BLOCKED),
+        ],
+    )
+    topology.visit_node(a.node_id)
+    topology.visit_node(b.node_id)
+    topology.visit_node(c.node_id)
+    topology.visit_node(d.node_id)
+
+    backtrack = topology.next_backtrack_target(d.node_id)
+
+    assert backtrack is not None
+    assert backtrack.node_id == a.node_id
+
+
+def test_partially_explored_junction_is_not_skipped_by_level2_backtrack():
+    topology = MazeTopology(junction_merge_radius_m=0.5)
+    a = topology.find_or_create_node(0.0, 0.0, node_type='junction')
+    b = topology.find_or_create_node(1.0, 0.0, node_type='junction')
+    c = topology.find_or_create_node(2.0, 0.0, node_type='dead_end')
+
+    # A has UNTRIED branch
+    topology.set_branch_options(a.node_id, [BranchOption(angle_rad=math.pi / 2.0, target_xy=(0.0, 1.0))])
+    # B has one DEAD_END and one UNTRIED — partially explored, NOT fully-explored
+    topology.set_branch_options(
+        b.node_id,
+        [
+            BranchOption(angle_rad=0.0, target_xy=(2.0, 0.0), state=DEAD_END),
+            BranchOption(angle_rad=-math.pi / 2.0, target_xy=(1.0, -1.0)),  # UNTRIED
+        ],
+    )
+    topology.visit_node(a.node_id)
+    topology.visit_node(b.node_id)
+    topology.visit_node(c.node_id)
+
+    backtrack = topology.next_backtrack_target(c.node_id)
+
+    # B still has untried branches, so it is the target (not skipped)
+    assert backtrack is not None
+    assert backtrack.node_id == b.node_id

@@ -79,6 +79,16 @@ class TopoNode:
     def has_untried_branches(self) -> bool:
         return any(branch.state in SELECTABLE_BRANCH_STATES for branch in self.branches)
 
+    def all_branches_terminal(self) -> bool:
+        """Return True if every branch state is terminal (EXPLORED, DEAD_END, BLOCKED, BLACKLISTED).
+
+        Returns False for nodes with no branches set (unvisited/corridor nodes).
+        Used by level-2 backtracking to detect junctions whose entire subtree is dead.
+        """
+        return bool(self.branches) and all(
+            branch.state in TERMINAL_BRANCH_STATES for branch in self.branches
+        )
+
 
 @dataclass
 class TopoEdge:
@@ -206,6 +216,12 @@ class MazeTopology:
             node = self.nodes[node_id]
             if node.node_type == 'junction' and node.has_untried_branches() and node.backtrack_failures < self.max_backtrack_failures_per_node:
                 return node
+            # Level-2 backtracking: explicitly skip junctions where ALL branches
+            # are terminal (DEAD_END/BLOCKED/BLACKLISTED/EXPLORED). These have no
+            # useful work left — the dead-subtree signal should cascade upward so
+            # that higher-level junctions get a chance to use their remaining branches.
+            if node.all_branches_terminal():
+                continue
         return None
 
     def choose_next_branch(self, node_id: int, exit_xy: Point) -> Optional[BranchOption]:

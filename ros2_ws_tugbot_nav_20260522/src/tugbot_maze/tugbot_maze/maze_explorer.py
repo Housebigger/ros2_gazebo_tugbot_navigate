@@ -1160,6 +1160,22 @@ class MazeExplorer(Node):
             if backtrack_target is None:
                 self._mark_exhausted('dead end reached and no untried junction remains')
                 return
+            # Level-2 backtracking: if the backtrack target junction is fully-explored
+            # (all branches terminal), skip it and cascade to a higher-level junction.
+            bt_node = self.topology.nodes[backtrack_target.node_id]
+            if bt_node.all_branches_terminal():
+                self.get_logger().info(
+                    'level-2 backtrack: junction %d fully-explored (all branches terminal), cascading to higher-level junction'
+                    % backtrack_target.node_id
+                )
+                backtrack_target = self.topology.next_backtrack_target(backtrack_target.node_id)
+                if backtrack_target is None:
+                    self._mark_exhausted('dead end reached and no untried junction remains after level-2 backtrack')
+                    return
+                self.get_logger().info(
+                    'level-2 backtrack: selected higher-level junction %d at (%.3f, %.3f)'
+                    % (backtrack_target.node_id, backtrack_target.x, backtrack_target.y)
+                )
             self._send_goal(backtrack_target.xy, yaw=self._yaw_to_point(robot_pose[:2], backtrack_target.xy), goal_kind='backtrack')
             return
 
@@ -1247,6 +1263,21 @@ class MazeExplorer(Node):
             return
 
         backtrack_target = self.topology.next_backtrack_target(node.node_id)
+        if backtrack_target is not None:
+            # Level-2 backtracking: if the backtrack target junction is fully-explored
+            # (all branches terminal), skip it and cascade to a higher-level junction.
+            bt_node = self.topology.nodes[backtrack_target.node_id]
+            if bt_node.all_branches_terminal():
+                self.get_logger().info(
+                    'level-2 backtrack (no-candidate): junction %d fully-explored, cascading higher'
+                    % backtrack_target.node_id
+                )
+                backtrack_target = self.topology.next_backtrack_target(backtrack_target.node_id)
+            if backtrack_target is not None:
+                self.get_logger().info(
+                    'level-2 backtrack: selected junction %d at (%.3f, %.3f)'
+                    % (backtrack_target.node_id, backtrack_target.x, backtrack_target.y)
+                )
         if backtrack_target is not None:
             self.phase56_open_direction_to_candidate_diagnostics['junction_or_dead_end_policy_filter'] = 'backtrack_selected_after_no_candidate'
             self.phase56_open_direction_to_candidate_diagnostics['branch_candidate_rejection_reason'] = self.phase56_open_direction_to_candidate_diagnostics.get('branch_candidate_rejection_reason') or 'node_policy_no_untried_branch'
