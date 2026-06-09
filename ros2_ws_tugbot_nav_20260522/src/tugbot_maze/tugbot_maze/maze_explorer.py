@@ -124,7 +124,7 @@ class MazeExplorer(Node):
         self.post_ingress_single_open_exception_return_angle_min_deg = float(
             self.declare_parameter('post_ingress_single_open_exception_return_angle_min_deg', 80.0).value
         )
-        self.centerline_target_refinement_enabled = bool(self.declare_parameter('centerline_target_refinement_enabled', True).value)
+        self.centerline_target_refinement_enabled = bool(self.declare_parameter('centerline_target_refinement_enabled', False).value)
         self.centerline_target_refinement_side_probe_m = float(
             self.declare_parameter('centerline_target_refinement_side_probe_m', 1.5).value
         )
@@ -416,6 +416,13 @@ class MazeExplorer(Node):
         if self.mode in (EXIT_REACHED, FAILED_EXHAUSTED):
             self._publish_state()
             return
+        if self.goal_active or self._goal_settle_active():
+            pass  # no log spam during normal nav/settle
+        else:
+            self.get_logger().debug(
+                '_explore_once active: mode=%s goal_count=%d goal_active=%s'
+                % (self.mode, self.goal_count, self.goal_active)
+            )
 
         if self.map_view is None:
             self.mode = WAIT_FOR_MAP
@@ -435,7 +442,11 @@ class MazeExplorer(Node):
         if self.goal_active:
             self.mode = NAVIGATING if self.active_goal_kind != 'backtrack' else BACKTRACKING
             if self._goal_timed_out():
-                self.get_logger().warn('maze explorer goal timed out; classifying active goal failure')
+                elapsed_sec = (self.get_clock().now() - self.goal_sent_time).nanoseconds / 1e9 if self.goal_sent_time else -1
+                self.get_logger().warn(
+                    'maze explorer goal timed out; classifying active goal failure seq=%s elapsed=%.1fs timeout=%.1fs'
+                    % (self.active_goal_sequence_id, elapsed_sec, self._effective_goal_timeout_sec())
+                )
                 self._handle_goal_failure(reason=GOAL_TIMEOUT)
             self._publish_state()
             return
@@ -451,6 +462,7 @@ class MazeExplorer(Node):
             return
 
         if not self.action_client.wait_for_server(timeout_sec=0.0):
+            self.get_logger().warn('action server not ready, mode=WAIT_FOR_NAV2')
             self.mode = WAIT_FOR_NAV2
             self._publish_state()
             return
@@ -491,9 +503,30 @@ class MazeExplorer(Node):
             return
 
         if not gate['passed']:
-            self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
-            self._publish_state()
-            return
+            # After ENTRY_DIRECT dispatched, relax readiness: only require
+            # essential infrastructure (action server, TF, scan).  Skip
+            # map_sufficient / local_costmap_sufficient which can fail in
+            # narrow corridors during normal DFS exploration.
+            if self.entry_direct_dispatched:
+                essential_keys = (
+                    'navigate_to_pose_action_ready',
+                    'tf_sufficient',
+                    'scan_sufficient',
+                )
+                essential_ok = all(
+                    gate['checks'].get(k, False) for k in essential_keys)
+                if essential_ok:
+                    if self.dispatch_readiness_first_pass_time is None:
+                        self.dispatch_readiness_first_pass_time = (
+                            self.get_clock().now())
+                else:
+                    self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
+                    self._publish_state()
+                    return
+            else:
+                self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
+                self._publish_state()
+                return
         if self.dispatch_readiness_first_pass_time is None:
             self.dispatch_readiness_first_pass_time = self.get_clock().now()
 
@@ -1120,14 +1153,13 @@ class MazeExplorer(Node):
                     self.topology.mark_branch_state(node.node_id, chosen, IN_PROGRESS)
                     self.active_start_node_id = node.node_id
                     self.active_branch = chosen
-                    self._send_goal(chosen.target_xy, yaw=chosen.angle_rad, goal_kind='explore')
+                    self._send_goal(chosen.target_xy, yaw=chosen.angle_rad, goal_kind='explore', skip_two_step_staging=True)
                     return
             self.topology.mark_dead_end(node.node_id, incoming_edge_id=self.active_edge_id)
             backtrack_target = self.topology.next_backtrack_target(node.node_id)
             if backtrack_target is None:
                 self._mark_exhausted('dead end reached and no untried junction remains')
                 return
-            self.pending_branch_choice_diagnostics = self._empty_branch_choice_diagnostics(selected_due_to_context='dead_end_backtrack')
             self._send_goal(backtrack_target.xy, yaw=self._yaw_to_point(robot_pose[:2], backtrack_target.xy), goal_kind='backtrack')
             return
 
@@ -1211,7 +1243,7 @@ class MazeExplorer(Node):
             self.topology.mark_branch_state(node.node_id, chosen, IN_PROGRESS)
             self.active_start_node_id = node.node_id
             self.active_branch = chosen
-            self._send_goal(chosen.target_xy, yaw=chosen.angle_rad, goal_kind='explore')
+            self._send_goal(chosen.target_xy, yaw=chosen.angle_rad, goal_kind='explore', skip_two_step_staging=True)
             return
 
         backtrack_target = self.topology.next_backtrack_target(node.node_id)
@@ -2623,6 +2655,7 @@ class MazeExplorer(Node):
 
     def _goal_response_callback(self, future, sequence_id: int) -> None:  # noqa: ANN001 - rclpy future type varies.
         if self._is_stale_goal_result(sequence_id):
+            self.get_logger().warn('goal_response STALE seq=%d active_seq=%s' % (sequence_id, self.active_goal_sequence_id))
             self._mark_goal_preempted(sequence_id, GoalStatus.STATUS_UNKNOWN)
             return
         self.goal_handle = future.result()
@@ -2634,6 +2667,16 @@ class MazeExplorer(Node):
         result_future.add_done_callback(lambda future, sequence_id=sequence_id: self._goal_result_callback(future, sequence_id))
 
     def _goal_result_callback(self, future, sequence_id: int) -> None:  # noqa: ANN001 - rclpy future type varies.
+        try:
+            self._goal_result_callback_impl(future, sequence_id)
+        except Exception as exc:
+            import traceback
+            self.get_logger().error(
+                'FATAL EXCEPTION in _goal_result_callback seq=%d: %s\n%s'
+                % (sequence_id, exc, traceback.format_exc())
+            )
+
+    def _goal_result_callback_impl(self, future, sequence_id: int) -> None:
         result = future.result()
         status = getattr(result, 'status', GoalStatus.STATUS_UNKNOWN)
         self.last_nav2_status = int(status)
@@ -2681,13 +2724,18 @@ class MazeExplorer(Node):
             self.get_logger().info('corridor-alignment staging succeeded; waiting for fresh scan/local_costmap/TF before second-step forward goal')
         elif self.active_goal_kind == 'explore' and self.active_start_node_id is not None and self.active_branch is not None:
             self.post_ingress_single_open_exception_consumed = True
-            self.topology.mark_branch_state(self.active_start_node_id, self.active_branch, EXPLORED)
-            end = self.topology.find_or_create_node(self.active_goal_target[0], self.active_goal_target[1], node_type='corridor') if self.active_goal_target else None
-            if end is not None:
-                edge = self.topology.connect_nodes(self.active_start_node_id, end.node_id, state=EXPLORED)
-                self.active_edge_id = edge.edge_id
-                self.current_node_id = end.node_id
-                self.topology.visit_node(end.node_id)
+            try:
+                self.topology.mark_branch_state(self.active_start_node_id, self.active_branch, EXPLORED)
+                end = self.topology.find_or_create_node(self.active_goal_target[0], self.active_goal_target[1], node_type='corridor') if self.active_goal_target else None
+                if end is not None:
+                    edge = self.topology.connect_nodes(self.active_start_node_id, end.node_id, state=EXPLORED)
+                    self.active_edge_id = edge.edge_id
+                    self.current_node_id = end.node_id
+                    self.topology.visit_node(end.node_id)
+            except Exception as exc:
+                self.get_logger().error('EXCEPTION in explore success topology update: %s' % exc)
+                import traceback
+                self.get_logger().error('traceback: %s' % traceback.format_exc())
         elif self.active_goal_kind == 'backtrack' and self.active_goal_target is not None:
             node = self.topology.find_or_create_node(self.active_goal_target[0], self.active_goal_target[1], node_type='junction')
             self.current_node_id = node.node_id
