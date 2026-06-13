@@ -4030,12 +4030,33 @@ class MazeExplorer(Node):
                     % (reason, self.entry_direct_retry_count, self.entry_direct_max_retries)
                 )
             else:
-                self.get_logger().warn(
-                    'ENTRY_DIRECT goal failed (reason=%s, retries exhausted %d); '
-                    'falling back to AT_NODE_ANALYZE'
-                    % (reason, self.entry_direct_retry_count)
-                )
+                # Nav2 planner kept failing (typically because the global
+                # costmap/map never populated — and it can't populate until the
+                # robot moves and SLAM sees the corridor). Break the chicken-
+                # and-egg with a reactive forward drive: it bypasses the planner
+                # and just drives into the entrance with laser safety, so the
+                # robot physically enters and SLAM starts building the map.
                 self.entry_direct_failed_time = self.get_clock().now()
+                self.entry_direct_dispatched = True  # don't retry Nav2 entry
+                started = self._start_reactive_drive(
+                    self.entrance_yaw,
+                    distance=self.entry_direct_distance_m,
+                    min_clearance=0.8)
+                if started:
+                    self.get_logger().warn(
+                        'ENTRY_DIRECT goal failed (reason=%s, retries exhausted %d); '
+                        'reactive forward entry started (%.1fm @ %.0f deg) to break '
+                        'planner/map chicken-and-egg'
+                        % (reason, self.entry_direct_retry_count,
+                           self.entry_direct_distance_m,
+                           math.degrees(self.entrance_yaw))
+                    )
+                else:
+                    self.get_logger().warn(
+                        'ENTRY_DIRECT goal failed (reason=%s, retries exhausted %d); '
+                        'reactive entry blocked — falling back to AT_NODE_ANALYZE'
+                        % (reason, self.entry_direct_retry_count)
+                    )
         if self.active_goal_kind == 'backtrack':
             self.backtrack_failure_count += 1
             if self.active_goal_target is not None:
