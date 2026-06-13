@@ -16,6 +16,11 @@ bt_navigator:
     default_server_timeout: 20
     wait_for_service_timeout: 1000
     action_server_result_timeout: 900.0
+    # SLAM sim: Gazebo clock jitter + SLAM map→odom corrections cause
+    # frequent TF buffer clears ("jump back in time").  A generous
+    # transform_tolerance lets bt_navigator survive these clears and
+    # still look up robot pose instead of aborting immediately.
+    transform_tolerance: 1.0
     navigators: ["navigate_to_pose", "navigate_through_poses"]
     navigate_to_pose:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
@@ -83,7 +88,8 @@ controller_server:
       wz_max: 1.0
       iteration_count: 1
       prune_distance: 1.7
-      transform_tolerance: 0.1
+      # SLAM sim: increased from 0.1 to survive TF buffer clears
+      transform_tolerance: 0.5
       temperature: 0.3
       gamma: 0.015
       motion_model: "DiffDrive"
@@ -121,7 +127,9 @@ controller_server:
         enabled: true
         cost_power: 1
         cost_weight: 3.81
-        critical_cost: 300.0
+        # Phase narrow-corridor: raise critical_cost 300→400 so MPPI doesn't
+        # treat moderate inflation costs as critical in narrow corridors.
+        critical_cost: 400.0
         # Tugbot currently uses robot_radius in the costmaps; keep MPPI collision
         # checking radius-based until a polygon footprint is explicitly added.
         consider_footprint: false
@@ -161,17 +169,30 @@ local_costmap:
     ros__parameters:
       update_frequency: 5.0
       publish_frequency: 2.0
-      global_frame: odom
+      # Optimization 1: use 'map' frame instead of 'odom'.
+      # With SLAM, the odom frame drifts significantly over long exploration
+      # (14.3m observed after 87 goals), making the local costmap nearly
+      # empty (2.1% known).  Using 'map' frame ensures the local costmap
+      # always reflects the robot's SLAM-corrected position.
+      # Trade-off: occasional jerkiness when SLAM corrects map→odom,
+      # but far better than a completely blind local costmap.
+      global_frame: map
       robot_base_frame: base_link
       rolling_window: true
       width: 3
       height: 3
       resolution: 0.05
       robot_radius: 0.35
+      # SLAM sim: tolerate TF jitter for odom→base_link lookups
+      transform_tolerance: 0.5
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
+        # Phase narrow-corridor: keep inflation_radius=0.46 for smooth gradient
+        # but increase cost_scaling_factor 3.0→8.0 so costs decay much faster.
+        # This reduces footprint cost from ~99 to ~35 in 1.76m corridors,
+        # allowing the MPPI controller to plan through narrow passages.
+        cost_scaling_factor: 8.0
         inflation_radius: 0.46
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
@@ -206,9 +227,11 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_link
       robot_radius: 0.35
+      # SLAM sim: tolerate TF jitter for map→base_link lookups
+      transform_tolerance: 0.5
       resolution: 0.05
       track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "maze_boundary_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -226,10 +249,22 @@ global_costmap:
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
+      maze_boundary_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_topic: "/maze_boundary_map"
+        map_subscribe_transient_local: True
+        subscribe_to_updates: False
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.40
+        # Optimization3b: faster decay and smaller inflation radius for narrow corridors
+        # With SLAM drift, walls appear in wrong positions; smaller inflation radius
+        # reduces the area affected by misplaced walls, allowing the planner to find
+        # paths through corridors that appear narrower than they really are.
+        # Opt14: increase cost_scaling 10→20 so inflation decays faster in corridors.
+        # With SLAM drift, walls appear in wrong positions; faster decay leaves more
+        # free space for the planner to find paths through slightly-narrowed corridors.
+        cost_scaling_factor: 20.0
+        inflation_radius: 0.36
       always_send_full_costmap: True
 
 map_saver:
@@ -246,8 +281,15 @@ planner_server:
     costmap_update_timeout: 1.0
     GridBased:
       plugin: "nav2_navfn_planner::NavfnPlanner"
-      tolerance: 0.5
-      use_astar: false
+      # Optimization3b: increased tolerance from 0.5→1.0 for SLAM drift tolerance.
+      # tolerance=2.0 caused backtrack loops (DFS false "goal reached"); 1.0 is
+      # a safer middle ground — 2x the original but not large enough to corrupt
+      # the DFS exploration state.
+      tolerance: 1.0
+      # Optimization3b: switch from Dijkstra to A* — handles gradient extraction
+      # better in narrow corridors with SLAM drift. Fixes "Failed to create a plan
+      # from potential when a legal potential was found" errors.
+      use_astar: true
       allow_unknown: true
 
 smoother_server:
@@ -280,7 +322,8 @@ behavior_server:
     local_frame: odom
     global_frame: map
     robot_base_frame: base_link
-    transform_tolerance: 0.1
+    # SLAM sim: increased from 0.1 to survive TF buffer clears
+    transform_tolerance: 0.5
     simulate_ahead_time: 2.0
     # Phase 14: keep Nav2 behavior-server rotations gentle; explorer spin defaults are disabled.
     max_rotational_vel: 0.5
@@ -344,7 +387,8 @@ collision_monitor:
     cmd_vel_in_topic: "cmd_vel_smoothed"
     cmd_vel_out_topic: "cmd_vel"
     state_topic: "collision_monitor_state"
-    transform_tolerance: 0.2
+    # SLAM sim: increased from 0.2 to survive TF buffer clears
+    transform_tolerance: 0.5
     source_timeout: 1.0
     base_shift_correction: True
     stop_pub_timeout: 2.0

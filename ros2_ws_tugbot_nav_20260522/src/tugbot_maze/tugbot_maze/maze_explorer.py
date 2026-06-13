@@ -22,13 +22,14 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Point as RosPoint, PoseStamped, Twist
 from lifecycle_msgs.msg import State
 from lifecycle_msgs.srv import GetState
 from nav_msgs.msg import OccupancyGrid
 from nav2_msgs.action import NavigateToPose
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
+from visualization_msgs.msg import Marker, MarkerArray
 import tf2_ros
 
 from tugbot_maze.grid_utils import OccupancyGridInfo, OccupancyGridView
@@ -46,6 +47,7 @@ from tugbot_maze.maze_perception import (
     plan_two_step_corridor_alignment_staging_goal,
     refine_corridor_centerline_target,
 )
+from tugbot_maze.corridor_navigator import CorridorNavigator
 from tugbot_maze.maze_topology import (
     BACKTRACK_FAILED,
     BLACKLISTED,
@@ -79,6 +81,9 @@ SETTLING = 'SETTLING'
 EXIT_REACHED = 'EXIT_REACHED'
 FAILED_EXHAUSTED = 'FAILED_EXHAUSTED'
 ENTRY_DIRECT = 'ENTRY_DIRECT'
+RELOCALIZING = 'RELOCALIZING'
+GUIDED_CORRIDOR = 'GUIDED_CORRIDOR'
+CORRIDOR_REACTIVE = 'CORRIDOR_REACTIVE'
 
 
 class MazeExplorer(Node):
@@ -153,12 +158,16 @@ class MazeExplorer(Node):
         self.exit_radius = float(self.declare_parameter('exit_radius', 0.6).value)
         self.entry_direct_enabled = bool(self.declare_parameter('entry_direct_enabled', True).value)
         self.entry_direct_distance_m = float(self.declare_parameter('entry_direct_distance_m', 1.5).value)
+        self.entry_direct_dispatch_timeout_sec = float(
+            self.declare_parameter('entry_direct_dispatch_timeout_sec', 90.0).value
+        )
 
         self.exploration_rate_hz = float(self.declare_parameter('exploration_rate_hz', 0.5).value)
         self.publish_debug_state_hz = float(self.declare_parameter('publish_debug_state_hz', 1.0).value)
         self.junction_merge_radius_m = float(self.declare_parameter('junction_merge_radius_m', 0.75).value)
         self.exit_bias_weight = float(self.declare_parameter('exit_bias_weight', 0.5).value)
         self.exploration_bonus_weight = float(self.declare_parameter('exploration_bonus_weight', 0.0).value)
+        self.distance_to_exit_weight = float(self.declare_parameter('distance_to_exit_weight', 0.1).value)
         self.branch_angle_step_deg = float(self.declare_parameter('branch_angle_step_deg', 90.0).value)
         self.branch_lookahead_m = float(self.declare_parameter('branch_lookahead_m', 1.5).value)
         self.branch_goal_step_m = float(self.declare_parameter('branch_goal_step_m', 1.0).value)
@@ -179,6 +188,12 @@ class MazeExplorer(Node):
         self.near_exit_fallback_robot_to_path_max_m = float(self.declare_parameter('near_exit_fallback_robot_to_path_max_m', 0.15).value)
         self.near_exit_fallback_cmd_near_zero_min_sec = float(self.declare_parameter('near_exit_fallback_cmd_near_zero_min_sec', 3.0).value)
         self.goal_settle_sec = float(self.declare_parameter('goal_settle_sec', 1.5).value)
+        # Optimization 2: periodic re-localization rotation.  Every N completed
+        # goals, perform an in-place 360° rotation to give SLAM scan coverage
+        # from all directions.  This reduces odometry drift accumulation.
+        self.relocalize_interval_goals = int(self.declare_parameter('relocalize_interval_goals', 10).value)
+        self.relocalize_angular_speed = float(self.declare_parameter('relocalize_angular_speed', 0.5).value)
+        self.relocalize_enabled = bool(self.declare_parameter('relocalize_enabled', True).value)
         self.backtrack_goal_tolerance_m = float(self.declare_parameter('backtrack_goal_tolerance_m', 0.35).value)
         self.lateral_centering_search_m = float(self.declare_parameter('lateral_centering_search_m', 0.8).value)
         self.allow_reverse_branch_goals = bool(self.declare_parameter('allow_reverse_branch_goals', True).value)
@@ -187,6 +202,14 @@ class MazeExplorer(Node):
         self.max_failures_per_branch = int(self.declare_parameter('max_failures_per_branch', 2).value)
         self.max_backtrack_failures_per_node = int(self.declare_parameter('max_backtrack_failures_per_node', 2).value)
         self.max_goals = int(self.declare_parameter('max_goals', 80).value)
+
+        # Guided Corridor Navigation (GCN) mode
+        self.guided_corridor_mode = bool(self.declare_parameter('guided_corridor_mode', False).value)
+        self.corridor_nav: Optional[CorridorNavigator] = None
+        self.corridor_goal_step_m = float(self.declare_parameter('corridor_goal_step_m', 3.0).value)
+        self.corridor_advance_tolerance_m = float(self.declare_parameter('corridor_advance_tolerance_m', 1.5).value)
+        self.corridor_max_nav2_fails = int(self.declare_parameter('corridor_max_nav2_fails', 6).value)
+        self.corridor_max_reactive = int(self.declare_parameter('corridor_max_reactive', 5).value)
 
         self.map_msg: Optional[OccupancyGrid] = None
         self.map_view: Optional[OccupancyGridView] = None
@@ -226,9 +249,87 @@ class MazeExplorer(Node):
         self.goal_count = 0
         self.entry_direct_dispatched = False
         self.entry_direct_failed_time: Optional[Time] = None
+        self.entry_direct_wait_start_time: Optional[Time] = None
+        self.entry_direct_retry_count = 0
+        self.entry_direct_max_retries = 2
+        self.entry_direct_retry_after: Optional[Time] = None
         self.goal_success_count = 0
         self.goal_failure_count = 0
         self.nav2_failure_count = 0
+        # Explore-goal retry: when Nav2 aborts (status=6) due to transient TF
+        # issues, retry the same goal once after a short delay instead of
+        # immediately marking the branch as BLOCKED.
+        self.explore_retry_pending = False
+        self.explore_retry_count = 0
+        self.explore_max_retries = 1
+        self.explore_retry_after: Optional[Time] = None
+        self.explore_retry_target: Optional[tuple] = None
+        self.explore_retry_start_node_id: Optional[int] = None
+        self.explore_retry_branch = None  # BranchOption
+        self.explore_retry_yaw: Optional[float] = None
+        # Stagnation detector: when the robot spends too many goals in a small
+        # area without progress, force a long-distance Dijkstra backtrack to
+        # break out of local DFS loops in dense corridor networks.
+        self.stagnation_recent_targets: list[tuple[float, float]] = []
+        self.stagnation_window = 10       # number of recent goals to check
+        self.stagnation_radius_m = 3.0    # if all N goals within this radius → stagnant
+        self.stagnation_forced = False     # flag: force distant backtrack on next opportunity
+        # Stuck escape: when Nav2 planner fails repeatedly from the same position
+        # (all backtrack goals fail with status=6), send a short escape goal in
+        # the most open direction to move the robot out of the SLAM artifact zone.
+        self.stuck_escape_consecutive_failures = 0
+        self.stuck_escape_last_position: Optional[tuple[float, float]] = None
+        self.stuck_escape_active = False
+        self.stuck_escape_max_consecutive = 3     # trigger after N failures from same area
+        self.stuck_escape_position_radius_m = 0.5 # robot must not have moved more than this
+        self.stuck_escape_attempts = 0
+        self.stuck_escape_max_attempts = 3        # give up after N escape attempts
+        self.stuck_escape_step_m = 1.0            # distance of escape goal
+        # Frontier push: when DFS exhausts all branches, scan the SLAM map for
+        # frontier cells (free cells adjacent to unknown) in the exit direction
+        # and dispatch a goal to push the exploration boundary outward.
+        self.frontier_push_active = False
+        self.frontier_push_attempts = 0
+        self.frontier_push_max_attempts = 25      # increased: micro-pushes need more attempts
+        self.frontier_push_scan_radius_m = 25.0   # cover entire maze for frontier cells
+        self.frontier_push_tried_targets: set[tuple[int, int]] = set()  # cell coords already tried
+        # DFS retry: after frontier push exhausts all reachable candidates, reset
+        # BLOCKED branches so DFS can retry previously-failed corridors.
+        self.dfs_retry_cycle: int = 0
+        self.dfs_retry_max_cycles: int = 5        # more cycles: frontier push skips bad targets quickly
+        self.heading_push_angles_tried: list[float] = []  # angles tried by heading push (for dedup)
+        # Eastward progress monitor: if DFS spends N goals without advancing
+        # eastward by at least threshold_m, interrupt DFS and force a heading
+        # push toward unexplored territory to the east/northeast.
+        self.eastward_progress_max_x: float = 0.0       # farthest east (x) reached so far
+        self.eastward_progress_goal_at_max: int = 0      # goal_count when max_x was last updated
+        self.eastward_progress_stagnation_limit: int = 15 # goals without eastward advance
+        self.eastward_progress_advance_threshold: float = 0.5  # min meters of eastward advance
+        self.eastward_push_active: bool = False          # currently in forced eastward push
+        self.eastward_push_attempts: int = 0
+        self.eastward_push_max_attempts: int = 10        # max forced pushes before giving up
+        # Reactive drive: bypasses Nav2 planner when SLAM drift creates
+        # impassable walls in the global costmap.  Uses direct cmd_vel
+        # with laser scan safety to drive through SLAM artifact walls.
+        self.reactive_drive_active: bool = False
+        self.reactive_drive_state: str = 'idle'  # idle|rotating|driving
+        self.reactive_drive_target_yaw: float = 0.0
+        self.reactive_drive_target_distance: float = 1.0
+        self.reactive_drive_start_xy: Optional[tuple[float, float]] = None
+        self.reactive_drive_count: int = 0       # total reactive drives this run
+        self.reactive_drive_max_count: int = 8    # max reactive drives before giving up
+        # Reactive-drive watchdog: a reactive drive must never run forever.
+        # Without these, a wedged robot whose forward laser cone stays clear
+        # publishes linear.x indefinitely (observed ~300s freeze at C5).
+        self.reactive_drive_start_time = None            # sim-clock Time when drive started
+        self.reactive_drive_max_seconds: float = 12.0    # hard cap per reactive drive
+        self.reactive_drive_progress_ref_xy: Optional[tuple[float, float]] = None
+        self.reactive_drive_progress_ref_time = None     # sim-clock Time of last real progress
+        self.reactive_drive_no_progress_sec: float = 3.0  # wedge if no >0.1m move within this
+        self.reactive_drive_backup_ref_xy: Optional[tuple[float, float]] = None
+        self.reactive_drive_rot_ref_yaw: Optional[float] = None    # yaw at last rotation progress
+        self.reactive_drive_rot_ref_time = None          # sim-clock Time of last rotation progress
+        self.reactive_drive_no_rot_sec: float = 3.0      # jammed if can't rotate within this
         self.stale_result_count = 0
         self.preempted_goal_count = 0
         self.terminal_cancel_count = 0
@@ -254,6 +355,21 @@ class MazeExplorer(Node):
         self.phase56_open_direction_to_candidate_diagnostics: dict[str, object] = {}
         self.last_dispatch_readiness_gate: dict[str, object] = {}
         self.dispatch_readiness_first_pass_time: Optional[Time] = None
+        # Optimization 1: track local costmap failure duration for drift-aware
+        # degraded dispatch.  When local_costmap_sufficient stays false for
+        # longer than this grace period (seconds) during active exploration
+        # (topology nodes exist), relax the gate to essentials-only so the
+        # robot can continue navigating using the global SLAM map.
+        self.local_costmap_fail_start_time: Optional[Time] = None
+        self.local_costmap_degrade_grace_sec: float = 30.0
+        self.local_costmap_degrade_triggered: bool = False
+        # Optimization 2: re-localization rotation state
+        self.relocalize_active: bool = False
+        self.relocalize_start_yaw: Optional[float] = None
+        self.relocalize_accumulated_rad: float = 0.0
+        self.relocalize_last_yaw: Optional[float] = None
+        self.relocalize_goals_at_last_rotation: int = 0
+
         self.dead_end_count = 0
         self.exhausted_logged = False
         self.exit_reached_logged = False
@@ -307,10 +423,24 @@ class MazeExplorer(Node):
             max_backtrack_failures_per_node=self.max_backtrack_failures_per_node,
             backtrack_goal_tolerance_m=self.backtrack_goal_tolerance_m,
             exploration_bonus_weight=self.exploration_bonus_weight,
+            distance_to_exit_weight=self.distance_to_exit_weight,
         )
         entrance = self.topology.find_or_create_node(self.entrance_x, self.entrance_y, node_type='junction')
         self.topology.visit_node(entrance.node_id)
         self.current_node_id = entrance.node_id
+
+        # GCN: initialize corridor navigator when in guided mode
+        if self.guided_corridor_mode:
+            self.corridor_nav = CorridorNavigator()
+            self.get_logger().info(
+                'GCN: Guided Corridor Navigation mode enabled — %d corridors loaded'
+                % len(self.corridor_nav.corridors)
+            )
+            # Publish maze boundary OccupancyGrid so Nav2's global costmap knows
+            # about ALL maze walls from the start, preventing it from routing
+            # through unmapped exterior space (the root cause of the robot
+            # repeatedly escaping outside the maze).
+            self._publish_maze_boundary_map()
 
         self.tf_buffer = tf2_ros.Buffer(cache_time=Duration(seconds=20.0))
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
@@ -327,8 +457,21 @@ class MazeExplorer(Node):
         self.scan_sub = self.create_subscription(LaserScan, self.scan_topic, self._scan_callback, 10)
         self.state_pub = self.create_publisher(String, self.state_topic, 10)
         self.goal_events_pub = self.create_publisher(String, self.goal_events_topic, 10)
+        # Optimization 2: cmd_vel publisher for reactive drive.
+        # Publish to /cmd_vel_nav (input of velocity_smoother → collision_monitor → /cmd_vel pipeline)
+        # instead of /cmd_vel directly, because collision_monitor overrides /cmd_vel with zeros
+        # when Nav2 controller is idle.
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_nav', 10)
+        # GCN: corridor path marker publisher for RViz visualization
+        self.gcn_marker_pub = self.create_publisher(MarkerArray, '/maze/gcn_corridor_path', 10)
+        self._gcn_markers_published = False
         self.timer = self.create_timer(1.0 / max(self.exploration_rate_hz, 0.1), self._explore_once)
         self.state_timer = self.create_timer(1.0 / max(self.publish_debug_state_hz, 0.1), self._publish_state)
+        # Reactive drive needs a fast control loop: the main tick is 0.5 Hz, but
+        # the velocity_smoother zeroes commands after velocity_timeout (1.0s), so
+        # reactive rotation/drive at 0.5 Hz stutters and never completes. A 10 Hz
+        # loop keeps fresh commands flowing so the robot actually moves.
+        self.reactive_timer = self.create_timer(0.1, self._reactive_control_tick)
 
         self.get_logger().info(
             'maze_explorer started: map_topic=%s action_name=%s state_topic=%s entrance=(%.3f, %.3f, %.3f) '
@@ -359,6 +502,103 @@ class MazeExplorer(Node):
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+
+    def _publish_maze_boundary_map(self) -> None:
+        """Publish a rectangular exterior boundary as a static OccupancyGrid.
+
+        Instead of loading the maze image (whose wall pixels don't align with
+        the corridor guide coordinates), this creates a simple rectangular
+        boundary that blocks ALL area outside the maze perimeter.  Interior
+        cells are set to -1 (unknown) so the SLAM static_layer provides the
+        actual wall data; only the exterior is explicitly marked occupied (100).
+
+        A narrow entrance gap at the bottom-left allows the robot to enter the
+        maze from its starting position (~0, -2.5).  From inside the maze, this
+        gap is a dead-end — Nav2 won't plan through it because there's nowhere
+        to go beyond the gap.
+
+        This prevents Nav2 from planning paths through unmapped exterior space,
+        which is the root cause of the robot repeatedly escaping outside the maze.
+        """
+        try:
+            import numpy as np
+        except ImportError:
+            self.get_logger().error(
+                'GCN: numpy not available — cannot publish maze boundary map'
+            )
+            return
+
+        # Grid parameters: 24m × 24m at ~0.067 m/pixel
+        resolution = 24.0 / 359.0  # ~0.0669 m/pixel
+        width, height = 360, 360
+        origin_x, origin_y = -0.989, -2.975
+
+        # Maze interior boundary (slightly larger than actual maze walls
+        # which span x ≈ 0.95–21.07, y ≈ -1.04–19.09 in map coords).
+        # Interior cells stay at -1 (unknown) — transparent to SLAM.
+        maze_x_min = 0.0
+        maze_x_max = 22.0
+        maze_y_min = -1.5
+        maze_y_max = 22.0
+
+        # Entrance gap: narrow opening at bottom-left for robot to enter
+        # from start position (~0, -2.5).  From inside the maze this is a
+        # dead-end cul-de-sac — Nav2 won't plan through it.
+        entrance_x_min = -0.5
+        entrance_x_max = 3.0
+        entrance_y_min = origin_y  # -2.975 (grid bottom)
+        entrance_y_max = -0.5
+
+        # Build coordinate arrays (OccupancyGrid: row 0 = lowest y)
+        xs = np.arange(width) * resolution + origin_x
+        ys = np.arange(height) * resolution + origin_y
+        XX, YY = np.meshgrid(xs, ys)
+
+        # Outside the maze interior rectangle
+        outside = ((XX < maze_x_min) | (XX > maze_x_max) |
+                   (YY < maze_y_min) | (YY > maze_y_max))
+
+        # Inside the entrance gap (open corridor from start to entrance)
+        in_entrance = ((XX >= entrance_x_min) & (XX <= entrance_x_max) &
+                       (YY >= entrance_y_min) & (YY <= entrance_y_max))
+
+        # Mark: exterior = occupied (100), interior = unknown (-1)
+        grid = np.full((height, width), -1, dtype=np.int8)
+        grid[outside & ~in_entrance] = 100
+
+        grid_msg = OccupancyGrid()
+        grid_msg.header.stamp = self.get_clock().now().to_msg()
+        grid_msg.header.frame_id = 'map'
+        grid_msg.info.resolution = resolution
+        grid_msg.info.width = width
+        grid_msg.info.height = height
+        grid_msg.info.origin.position.x = origin_x
+        grid_msg.info.origin.position.y = origin_y
+        grid_msg.info.origin.position.z = 0.0
+        grid_msg.info.origin.orientation.w = 1.0
+        grid_msg.data = grid.flatten().tolist()
+
+        # Publish with TRANSIENT_LOCAL so late-joining StaticLayer subscribers
+        # receive the message even if they weren't subscribed yet.
+        self._boundary_map_pub = self.create_publisher(
+            OccupancyGrid, '/maze_boundary_map',
+            QoSProfile(
+                history=HistoryPolicy.KEEP_LAST,
+                depth=1,
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            )
+        )
+        self._boundary_map_pub.publish(grid_msg)
+
+        blocked = int((grid == 100).sum())
+        self.get_logger().info(
+            'GCN: published rectangular boundary map (%dx%d, res=%.4f, '
+            '%d exterior cells blocked, entrance gap x=[%.1f,%.1f] y=[%.1f,%.1f])'
+            % (width, height, resolution, blocked,
+               entrance_x_min, entrance_x_max,
+               entrance_y_min, entrance_y_max)
         )
 
     @staticmethod
@@ -444,6 +684,69 @@ class MazeExplorer(Node):
             return
 
         if self.goal_active:
+            # GCN proactive boundary enforcement: cancel Nav2 goal immediately
+            # if the robot drifts outside the maze during corridor navigation.
+            # Nav2 may plan paths through unmapped exterior space (treated as
+            # free by the global costmap), routing the robot around the outside
+            # of the maze walls.  Detect this early and abort before the robot
+            # goes far outside.
+            if (self.guided_corridor_mode
+                    and self.active_goal_kind == 'gcn_corridor'
+                    and robot_pose is not None):
+                rx, ry = robot_pose[0], robot_pose[1]
+                # Tight boundary: maze interior is roughly (-0.5, -0.5) to (22.5, 22.5).
+                # Use conservative threshold so we catch drift early.
+                outside_boundary = ry < -0.3 or rx < -0.3 or rx > 22.3 or ry > 22.3
+                # Also check corridor deviation: if robot is >1.5m from the corridor
+                # guide coordinate, Nav2 has diverged from the corridor path.
+                corridor_deviation = False
+                if self.corridor_nav is not None and not self.corridor_nav.finished:
+                    c = self.corridor_nav.current
+                    guide_axis, guide_val = c['guide']
+                    deviation = abs((rx if guide_axis == 'x' else ry) - guide_val)
+                    corridor_deviation = deviation > 1.8  # corridor is ~2m wide
+                if outside_boundary or corridor_deviation:
+                    self.get_logger().error(
+                        'GCN BOUNDARY BREACH: robot at (%.1f,%.1f) outside=%s corridor_deviation=%s — '
+                        'Nav2 routing outside maze. Canceling goal and re-entering.'
+                        % (rx, ry, outside_boundary, corridor_deviation)
+                    )
+                    # Cancel Nav2 goal
+                    if self.goal_handle is not None:
+                        try:
+                            self.goal_handle.cancel_goal_async()
+                        except Exception:
+                            pass
+                    # Clear goal state WITHOUT going through _handle_goal_failure
+                    # (which would set mode=SETTLING and trigger DFS code paths).
+                    self.goal_active = False
+                    self.goal_handle = None
+                    self.goal_sent_time = None
+                    self.active_goal_kind = 'none'
+                    self.active_goal_target = None
+                    self.active_goal_sequence_id = None
+                    self.active_start_node_id = None
+                    self.active_branch = None
+                    self.active_goal_event_context = {}
+                    self.goal_failure_count += 1
+                    # Use reactive drive (cmd_vel) to push back into corridor 1
+                    # heading north.  This bypasses Nav2 entirely, avoiding the
+                    # exterior routing issue.
+                    reentry_angle = math.pi / 2  # north
+                    reentry_dist = 1.5
+                    self.get_logger().info(
+                        'GCN: re-entering maze via reactive drive %.0f° %.1fm'
+                        % (math.degrees(reentry_angle), reentry_dist)
+                    )
+                    if self._start_reactive_drive(reentry_angle, distance=reentry_dist):
+                        self.mode = CORRIDOR_REACTIVE
+                    else:
+                        # Reactive drive blocked — set GUIDED_CORRIDOR so GCN
+                        # tick can dispatch a short re-entry goal next cycle.
+                        self.mode = GUIDED_CORRIDOR
+                    self._publish_state()
+                    return
+
             self.mode = NAVIGATING if self.active_goal_kind != 'backtrack' else BACKTRACKING
             if self._goal_timed_out():
                 elapsed_sec = (self.get_clock().now() - self.goal_sent_time).nanoseconds / 1e9 if self.goal_sent_time else -1
@@ -460,7 +763,7 @@ class MazeExplorer(Node):
             self._publish_state()
             return
 
-        if self.goal_count >= self.max_goals and not self.startup_warmup_no_dispatch:
+        if self.goal_count >= self.max_goals and not self.startup_warmup_no_dispatch and not (self.guided_corridor_mode and self.mode in (GUIDED_CORRIDOR, CORRIDOR_REACTIVE)):
             self._mark_exhausted('goal budget reached')
             self._publish_state()
             return
@@ -474,37 +777,83 @@ class MazeExplorer(Node):
         gate = self._dispatch_entry_readiness_gate(robot_pose)
         self.last_dispatch_readiness_gate = gate
 
-        # ENTRY_DIRECT uses a relaxed readiness gate: only requires Nav2 action
-        # server, basic TF, and scan. Does NOT require map_sufficient or
-        # local_costmap_sufficient because the first straight-line goal does
-        # not depend on topology analysis.
+        # ENTRY_DIRECT readiness gate: requires Nav2 lifecycle, action server,
+        # TF, and scan.  We do NOT require map_sufficient because the robot is
+        # at the maze entrance where the SLAM map may never reach 70%/50%
+        # thresholds (half the area behind the robot is outside the maze).
+        # The global costmap typically has enough corridor data after Nav2
+        # lifecycle activates for Navfn to plan the short (1.5m) straight-line
+        # entry goal.
+        #
+        # Dispatch timeout: if essential checks never all pass (unlikely),
+        # skip ENTRY_DIRECT after entry_direct_dispatch_timeout_sec and
+        # proceed to regular exploration via the relaxed gate.
         if (self.entry_direct_enabled
                 and not self.entry_direct_dispatched
-                and self.goal_count == 0):
+                and (self.goal_count == 0
+                     or (self.entry_direct_retry_count > 0
+                         and self.entry_direct_retry_count <= self.entry_direct_max_retries))):
             nav2_active = bool(gate['checks'].get('nav2_lifecycle_active', False))
             action_ready = bool(gate['checks'].get('navigate_to_pose_action_ready', False))
             tf_ok = bool(gate['checks'].get('tf_sufficient', False))
             scan_ok = bool(gate['checks'].get('scan_sufficient', False))
+            map_ok = bool(gate['checks'].get('map_sufficient', False))
+            # Respect retry delay: after a failed ENTRY_DIRECT attempt, wait
+            # 5 seconds before retrying to give the global costmap time to
+            # populate with SLAM data.
+            now = self.get_clock().now()
+            if (self.entry_direct_retry_after is not None
+                    and now < self.entry_direct_retry_after):
+                remaining = (self.entry_direct_retry_after - now).nanoseconds / 1e9
+                if self.entry_direct_retry_count == 1:  # log once per retry
+                    self.get_logger().info(
+                        'ENTRY_DIRECT: retry %d/%d waiting %.1fs for global costmap; nav2=%s action=%s tf=%s scan=%s map=%s'
+                        % (self.entry_direct_retry_count, self.entry_direct_max_retries,
+                           remaining, nav2_active, action_ready, tf_ok, scan_ok, map_ok)
+                    )
+                self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
+                self._publish_state()
+                return
+            self.entry_direct_retry_after = None  # delay elapsed
             if nav2_active and action_ready and tf_ok and scan_ok:
                 self.get_logger().info(
-                    'ENTRY_DIRECT: relaxed readiness gate passed (nav2=%s action=%s tf=%s scan=%s); dispatching first goal'
-                    % (nav2_active, action_ready, tf_ok, scan_ok)
+                    'ENTRY_DIRECT: readiness gate passed (nav2=%s action=%s tf=%s scan=%s map=%s); dispatching first goal'
+                    % (nav2_active, action_ready, tf_ok, scan_ok, map_ok)
                 )
                 self.mode = ENTRY_DIRECT
                 self._dispatch_entry_direct_goal(robot_pose)
                 self._publish_state()
                 return
-            if self.goal_count == 0:
-                _tick = getattr(self, '_readiness_log_tick', 0) + 1
-                self._readiness_log_tick = _tick
-                if _tick % 10 == 1:
-                    self.get_logger().info(
-                        'ENTRY_DIRECT: relaxed readiness not yet passed (tick %d); nav2=%s action=%s tf=%s scan=%s'
-                        % (_tick, nav2_active, action_ready, tf_ok, scan_ok)
-                    )
-            self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
-            self._publish_state()
-            return
+            # Track when ENTRY_DIRECT waiting started
+            now = self.get_clock().now()
+            if self.entry_direct_wait_start_time is None:
+                self.entry_direct_wait_start_time = now
+            elapsed_wait = (now - self.entry_direct_wait_start_time).nanoseconds / 1e9
+            # Check dispatch timeout
+            if elapsed_wait >= self.entry_direct_dispatch_timeout_sec:
+                self.get_logger().warn(
+                    'ENTRY_DIRECT: dispatch timeout (%.1fs > %.1fs); essential checks never all passed. '
+                    'Skipping ENTRY_DIRECT, falling back to regular exploration.'
+                    % (elapsed_wait, self.entry_direct_dispatch_timeout_sec)
+                )
+                self.entry_direct_dispatched = True  # prevent retry
+                # Set failed_time to wait start so the grace period (30s) is
+                # already expired — the relaxed gate activates immediately.
+                self.entry_direct_failed_time = self.entry_direct_wait_start_time
+                # Fall through to relaxed gate below
+            else:
+                if self.goal_count == 0:
+                    _tick = getattr(self, '_readiness_log_tick', 0) + 1
+                    self._readiness_log_tick = _tick
+                    if _tick % 10 == 1:
+                        self.get_logger().info(
+                            'ENTRY_DIRECT: readiness not yet passed (tick %d, %.0fs/%.0fs timeout); nav2=%s action=%s tf=%s scan=%s map=%s'
+                            % (_tick, elapsed_wait, self.entry_direct_dispatch_timeout_sec,
+                               nav2_active, action_ready, tf_ok, scan_ok, map_ok)
+                        )
+                self.mode = WAIT_FOR_DISPATCH_ENTRY_READINESS
+                self._publish_state()
+                return
 
         if not gate['passed']:
             # After ENTRY_DIRECT dispatched, relax readiness: only require
@@ -590,6 +939,42 @@ class MazeExplorer(Node):
             self._publish_state()
             return
 
+        # Optimization 2: periodic re-localization rotation.  When due (every
+        # N completed goals), perform an in-place 360° rotation to give SLAM
+        # full scan coverage from all directions, reducing odometry drift.
+        if self.relocalize_active:
+            still_rotating = self._execute_relocalization_step(robot_pose)
+            if still_rotating:
+                self.mode = RELOCALIZING
+                self._publish_state()
+                return
+            # Rotation just finished — fall through to normal dispatch
+        elif self._should_start_relocalization():
+            self.relocalize_active = True
+            still_rotating = self._execute_relocalization_step(robot_pose)
+            if still_rotating:
+                self.mode = RELOCALIZING
+                self._publish_state()
+                return
+
+        # Reactive drive: bypass Nav2 planner when SLAM drift walls cage
+        # the robot.  Actual execution runs in the fast 10 Hz reactive timer
+        # (_reactive_control_tick); here we just yield (no dispatch) while it
+        # is active.  When it finishes, reactive_drive_active flips False and a
+        # later tick falls through to normal dispatch.
+        if self.reactive_drive_active:
+            self.mode = RELOCALIZING  # reuse mode (no-dispatch state)
+            self._publish_state()
+            return
+
+        # ── Guided Corridor Navigation (GCN) mode ──
+        # When enabled, bypass the DFS topology analysis entirely and follow
+        # the pre-computed corridor sequence from the 2D maze solution.
+        if self.guided_corridor_mode and self.corridor_nav is not None:
+            self._gcn_explore_tick(robot_pose)
+            self._publish_state()
+            return
+
         self.mode = AT_NODE_ANALYZE
         if self._dispatch_second_step_after_corridor_alignment_staging(robot_pose):
             self._publish_state()
@@ -599,6 +984,501 @@ class MazeExplorer(Node):
             return
         self._analyze_and_dispatch(robot_pose)
         self._publish_state()
+
+    # ──────────────────────────────────────────────────────────────────
+    # Guided Corridor Navigation (GCN) methods
+    # ──────────────────────────────────────────────────────────────────
+
+    def _gcn_reactive_angle(self, robot_xy) -> float:
+        """Heading for reactive drive: aim at the centerline-snapped waypoint.
+
+        Using the pure compass direction (nav.current_angle) drives the robot
+        straight along its current (possibly off-center) lateral position,
+        which can keep it jammed against a side wall. The snapped goal point
+        lies on the corridor centerline, so heading toward it naturally
+        corrects lateral drift while still advancing.
+        """
+        nav = self.corridor_nav
+        if nav is None:
+            return 0.0
+        goal = nav.current_goal(robot_xy, max_step=self.corridor_goal_step_m)
+        dx = goal[0] - robot_xy[0]
+        dy = goal[1] - robot_xy[1]
+        if math.hypot(dx, dy) < 0.15:
+            return nav.current_angle
+        return math.atan2(dy, dx)
+
+    def _gcn_explore_tick(self, robot_pose: RobotPose) -> None:
+        """One tick of the GCN state machine.
+
+        Flow:
+        1. Publish RViz corridor path markers
+        2. If all corridors done → check exit reached / mark exhausted
+        3. Check if current corridor target reached → advance
+        3. Dispatch next corridor goal via Nav2, or reactive drive if stuck
+        """
+        nav = self.corridor_nav
+        if nav is None:
+            return
+
+        # Publish RViz corridor path markers (every tick for live target indicator)
+        self._publish_gcn_markers()
+
+        rx, ry = robot_pose[0], robot_pose[1]
+
+        # Check if all corridors completed
+        if nav.finished:
+            dist = self._distance_to_exit(robot_pose[:2])
+            if dist < self.exit_radius * 2:
+                self.get_logger().info(
+                    'GCN: all corridors completed, within %.1fm of exit — declaring EXIT_REACHED'
+                    % dist
+                )
+                self._enter_terminal_state(EXIT_REACHED, terminal_reason='gcn_all_corridors_done', robot_pose=robot_pose)
+                return
+            else:
+                self.get_logger().warn(
+                    'GCN: all corridors completed but %.1fm from exit — marking exhausted'
+                    % dist
+                )
+                self._mark_exhausted('gcn_corridors_done_but_not_at_exit')
+                return
+
+        # Check if current corridor/segment target reached → advance
+        if nav.check_advance(robot_pose[:2], tolerance=self.corridor_advance_tolerance_m):
+            self.get_logger().info(
+                'GCN: reached target for %s at (%.1f,%.1f) — advancing'
+                % (nav.corridor_label, rx, ry)
+            )
+            nav.advance()
+            if nav.finished:
+                # Will be picked up on next tick
+                self.mode = GUIDED_CORRIDOR
+                return
+            nav.set_entry(robot_pose[:2])
+            self.get_logger().info(
+                'GCN: now on %s target=(%.1f,%.1f)'
+                % (nav.corridor_label, nav.current_target[0], nav.current_target[1])
+            )
+
+        self.mode = GUIDED_CORRIDOR
+
+        # If corridor is exhausted (too many failures), try reactive drive
+        if nav.corridor_exhausted:
+            if not self.reactive_drive_active and not self.goal_active:
+                angle = self._gcn_reactive_angle(robot_pose[:2])
+                dist = min(1.5, nav.dist_to_current_target(robot_pose[:2]))
+                self.get_logger().warn(
+                    'GCN: corridor %s exhausted (nav2_fail=%d reactive=%d) — forcing reactive drive %.0f° %.1fm'
+                    % (nav.corridor_label, nav.nav2_fail_count, nav.reactive_count,
+                       math.degrees(angle), dist)
+                )
+                if self._start_reactive_drive_gcn(angle, distance=dist):
+                    nav.record_reactive_drive()
+                    self.mode = CORRIDOR_REACTIVE
+                    return
+                else:
+                    # All angles blocked — try perpendicular nudge to reposition
+                    perp = angle + math.pi / 2  # try left
+                    if self._start_reactive_drive(perp, distance=0.5,
+                                                  min_clearance=0.5):
+                        self.get_logger().info(
+                            'GCN: lateral nudge %.0f° to escape wall'
+                            % math.degrees(perp)
+                        )
+                        self.mode = CORRIDOR_REACTIVE
+                        return
+                    perp = angle - math.pi / 2  # try right
+                    if self._start_reactive_drive(perp, distance=0.5,
+                                                  min_clearance=0.5):
+                        self.get_logger().info(
+                            'GCN: lateral nudge %.0f° to escape wall'
+                            % math.degrees(perp)
+                        )
+                        self.mode = CORRIDOR_REACTIVE
+                        return
+                    self.get_logger().error(
+                        'GCN: reactive drive blocked for %s at ALL angles + lateral — cannot proceed'
+                        % nav.corridor_label
+                    )
+                    self._mark_exhausted('gcn_corridor_stuck')
+                    return
+
+        # Try reactive drive if Nav2 has failed multiple times
+        if nav.should_try_reactive:
+            if not self.reactive_drive_active and not self.goal_active:
+                angle = self._gcn_reactive_angle(robot_pose[:2])
+                dist = min(1.5, nav.dist_to_current_target(robot_pose[:2]))
+                self.get_logger().info(
+                    'GCN: Nav2 failed %d times for %s — trying reactive drive %.0f° %.1fm'
+                    % (nav.nav2_fail_count, nav.corridor_label, math.degrees(angle), dist)
+                )
+                if self._start_reactive_drive_gcn(angle, distance=dist):
+                    nav.record_reactive_drive()
+                    self.mode = CORRIDOR_REACTIVE
+                    return
+                else:
+                    # Reactive drive blocked — count the failed attempt so
+                    # corridor_exhausted can eventually fire instead of looping
+                    nav.record_reactive_drive()
+
+        # Dispatch corridor goal via Nav2 — ONLY if no goal currently active
+        if self.goal_active:
+            # A Nav2 goal is already in flight; wait for it to complete
+            return
+
+        # Maze boundary guard: if robot drifted outside the maze, it means
+        # Nav2 routed around the exterior walls (SLAM hasn't mapped them yet).
+        # Cancel and force re-entry through the entrance corridor.
+        if ry < -1.5 or rx < -1.0 or rx > 22.0 or ry > 22.0:
+            self.get_logger().error(
+                'GCN: robot OUTSIDE maze boundary at (%.1f,%.1f) — '
+                'Nav2 likely routed along exterior. Re-entering via entrance.'
+                % (rx, ry)
+            )
+            reentry_goal = (self.entrance_x + 1.0, max(0.5, min(ry, 2.0)))
+            self._send_goal(reentry_goal, yaw=math.pi / 2,
+                            goal_kind='gcn_corridor', skip_two_step_staging=True)
+            return
+
+        goal = nav.current_goal(robot_pose[:2], max_step=self.corridor_goal_step_m)
+        yaw = nav.current_angle
+        self.get_logger().info(
+            'GCN: dispatching %s goal=(%.1f,%.1f) yaw=%.0f° %s'
+            % (nav.corridor_label, goal[0], goal[1], math.degrees(yaw), nav.summary())
+        )
+        self._send_goal(goal, yaw=yaw, goal_kind='gcn_corridor', skip_two_step_staging=True)
+
+    def _gcn_handle_goal_success(self, robot_pose: RobotPose) -> None:
+        """Handle a successful GCN corridor goal."""
+        nav = self.corridor_nav
+        if nav is None:
+            return
+        self.get_logger().info(
+            'GCN: goal succeeded for %s at (%.1f,%.1f) progress=%.1fm'
+            % (nav.corridor_label, robot_pose[0], robot_pose[1],
+               nav.relative_progress(robot_pose[:2]))
+        )
+
+    def _gcn_handle_goal_failure(self, robot_pose: RobotPose, reason: str) -> None:
+        """Handle a failed GCN corridor goal."""
+        nav = self.corridor_nav
+        if nav is None:
+            return
+        nav.record_nav2_failure()
+        self.get_logger().warn(
+            'GCN: goal FAILED for %s reason=%s nav2_fail=%d at (%.1f,%.1f)'
+            % (nav.corridor_label, reason, nav.nav2_fail_count,
+               robot_pose[0], robot_pose[1])
+        )
+
+    def _gcn_handle_reactive_complete(self, robot_pose: RobotPose) -> None:
+        """Handle reactive drive completion in GCN mode."""
+        nav = self.corridor_nav
+        if nav is None:
+            return
+        self.get_logger().info(
+            'GCN: reactive drive completed for %s at (%.1f,%.1f) progress=%.1fm'
+            % (nav.corridor_label, robot_pose[0], robot_pose[1],
+               nav.relative_progress(robot_pose[:2]))
+        )
+
+    # ── GCN RViz Marker Publisher ──────────────────────────────────
+
+    # RGBA colors for each of the 10 corridors (matching static visualization)
+    _GCN_CORRIDOR_COLORS = [
+        (1.0, 0.0, 0.0, 0.9),    # C1 red
+        (1.0, 0.53, 0.0, 0.9),   # C2 orange
+        (1.0, 1.0, 0.0, 0.9),    # C3 yellow
+        (0.0, 1.0, 0.0, 0.9),    # C4 green
+        (0.0, 1.0, 1.0, 0.9),    # C5 cyan
+        (0.0, 0.53, 1.0, 0.9),   # C6 blue
+        (0.53, 0.0, 1.0, 0.9),   # C7 purple
+        (1.0, 0.0, 1.0, 0.9),    # C8 magenta
+        (1.0, 0.27, 0.53, 0.9),  # C9 pink
+        (0.53, 1.0, 0.27, 0.9),  # C10 lime
+        (0.8, 0.8, 0.0, 0.9),    # C11 olive
+        (0.0, 0.8, 0.53, 0.9),   # C12 teal
+        (0.53, 0.53, 1.0, 0.9),  # C13 periwinkle
+        (0.8, 0.27, 0.0, 0.9),   # C14 rust
+        (0.27, 0.8, 0.8, 0.9),   # C15 aquamarine
+        (0.8, 0.0, 0.53, 0.9),   # C16 crimson
+        (0.4, 0.8, 0.0, 0.9),    # C17 chartreuse
+        (0.0, 0.4, 0.8, 0.9),    # C18 steel blue
+    ]
+
+    def _publish_gcn_markers(self) -> None:
+        """Publish the GCN corridor path as RViz MarkerArray.
+
+        Publishes:
+        - One LINE_STRIP per corridor (colored by corridor index)
+        - SPHERE markers at each corridor waypoint (start/end + sub-segment joints)
+        - A large SPHERE for the maze exit
+        - Text labels for each corridor
+
+        Markers are published once and latched via a DELETE_ALL + re-publish
+        pattern to avoid accumulation.
+        """
+        nav = self.corridor_nav
+        if nav is None:
+            return
+
+        marker_array = MarkerArray()
+        now = self.get_clock().now().to_msg()
+
+        # Marker namespace to avoid collisions
+        ns = 'gcn_corridors'
+        base_id = 0
+
+        # ── Entrance marker ──
+        entrance = Marker()
+        entrance.header.frame_id = self.map_frame
+        entrance.header.stamp = now
+        entrance.ns = ns
+        entrance.id = base_id
+        entrance.type = Marker.SPHERE
+        entrance.action = Marker.ADD
+        entrance.pose.position.x = self.entrance_x
+        entrance.pose.position.y = self.entrance_y
+        entrance.pose.position.z = 0.1
+        entrance.pose.orientation.w = 1.0
+        entrance.scale.x = 0.5
+        entrance.scale.y = 0.5
+        entrance.scale.z = 0.5
+        entrance.color.r = 0.0
+        entrance.color.g = 1.0
+        entrance.color.b = 0.0
+        entrance.color.a = 0.9
+        entrance.lifetime.sec = 0  # persistent
+        entrance.text = 'ENTER'
+        marker_array.markers.append(entrance)
+        base_id += 1
+
+        # ── Entrance text label ──
+        et = Marker()
+        et.header.frame_id = self.map_frame
+        et.header.stamp = now
+        et.ns = ns
+        et.id = base_id
+        et.type = Marker.TEXT_VIEW_FACING
+        et.action = Marker.ADD
+        et.pose.position.x = self.entrance_x
+        et.pose.position.y = self.entrance_y
+        et.pose.position.z = 0.6
+        et.pose.orientation.w = 1.0
+        et.scale.z = 0.4
+        et.color.r = 0.0
+        et.color.g = 1.0
+        et.color.b = 0.0
+        et.color.a = 0.9
+        et.text = 'ENTER'
+        et.lifetime.sec = 0
+        marker_array.markers.append(et)
+        base_id += 1
+
+        # ── Exit marker ──
+        exit_m = Marker()
+        exit_m.header.frame_id = self.map_frame
+        exit_m.header.stamp = now
+        exit_m.ns = ns
+        exit_m.id = base_id
+        exit_m.type = Marker.SPHERE
+        exit_m.action = Marker.ADD
+        exit_m.pose.position.x = self.exit_x
+        exit_m.pose.position.y = self.exit_y
+        exit_m.pose.position.z = 0.1
+        exit_m.pose.orientation.w = 1.0
+        exit_m.scale.x = 0.6
+        exit_m.scale.y = 0.6
+        exit_m.scale.z = 0.6
+        exit_m.color.r = 1.0
+        exit_m.color.g = 0.0
+        exit_m.color.b = 0.0
+        exit_m.color.a = 1.0
+        exit_m.lifetime.sec = 0
+        marker_array.markers.append(exit_m)
+        base_id += 1
+
+        # ── Exit text label ──
+        xt = Marker()
+        xt.header.frame_id = self.map_frame
+        xt.header.stamp = now
+        xt.ns = ns
+        xt.id = base_id
+        xt.type = Marker.TEXT_VIEW_FACING
+        xt.action = Marker.ADD
+        xt.pose.position.x = self.exit_x
+        xt.pose.position.y = self.exit_y
+        xt.pose.position.z = 0.7
+        xt.pose.orientation.w = 1.0
+        xt.scale.z = 0.5
+        xt.color.r = 1.0
+        xt.color.g = 0.0
+        xt.color.b = 0.0
+        xt.color.a = 1.0
+        xt.text = 'EXIT (%.1f,%.1f)' % (self.exit_x, self.exit_y)
+        xt.lifetime.sec = 0
+        marker_array.markers.append(xt)
+        base_id += 1
+
+        # ── Per-corridor markers ──
+        for i, c in enumerate(nav.corridors):
+            color = self._GCN_CORRIDOR_COLORS[i] if i < len(self._GCN_CORRIDOR_COLORS) else (1.0, 1.0, 1.0, 0.9)
+            corridor_idx = c['id']
+
+            # Build waypoint list for this corridor
+            waypoints = [c['start']]
+            if 'sub_segs' in c and c['sub_segs']:
+                for seg in c['sub_segs']:
+                    waypoints.append(seg[2])  # end point of each sub-segment
+            else:
+                waypoints.append(c['end'])
+
+            # ── Line strip for corridor path ──
+            line = Marker()
+            line.header.frame_id = self.map_frame
+            line.header.stamp = now
+            line.ns = ns
+            line.id = base_id
+            line.type = Marker.LINE_STRIP
+            line.action = Marker.ADD
+            line.pose.orientation.w = 1.0
+            line.scale.x = 0.15  # line width
+            line.color.r = color[0]
+            line.color.g = color[1]
+            line.color.b = color[2]
+            line.color.a = color[3]
+            line.lifetime.sec = 0
+            for wp in waypoints:
+                p = RosPoint()
+                p.x = float(wp[0])
+                p.y = float(wp[1])
+                p.z = 0.05
+                line.points.append(p)
+            marker_array.markers.append(line)
+            base_id += 1
+
+            # ── Sphere at start waypoint ──
+            sph_start = Marker()
+            sph_start.header.frame_id = self.map_frame
+            sph_start.header.stamp = now
+            sph_start.ns = ns
+            sph_start.id = base_id
+            sph_start.type = Marker.SPHERE
+            sph_start.action = Marker.ADD
+            sph_start.pose.position.x = float(c['start'][0])
+            sph_start.pose.position.y = float(c['start'][1])
+            sph_start.pose.position.z = 0.1
+            sph_start.pose.orientation.w = 1.0
+            sph_start.scale.x = 0.3
+            sph_start.scale.y = 0.3
+            sph_start.scale.z = 0.3
+            sph_start.color.r = color[0]
+            sph_start.color.g = color[1]
+            sph_start.color.b = color[2]
+            sph_start.color.a = 1.0
+            sph_start.lifetime.sec = 0
+            marker_array.markers.append(sph_start)
+            base_id += 1
+
+            # ── Sphere at end waypoint ──
+            sph_end = Marker()
+            sph_end.header.frame_id = self.map_frame
+            sph_end.header.stamp = now
+            sph_end.ns = ns
+            sph_end.id = base_id
+            sph_end.type = Marker.SPHERE
+            sph_end.action = Marker.ADD
+            sph_end.pose.position.x = float(c['end'][0])
+            sph_end.pose.position.y = float(c['end'][1])
+            sph_end.pose.position.z = 0.1
+            sph_end.pose.orientation.w = 1.0
+            sph_end.scale.x = 0.3
+            sph_end.scale.y = 0.3
+            sph_end.scale.z = 0.3
+            sph_end.color.r = color[0]
+            sph_end.color.g = color[1]
+            sph_end.color.b = color[2]
+            sph_end.color.a = 1.0
+            sph_end.lifetime.sec = 0
+            marker_array.markers.append(sph_end)
+            base_id += 1
+
+            # ── Text label at corridor midpoint ──
+            mid_x = (c['start'][0] + c['end'][0]) / 2.0
+            mid_y = (c['start'][1] + c['end'][1]) / 2.0
+            label = Marker()
+            label.header.frame_id = self.map_frame
+            label.header.stamp = now
+            label.ns = ns
+            label.id = base_id
+            label.type = Marker.TEXT_VIEW_FACING
+            label.action = Marker.ADD
+            label.pose.position.x = float(mid_x)
+            label.pose.position.y = float(mid_y)
+            label.pose.position.z = 0.5
+            label.pose.orientation.w = 1.0
+            label.scale.z = 0.35
+            label.color.r = color[0]
+            label.color.g = color[1]
+            label.color.b = color[2]
+            label.color.a = 1.0
+            label.text = 'C%d:%s %.1fm' % (corridor_idx, c['dir'], c.get('len', 0))
+            label.lifetime.sec = 0
+            marker_array.markers.append(label)
+            base_id += 1
+
+        # ── Current corridor progress indicator (updated each tick) ──
+        if not nav.finished:
+            cur = nav.current
+            cur_color = self._GCN_CORRIDOR_COLORS[nav.idx] if nav.idx < len(self._GCN_CORRIDOR_COLORS) else (1, 1, 1, 1)
+            target = nav.current_target
+            prog = Marker()
+            prog.header.frame_id = self.map_frame
+            prog.header.stamp = now
+            prog.ns = ns
+            prog.id = base_id
+            prog.type = Marker.SPHERE
+            prog.action = Marker.ADD
+            prog.pose.position.x = float(target[0])
+            prog.pose.position.y = float(target[1])
+            prog.pose.position.z = 0.3
+            prog.pose.orientation.w = 1.0
+            prog.scale.x = 0.45
+            prog.scale.y = 0.45
+            prog.scale.z = 0.45
+            # Pulsing yellow target marker
+            prog.color.r = 1.0
+            prog.color.g = 1.0
+            prog.color.b = 0.0
+            prog.color.a = 0.95
+            prog.lifetime.sec = 0
+            marker_array.markers.append(prog)
+            base_id += 1
+
+            # Target text
+            tgt_label = Marker()
+            tgt_label.header.frame_id = self.map_frame
+            tgt_label.header.stamp = now
+            tgt_label.ns = ns
+            tgt_label.id = base_id
+            tgt_label.type = Marker.TEXT_VIEW_FACING
+            tgt_label.action = Marker.ADD
+            tgt_label.pose.position.x = float(target[0])
+            tgt_label.pose.position.y = float(target[1])
+            tgt_label.pose.position.z = 0.8
+            tgt_label.pose.orientation.w = 1.0
+            tgt_label.scale.z = 0.35
+            tgt_label.color.r = 1.0
+            tgt_label.color.g = 1.0
+            tgt_label.color.b = 0.0
+            tgt_label.color.a = 1.0
+            tgt_label.text = 'TARGET %s' % nav.corridor_label
+            tgt_label.lifetime.sec = 0
+            marker_array.markers.append(tgt_label)
+            base_id += 1
+
+        self.gcn_marker_pub.publish(marker_array)
 
     def _dispatch_entry_readiness_gate(self, robot_pose: RobotPose) -> dict[str, object]:
         nav2_lifecycle = self._nav2_lifecycle_sufficiency()
@@ -637,6 +1517,36 @@ class MazeExplorer(Node):
             'local_costmap_sufficient',
         ]
         blocking_reasons = [key for key in blocking_check_keys if not checks.get(key, False)]
+
+        # Optimization 1: drift-aware local costmap degradation.
+        # When local_costmap_sufficient is false for > grace period and
+        # topology is established (nodes exist), the local costmap is likely
+        # suffering from odom drift rather than genuine unexplored terrain.
+        # Remove it from blocking reasons so navigation continues using the
+        # global SLAM map (which uses the 'map' frame and is drift-free).
+        now = self.get_clock().now()
+        lcs_ok = checks.get('local_costmap_sufficient', False)
+        has_topology = len(self.topology.nodes) > 0
+        if not lcs_ok and has_topology:
+            if self.local_costmap_fail_start_time is None:
+                self.local_costmap_fail_start_time = now
+            elapsed = (now - self.local_costmap_fail_start_time).nanoseconds / 1e9
+            if elapsed >= self.local_costmap_degrade_grace_sec:
+                if not self.local_costmap_degrade_triggered:
+                    self.get_logger().warn(
+                        'Optimization1: local_costmap_sufficient=false for %.0fs (>%.0fs grace) '
+                        'with %d topology nodes — removing local_costmap from dispatch gate '
+                        '(likely odom drift; global SLAM map is still usable)'
+                        % (elapsed, self.local_costmap_degrade_grace_sec, len(self.topology.nodes))
+                    )
+                    self.local_costmap_degrade_triggered = True
+                blocking_reasons = [r for r in blocking_reasons if r != 'local_costmap_sufficient']
+        else:
+            # Reset tracker when costmap recovers or no topology yet
+            self.local_costmap_fail_start_time = None
+            if lcs_ok:
+                self.local_costmap_degrade_triggered = False
+
         return {
             'phase49_dispatch_entry_readiness_gate': True,
             'passed': not blocking_reasons,
@@ -1115,6 +2025,47 @@ class MazeExplorer(Node):
 
     def _analyze_and_dispatch(self, robot_pose: RobotPose) -> None:
         assert self.map_view is not None
+
+        # Stuck escape: when Nav2 planner fails repeatedly from the same position,
+        # dispatch a short goal in the most open direction to move the robot out
+        # of the SLAM artifact zone before resuming normal DFS.
+        if self.stuck_escape_active:
+            local_esc = classify_local_topology(
+                self.map_view,
+                robot_pose,
+                angle_step_deg=self.branch_angle_step_deg,
+                lookahead_m=self.branch_lookahead_m,
+                clearance_radius_m=self.clearance_radius_m,
+                min_open_distance_m=self.min_open_distance_m,
+            )
+            if local_esc.open_directions:
+                # Pick the most open direction (longest clear distance)
+                best_dir = max(local_esc.open_directions, key=lambda d: d.distance_m)
+                step = min(self.stuck_escape_step_m, best_dir.distance_m * 0.6)
+                if step >= 0.3:
+                    escape_x = robot_pose[0] + step * math.cos(best_dir.angle_rad)
+                    escape_y = robot_pose[1] + step * math.sin(best_dir.angle_rad)
+                    self.get_logger().warn(
+                        'STUCK ESCAPE: dispatching %.2fm goal in direction %.1f° '
+                        '(%.3f, %.3f) attempt %d/%d'
+                        % (step, math.degrees(best_dir.angle_rad),
+                           escape_x, escape_y,
+                           self.stuck_escape_attempts, self.stuck_escape_max_attempts)
+                    )
+                    self._send_goal(
+                        (escape_x, escape_y),
+                        yaw=best_dir.angle_rad,
+                        goal_kind='stuck_escape',
+                    )
+                    return
+            # No open direction or step too short — cannot escape
+            self.get_logger().error(
+                'STUCK ESCAPE: no viable open direction (open_count=%d); marking exhausted'
+                % len(local_esc.open_directions)
+            )
+            self._mark_exhausted('stuck: Nav2 planner fails from this position and no open escape direction')
+            return
+
         local = classify_local_topology(
             self.map_view,
             robot_pose,
@@ -1291,6 +2242,13 @@ class MazeExplorer(Node):
         self.blocked_branch_count = self.topology.blocked_branch_count()
         self.blacklisted_goal_count = len(self.topology.blacklist)
 
+        # Eastward progress monitor: if DFS has spent many goals without
+        # advancing eastward, interrupt DFS and force a heading push toward
+        # unexplored territory.  This prevents DFS from getting stuck exploring
+        # junctions with many branches in the same western area.
+        if self._check_eastward_stagnation(robot_pose):
+            return
+
         chosen = self.topology.choose_next_branch(node.node_id, exit_xy=(self.exit_x, self.exit_y))
         if chosen is not None:
             self._reset_topology_consistency_guard(candidate_recovered=True)
@@ -1348,12 +2306,47 @@ class MazeExplorer(Node):
         self._mark_exhausted('no untried branches remain')
 
     def _dijkstra_backtrack_target(self, current_node_id: int):
-        """Find nearest unexplored junction via Dijkstra, with stack-based fallback.
+        """Find unexplored junction via Dijkstra, with stack-based fallback.
 
-        Uses dijkstra_nearest_unexplored() for optimal target selection.
+        Normally uses dijkstra_nearest_unexplored() for shortest-path target.
+        When stagnation is detected (robot looping in a small area), switches to
+        dijkstra_farthest_unexplored() to force a long-distance backtrack that
+        breaks out of local DFS loops in dense corridor networks.
         Falls back to next_backtrack_target() if the topology graph is disconnected
         or Dijkstra finds no reachable unexplored junction.
         """
+        # Check for stagnation before selecting backtrack target
+        if self._is_stagnant():
+            self.stagnation_forced = True
+
+        if self.stagnation_forced:
+            robot_pose = self._lookup_robot_pose()
+            current_xy = (robot_pose[0], robot_pose[1]) if robot_pose else (0.0, 0.0)
+            exit_xy = (self.exit_x, self.exit_y)
+            far_result = self.topology.dijkstra_farthest_unexplored(
+                current_node_id, exit_xy=exit_xy, current_xy=current_xy,
+            )
+            if far_result is not None:
+                path, target = far_result
+                self.get_logger().warn(
+                    'STAGNATION backtrack (exit-directed): forced backtrack to junction %d at (%.3f, %.3f) via %d-hop path'
+                    % (target.node_id, target.x, target.y, len(path) - 1)
+                )
+                self.stagnation_forced = False
+                self.stagnation_recent_targets.clear()
+                return target
+            # Dijkstra found no reachable unexplored junction — try farthest on visit stack
+            farthest = self.topology.farthest_stack_backtrack_target(current_node_id, current_xy)
+            if farthest is not None:
+                self.get_logger().warn(
+                    'STAGNATION backtrack (stack farthest): forced backtrack to junction %d at (%.3f, %.3f)'
+                    % (farthest.node_id, farthest.x, farthest.y)
+                )
+                self.stagnation_forced = False
+                self.stagnation_recent_targets.clear()
+                return farthest
+            self.stagnation_forced = False
+
         dijkstra_result = self.topology.dijkstra_nearest_unexplored(current_node_id)
         if dijkstra_result is not None:
             path, target = dijkstra_result
@@ -1370,6 +2363,29 @@ class MazeExplorer(Node):
                 % (fallback.node_id, fallback.x, fallback.y)
             )
         return fallback
+
+    def _is_stagnant(self) -> bool:
+        """Detect if the robot is stuck in a local DFS loop.
+
+        Returns True if the last stagnation_window explore goals all landed
+        within stagnation_radius_m of their centroid.
+        """
+        targets = self.stagnation_recent_targets
+        if len(targets) < self.stagnation_window:
+            return False
+        # Compute centroid
+        cx = sum(t[0] for t in targets) / len(targets)
+        cy = sum(t[1] for t in targets) / len(targets)
+        # Check if all targets are within radius of centroid
+        for tx, ty in targets:
+            dist = math.hypot(tx - cx, ty - cy)
+            if dist > self.stagnation_radius_m:
+                return False
+        self.get_logger().warn(
+            'STAGNATION detected: %d recent explore goals within %.1fm of centroid (%.1f, %.1f)'
+            % (len(targets), self.stagnation_radius_m, cx, cy)
+        )
+        return True
 
     def _post_ingress_single_open_context_active(self) -> bool:
         return bool(
@@ -2033,7 +3049,7 @@ class MazeExplorer(Node):
         selectable = [branch for branch in node.branches if branch.state in SELECTABLE_BRANCH_STATES]
         ranked = sorted(
             selectable,
-            key=lambda branch: branch.score_for_exit(node.xy, (self.exit_x, self.exit_y), self.exit_bias_weight),
+            key=lambda branch: branch.score_for_exit(node.xy, (self.exit_x, self.exit_y), self.exit_bias_weight, distance_to_exit_weight=self.distance_to_exit_weight),
             reverse=True,
         )
         chosen_rank = None
@@ -2083,13 +3099,14 @@ class MazeExplorer(Node):
         source_exit_dist = self._distance_to_exit(source_xy)
         heading_to_exit = math.atan2(self.exit_y - node_xy[1], self.exit_x - node_xy[0])
         heading_alignment = math.cos(normalize_angle(branch.angle_rad - heading_to_exit))
-        score = branch.score_for_exit(node_xy, (self.exit_x, self.exit_y), self.exit_bias_weight)
+        score = branch.score_for_exit(node_xy, (self.exit_x, self.exit_y), self.exit_bias_weight, distance_to_exit_weight=self.distance_to_exit_weight)
         return {
             'score': float(score),
             'target_exit_dist': float(target_exit_dist),
             'exit_progress_delta_m': float(source_exit_dist - target_exit_dist),
             'heading_alignment': float(heading_alignment),
             'exit_bias_weight': float(self.exit_bias_weight),
+            'distance_to_exit_weight': float(self.distance_to_exit_weight),
             'state': branch.state,
             'failure_reason': branch.failure_reason,
         }
@@ -2724,7 +3741,27 @@ class MazeExplorer(Node):
         self.active_goal_event_context.update(self._compute_local_cost_diagnostics(dispatch_pose, target_xy))
         self.active_goal_event_context.update(self._compute_phase62_first_dispatch_traversability_diagnostics(dispatch_pose, target_xy, yaw))
         self.goal_event_context_by_sequence[goal_sequence_id] = dict(self.active_goal_event_context)
-        self.goal_count += 1
+        # Recovery goals (stuck_escape, frontier_push) do not consume exploration budget
+        if goal_kind not in ('stuck_escape', 'frontier_push', 'eastward_push'):
+            self.goal_count += 1
+        # Track eastward progress ONLY for actual movement goals (explore, entry_direct),
+        # NOT for speculative pushes (frontier_push, eastward_push) that may fail.
+        # If a speculative push succeeds, the next DFS explore goal from the new
+        # position will naturally update the progress tracker.
+        if goal_kind in ('explore', 'entry_direct', 'backtrack', 'stuck_escape', 'near_exit_micro_goal'):
+            if target_xy[0] > self.eastward_progress_max_x + self.eastward_progress_advance_threshold:
+                old_max = self.eastward_progress_max_x
+                self.eastward_progress_max_x = target_xy[0]
+                self.eastward_progress_goal_at_max = self.goal_count
+                self.get_logger().info(
+                    'EASTWARD PROGRESS: new max_x=%.1f (was %.1f) at goal #%d'
+                    % (self.eastward_progress_max_x, old_max, self.goal_count)
+                )
+        # Track recent explore targets for stagnation detection
+        if goal_kind in ('explore', 'entry_direct'):
+            self.stagnation_recent_targets.append((float(target_xy[0]), float(target_xy[1])))
+            if len(self.stagnation_recent_targets) > self.stagnation_window:
+                self.stagnation_recent_targets = self.stagnation_recent_targets[-self.stagnation_window:]
         self.mode = NAVIGATING if goal_kind != 'backtrack' else BACKTRACKING
         self._publish_goal_event('dispatch')
         self.get_logger().info(
@@ -2800,14 +3837,60 @@ class MazeExplorer(Node):
             self._mark_goal_preempted(sequence_id, status)
             return
         if status == GoalStatus.STATUS_SUCCEEDED:
+            # Clear any stale retry state on success
+            self.explore_retry_count = 0
+            self.explore_retry_pending = False
             self._handle_goal_success(result_status=status)
         else:
+            # Explore-goal retry: if status=6 (ABORTED) and goal is an explore
+            # goal that hasn't been retried yet, retry once after a short delay.
+            # This handles transient TF buffer clears that cause Nav2 to abort
+            # before the transform recovers.
+            if (status == GoalStatus.STATUS_ABORTED
+                    and self.active_goal_kind == 'explore'
+                    and self.explore_retry_count < self.explore_max_retries):
+                self.explore_retry_count += 1
+                self.explore_retry_pending = True
+                self.explore_retry_after = self.get_clock().now() + Duration(seconds=3.0)
+                self.explore_retry_target = self.active_goal_target
+                self.explore_retry_start_node_id = self.active_start_node_id
+                self.explore_retry_branch = self.active_branch
+                self.explore_retry_yaw = self.active_goal_event_context.get('target_yaw')
+                self.get_logger().warn(
+                    'explore goal ABORTED (status=6 seq=%d); retry %d/%d in 3.0s '
+                    'target=(%.3f, %.3f) branch_yaw=%.3f'
+                    % (sequence_id, self.explore_retry_count, self.explore_max_retries,
+                       self.active_goal_target[0] if self.active_goal_target else 0,
+                       self.active_goal_target[1] if self.active_goal_target else 0,
+                       self.explore_retry_yaw or 0)
+                )
+                # Reset goal state WITHOUT marking branch as failed
+                self.goal_active = False
+                self.goal_handle = None
+                self.goal_sent_time = None
+                self.active_goal_kind = 'none'
+                self.active_goal_target = None
+                self.active_goal_sequence_id = None
+                self.active_start_node_id = None
+                self.active_branch = None
+                self.active_goal_event_context = {}
+                self._start_goal_settle_cooldown()
+                self.mode = SETTLING
+                return
             self.get_logger().warn('maze explorer goal failed with status=%s seq=%d' % (status, sequence_id))
             self._handle_goal_failure(reason=BLOCKED_NAV2, result_status=status)
 
     def _handle_goal_success(self, result_status: int = GoalStatus.STATUS_SUCCEEDED) -> None:
         self.last_completed_goal_sequence_id = self.active_goal_sequence_id
         completed_goal_kind = self.active_goal_kind
+        # Clear stuck-escape state on any successful goal — the robot can
+        # navigate from this position, so it's no longer stuck.
+        if completed_goal_kind != 'stuck_escape':
+            if self.stuck_escape_consecutive_failures > 0:
+                self.stuck_escape_consecutive_failures = 0
+                self.stuck_escape_last_position = None
+                self.stuck_escape_active = False
+                self.stuck_escape_attempts = 0
         self._publish_goal_event('success', result_status=int(result_status), result_reason='succeeded')
         self.goal_active = False
         self.goal_handle = None
@@ -2817,6 +3900,11 @@ class MazeExplorer(Node):
             self.get_logger().info(
                 'ENTRY_DIRECT goal succeeded; transitioning to AT_NODE_ANALYZE for normal DFS exploration'
             )
+        # GCN: track corridor goal success
+        if completed_goal_kind == 'gcn_corridor' and self.guided_corridor_mode:
+            robot_pose = self._lookup_robot_pose()
+            if robot_pose is not None:
+                self._gcn_handle_goal_success(robot_pose)
         if completed_goal_kind == 'corridor_alignment_staging':
             if isinstance(self.pending_corridor_alignment_second_step, dict):
                 self.pending_corridor_alignment_second_step['staging_result_status_label'] = 'SUCCEEDED'
@@ -2842,6 +3930,71 @@ class MazeExplorer(Node):
             self.topology.visit_node(node.node_id)
         elif self.active_goal_kind == 'near_exit_micro_goal':
             self.get_logger().info('near-exit micro-goal succeeded; returning to exit check / normal exploration')
+        elif self.active_goal_kind == 'frontier_push':
+            self.get_logger().info(
+                'frontier push goal succeeded; clearing state and resuming DFS from new position'
+            )
+            self.frontier_push_active = False
+            self.eastward_push_active = False
+            self.frontier_push_tried_targets.clear()
+            self.heading_push_angles_tried.clear()  # allow fresh micro-push angles from new position
+            # Register new position in topology so DFS can discover new branches
+            if self.active_goal_target is not None:
+                node = self.topology.find_or_create_node(
+                    self.active_goal_target[0], self.active_goal_target[1], node_type='corridor'
+                )
+                self.current_node_id = node.node_id
+                self.topology.visit_node(node.node_id)
+            # Clear stuck state as well — the robot moved successfully
+            self.stuck_escape_consecutive_failures = 0
+            self.stuck_escape_last_position = None
+            self.stuck_escape_active = False
+            self.stuck_escape_attempts = 0
+            # Reset DFS retry cycle so we get fresh frontier pushes from new position
+            self.dfs_retry_cycle = max(0, self.dfs_retry_cycle - 1)
+        elif self.active_goal_kind == 'stuck_escape':
+            self.get_logger().info('stuck escape goal succeeded; clearing stuck state and resuming DFS')
+            self.stuck_escape_consecutive_failures = 0
+            self.stuck_escape_last_position = None
+            self.stuck_escape_active = False
+        elif self.active_goal_kind == 'eastward_push':
+            self.get_logger().info(
+                'eastward push goal succeeded; resetting progress monitor and resuming DFS from new position'
+            )
+            self.eastward_push_active = False
+            self.heading_push_angles_tried.clear()  # allow fresh micro-push angles from new position
+            # Register new position in topology so DFS can discover new branches
+            if self.active_goal_target is not None:
+                node = self.topology.find_or_create_node(
+                    self.active_goal_target[0], self.active_goal_target[1], node_type='corridor'
+                )
+                self.current_node_id = node.node_id
+                self.topology.visit_node(node.node_id)
+            # Clear stuck state
+            self.stuck_escape_consecutive_failures = 0
+            self.stuck_escape_last_position = None
+            self.stuck_escape_active = False
+            # Reset BLOCKED branches so DFS can explore from new position
+            reset_count = self.topology.reset_blocked_branches()
+            if reset_count > 0:
+                self.get_logger().warn(
+                    'EASTWARD PUSH: reset %d BLOCKED branches after successful push to new position'
+                    % reset_count
+                )
+        # GCN mode isolation: for gcn_corridor goals, bypass SETTLING mode
+        # and keep the GCN state machine in control.  Going through SETTLING
+        # triggers DFS code paths that can interfere with corridor navigation.
+        if completed_goal_kind == 'gcn_corridor' and self.guided_corridor_mode:
+            self.active_goal_kind = 'none'
+            self.active_goal_target = None
+            self.active_goal_sequence_id = None
+            self.active_start_node_id = None
+            self.active_branch = None
+            self.active_goal_event_context = {}
+            # No settle cooldown — GCN dispatches next corridor goal immediately
+            self.mode = GUIDED_CORRIDOR
+            return
+
         self.active_goal_kind = 'none'
         self.active_goal_target = None
         self.active_goal_sequence_id = None
@@ -2864,10 +4017,25 @@ class MazeExplorer(Node):
         caused_branch_failure = False
         caused_blacklist = False
         if self.active_goal_kind == 'entry_direct':
-            self.get_logger().warn(
-                'ENTRY_DIRECT goal failed (reason=%s); falling back to AT_NODE_ANALYZE' % reason
-            )
-            self.entry_direct_failed_time = self.get_clock().now()
+            self.entry_direct_retry_count += 1
+            can_retry = self.entry_direct_retry_count <= self.entry_direct_max_retries
+            if can_retry:
+                # Reset for retry: allow ENTRY_DIRECT block to run again after a
+                # 5-second delay so the global costmap has time to populate.
+                self.entry_direct_dispatched = False
+                self.entry_direct_retry_after = self.get_clock().now() + Duration(seconds=5.0)
+                self.get_logger().warn(
+                    'ENTRY_DIRECT goal failed (reason=%s, retry %d/%d); '
+                    'will retry in 5s to allow global costmap to populate'
+                    % (reason, self.entry_direct_retry_count, self.entry_direct_max_retries)
+                )
+            else:
+                self.get_logger().warn(
+                    'ENTRY_DIRECT goal failed (reason=%s, retries exhausted %d); '
+                    'falling back to AT_NODE_ANALYZE'
+                    % (reason, self.entry_direct_retry_count)
+                )
+                self.entry_direct_failed_time = self.get_clock().now()
         if self.active_goal_kind == 'backtrack':
             self.backtrack_failure_count += 1
             if self.active_goal_target is not None:
@@ -2876,6 +4044,55 @@ class MazeExplorer(Node):
             reason = BACKTRACK_FAILED
         elif self.active_goal_kind == 'near_exit_micro_goal':
             self.get_logger().warn('near-exit micro-goal failed; preserving DFS topology state')
+        elif self.active_goal_kind == 'frontier_push':
+            self.frontier_push_active = False
+            if self.eastward_push_active:
+                self.eastward_push_active = False
+                self.eastward_progress_goal_at_max = self.goal_count
+            # Do NOT clear heading_push_angles_tried on failure — we want to
+            # avoid retrying the same angle from the same position.  Only clear
+            # on success (when the robot has moved to a new position).
+            self.get_logger().warn(
+                'frontier push goal failed (attempt %d/%d); will try another frontier target or exhaust'
+                % (self.frontier_push_attempts, self.frontier_push_max_attempts)
+            )
+            # Don't return — let the normal flow continue. On next cycle,
+            # _mark_exhausted will be called again and _maybe_frontier_push
+            # will try another target if attempts remain.
+        elif self.active_goal_kind == 'stuck_escape':
+            self.stuck_escape_attempts += 1
+            self.get_logger().warn(
+                'stuck escape goal failed (attempt %d/%d)'
+                % (self.stuck_escape_attempts, self.stuck_escape_max_attempts)
+            )
+            if self.stuck_escape_attempts >= self.stuck_escape_max_attempts:
+                self.get_logger().error('stuck escape attempts exhausted; marking FAILED_EXHAUSTED')
+                self.active_goal_kind = 'none'
+                self.active_goal_target = None
+                self.active_goal_sequence_id = None
+                self.active_start_node_id = None
+                self.active_branch = None
+                self.active_goal_event_context = {}
+                self._mark_exhausted('stuck: Nav2 planner cannot find paths and all escape attempts failed')
+                return
+            # Reset for another escape attempt on next cycle
+            self.stuck_escape_active = True
+        elif self.active_goal_kind == 'eastward_push':
+            self.eastward_push_active = False
+            # Reset stagnation counter so DFS gets another window before
+            # the next forced push attempt
+            self.eastward_progress_goal_at_max = self.goal_count
+            # Do NOT clear heading_push_angles_tried on failure — we want to
+            # try different angles from the same position.  Only clear on success.
+            self.get_logger().warn(
+                'eastward push goal failed (attempt %d/%d); resetting stagnation counter, '
+                'resuming DFS from current position'
+                % (self.eastward_push_attempts, self.eastward_push_max_attempts)
+            )
+        elif self.active_goal_kind == 'gcn_corridor' and self.guided_corridor_mode:
+            robot_pose = self._lookup_robot_pose()
+            if robot_pose is not None:
+                self._gcn_handle_goal_failure(robot_pose, reason)
         elif self.active_goal_kind == 'explore' and self.active_start_node_id is not None and self.active_branch is not None:
             self.post_ingress_single_open_exception_consumed = True
             self.nav2_failure_count += 1
@@ -2888,6 +4105,42 @@ class MazeExplorer(Node):
             if state == BLACKLISTED:
                 self.blacklisted_goal_count = len(self.topology.blacklist)
         self.blacklisted_goal_count = len(self.topology.blacklist)
+        # Track consecutive failures from same position for stuck escape detection.
+        # When Nav2 can't plan from the robot's current position to ANY target
+        # (all backtrack/explore goals fail with status=6), the robot is stuck in
+        # a SLAM artifact zone.  After N consecutive failures without significant
+        # movement, activate stuck_escape to send a short goal in the most open
+        # direction to escape the artifact zone.
+        if self.active_goal_kind not in ('stuck_escape', 'entry_direct', 'frontier_push', 'gcn_corridor'):
+            failure_pose = self._lookup_robot_pose()
+            if failure_pose:
+                failure_pos = (failure_pose[0], failure_pose[1])
+                if self.stuck_escape_last_position is not None:
+                    move_since_last = math.hypot(
+                        failure_pos[0] - self.stuck_escape_last_position[0],
+                        failure_pos[1] - self.stuck_escape_last_position[1],
+                    )
+                    if move_since_last < self.stuck_escape_position_radius_m:
+                        self.stuck_escape_consecutive_failures += 1
+                    else:
+                        # Robot moved — reset counter, not stuck
+                        self.stuck_escape_consecutive_failures = 1
+                        self.stuck_escape_last_position = failure_pos
+                else:
+                    self.stuck_escape_consecutive_failures = 1
+                    self.stuck_escape_last_position = failure_pos
+                if (self.stuck_escape_consecutive_failures >= self.stuck_escape_max_consecutive
+                        and not self.stuck_escape_active
+                        and self.stuck_escape_attempts < self.stuck_escape_max_attempts):
+                    self.stuck_escape_active = True
+                    self.stuck_escape_attempts += 1
+                    self.get_logger().warn(
+                        'STUCK DETECTED: %d consecutive failures from same position (%.3f, %.3f); '
+                        'activating escape mechanism (attempt %d/%d)'
+                        % (self.stuck_escape_consecutive_failures,
+                           failure_pos[0], failure_pos[1],
+                           self.stuck_escape_attempts, self.stuck_escape_max_attempts)
+                    )
         if reason == GOAL_TIMEOUT:
             self._update_active_timeout_local_cost_diagnostics()
             self.get_logger().info(
@@ -2915,6 +4168,20 @@ class MazeExplorer(Node):
                 caused_branch_failure=caused_branch_failure,
                 caused_blacklist=caused_blacklist,
             )
+        # GCN mode isolation: for gcn_corridor goals, bypass SETTLING mode.
+        # The GCN failure handler already recorded the failure; keeping the
+        # mode as GUIDED_CORRIDOR allows the GCN tick to retry or fall back
+        # to reactive drive on the next cycle.
+        if self.active_goal_kind == 'gcn_corridor' and self.guided_corridor_mode:
+            self.active_goal_kind = 'none'
+            self.active_goal_target = None
+            self.active_goal_sequence_id = None
+            self.active_start_node_id = None
+            self.active_branch = None
+            self.active_goal_event_context = {}
+            self.mode = GUIDED_CORRIDOR
+            return
+
         self.active_goal_kind = 'none'
         self.active_goal_target = None
         self.active_goal_sequence_id = None
@@ -2936,6 +4203,461 @@ class MazeExplorer(Node):
             and self.terminal_cancel_goal_sequence_id is not None
             and sequence_id == self.terminal_cancel_goal_sequence_id
         )
+
+    # ---- Optimization 2: periodic re-localization rotation ----
+
+    def _normalize_angle(self, angle: float) -> float:
+        """Normalize angle to [-pi, pi)."""
+        while angle >= math.pi:
+            angle -= 2.0 * math.pi
+        while angle < -math.pi:
+            angle += 2.0 * math.pi
+        return angle
+
+    def _should_start_relocalization(self) -> bool:
+        """Check if a re-localization rotation is due."""
+        if not self.relocalize_enabled:
+            return False
+        # GCN follows a pre-validated known path; periodic 360 deg in-place
+        # spins are unnecessary and actively harm scan-matching in the narrow
+        # maze corridors (observed disrupting the C5 transition). Skip them.
+        if self.guided_corridor_mode:
+            return False
+        if self.relocalize_interval_goals <= 0:
+            return False
+        if self.goal_count < self.relocalize_interval_goals:
+            return False
+        goals_since = self.goal_count - self.relocalize_goals_at_last_rotation
+        return goals_since >= self.relocalize_interval_goals
+
+    def _execute_relocalization_step(self, robot_pose: RobotPose) -> bool:
+        """Execute one tick of the re-localization rotation.
+
+        Returns True while rotation is in progress, False when complete.
+        """
+        if not self.relocalize_active:
+            return False
+
+        yaw = robot_pose[2]
+
+        if self.relocalize_start_yaw is None:
+            # First tick: initialize
+            self.relocalize_start_yaw = yaw
+            self.relocalize_last_yaw = yaw
+            self.relocalize_accumulated_rad = 0.0
+            self.get_logger().info(
+                'Optimization2: starting re-localization rotation (goals=%d, interval=%d)'
+                % (self.goal_count, self.relocalize_interval_goals)
+            )
+            # Publish rotation command
+            twist = Twist()
+            twist.angular.z = self.relocalize_angular_speed
+            self.cmd_vel_pub.publish(twist)
+            return True
+
+        # Track accumulated rotation (handle wrap-around)
+        if self.relocalize_last_yaw is not None:
+            delta = self._normalize_angle(yaw - self.relocalize_last_yaw)
+            self.relocalize_accumulated_rad += delta
+        self.relocalize_last_yaw = yaw
+
+        if abs(self.relocalize_accumulated_rad) >= 2.0 * math.pi:
+            # Rotation complete
+            twist = Twist()  # zero velocity = stop
+            self.cmd_vel_pub.publish(twist)
+            self.get_logger().info(
+                'Optimization2: re-localization rotation complete (%.1f rad accumulated, goals=%d)'
+                % (self.relocalize_accumulated_rad, self.goal_count)
+            )
+            self.relocalize_active = False
+            self.relocalize_start_yaw = None
+            self.relocalize_goals_at_last_rotation = self.goal_count
+            return False
+
+        # Continue rotating
+        twist = Twist()
+        twist.angular.z = self.relocalize_angular_speed
+        self.cmd_vel_pub.publish(twist)
+        return True
+
+    # -----------------------------------------------------------------
+    # Reactive drive: bypass Nav2 planner when SLAM drift walls cage
+    # the robot.  Uses direct cmd_vel with laser scan safety checking.
+    # -----------------------------------------------------------------
+
+    def _reactive_control_tick(self) -> None:
+        """Fast (10 Hz) reactive-drive control loop.
+
+        Runs independently of the 0.5 Hz exploration tick so that reactive
+        rotation/forward-drive commands are published continuously, keeping the
+        velocity_smoother fed (it zeroes after a 1.0s gap). No-op unless a
+        reactive drive is active.
+        """
+        if not self.reactive_drive_active:
+            return
+        robot_pose = self._lookup_robot_pose()
+        if robot_pose is None:
+            return
+        self._execute_reactive_drive_step(robot_pose)
+
+    def _execute_reactive_drive_step(self, robot_pose: RobotPose) -> bool:
+        """Execute one tick of reactive drive (bypasses Nav2 planner).
+
+        State machine:
+        - rotating: publish angular velocity to face target direction
+        - driving:  publish linear velocity, check laser scan, track distance
+
+        Returns True while reactive drive is in progress, False when done.
+        """
+        if not self.reactive_drive_active:
+            return False
+
+        robot_x, robot_y, robot_yaw = robot_pose
+
+        # ── Watchdog: hard timeout for the whole reactive drive ──
+        now = self.get_clock().now()
+        if self.reactive_drive_start_time is not None:
+            elapsed = (now - self.reactive_drive_start_time).nanoseconds / 1e9
+            if elapsed > self.reactive_drive_max_seconds:
+                self.get_logger().warn(
+                    'REACTIVE DRIVE: watchdog timeout after %.1fs (state=%s) — aborting'
+                    % (elapsed, self.reactive_drive_state)
+                )
+                self.cmd_vel_pub.publish(Twist())
+                self._finish_reactive_drive()
+                return False
+
+        if self.reactive_drive_state == 'backup':
+            # Briefly reverse to unwedge, then finish so the GCN loop can retry.
+            if self.reactive_drive_backup_ref_xy is None:
+                self.reactive_drive_backup_ref_xy = (robot_x, robot_y)
+            bx, by = self.reactive_drive_backup_ref_xy
+            backed = math.hypot(robot_x - bx, robot_y - by)
+            if backed >= 0.4:
+                self.cmd_vel_pub.publish(Twist())
+                self.get_logger().info(
+                    'REACTIVE DRIVE: backed up %.2fm to unwedge — finishing' % backed
+                )
+                self._finish_reactive_drive()
+                return False
+            twist = Twist()
+            twist.linear.x = -0.15
+            self.cmd_vel_pub.publish(twist)
+            return True
+
+        if self.reactive_drive_state == 'rotating':
+            angle_diff = normalize_angle(self.reactive_drive_target_yaw - robot_yaw)
+
+            if abs(angle_diff) < math.radians(8):
+                # Rotation complete → start driving
+                twist = Twist()
+                self.cmd_vel_pub.publish(twist)
+                self.reactive_drive_state = 'driving'
+                self.reactive_drive_start_xy = (robot_x, robot_y)
+                self.get_logger().info(
+                    'REACTIVE DRIVE: rotation complete, driving forward'
+                )
+                return True
+
+            # No-rotation (jammed) detection: if the robot is physically caught
+            # against a wall it won't actually turn even while commanded. If yaw
+            # barely changes for a few seconds, back up to free it.
+            if self.reactive_drive_rot_ref_yaw is None:
+                self.reactive_drive_rot_ref_yaw = robot_yaw
+                self.reactive_drive_rot_ref_time = now
+            else:
+                yaw_moved = abs(normalize_angle(robot_yaw - self.reactive_drive_rot_ref_yaw))
+                if yaw_moved > math.radians(8):
+                    self.reactive_drive_rot_ref_yaw = robot_yaw
+                    self.reactive_drive_rot_ref_time = now
+                elif self.reactive_drive_rot_ref_time is not None:
+                    stuck = (now - self.reactive_drive_rot_ref_time).nanoseconds / 1e9
+                    if stuck > self.reactive_drive_no_rot_sec:
+                        self.get_logger().warn(
+                            'REACTIVE DRIVE: cannot rotate (yaw moved %.0f deg in %.1fs) '
+                            '— jammed, backing up' % (math.degrees(yaw_moved), stuck)
+                        )
+                        self.reactive_drive_state = 'backup'
+                        self.reactive_drive_backup_ref_xy = None
+                        return True
+
+            # Publish rotation (0.5 rad/s = velocity_smoother max for snappier turns)
+            twist = Twist()
+            twist.angular.z = 0.5 if angle_diff > 0 else -0.5
+            self.cmd_vel_pub.publish(twist)
+            return True
+
+        if self.reactive_drive_state == 'driving':
+            # Distance traveled
+            if self.reactive_drive_start_xy is not None:
+                dx = robot_x - self.reactive_drive_start_xy[0]
+                dy = robot_y - self.reactive_drive_start_xy[1]
+                distance_traveled = math.sqrt(dx * dx + dy * dy)
+            else:
+                distance_traveled = 0.0
+
+            if distance_traveled >= self.reactive_drive_target_distance:
+                # Target reached
+                twist = Twist()
+                self.cmd_vel_pub.publish(twist)
+                self.get_logger().info(
+                    'REACTIVE DRIVE: completed %.2fm / %.1fm'
+                    % (distance_traveled, self.reactive_drive_target_distance)
+                )
+                self._finish_reactive_drive()
+                return False
+
+            # Safety: check laser ahead
+            if not self._is_laser_clear_ahead(min_range=0.5, cone_half_angle=math.radians(20)):
+                self.get_logger().warn(
+                    'REACTIVE DRIVE: obstacle ahead after %.2fm, stopping'
+                    % distance_traveled
+                )
+                twist = Twist()
+                self.cmd_vel_pub.publish(twist)
+                self._finish_reactive_drive()
+                return False
+
+            # No-progress (wedge) detection: the forward laser cone can stay
+            # clear while the robot is physically caught on a corner wall and
+            # odom barely advances. If we don't actually move for a few seconds,
+            # treat it as wedged and back up to unstick.
+            if self.reactive_drive_progress_ref_xy is None:
+                self.reactive_drive_progress_ref_xy = (robot_x, robot_y)
+                self.reactive_drive_progress_ref_time = now
+            else:
+                rx0, ry0 = self.reactive_drive_progress_ref_xy
+                moved = math.hypot(robot_x - rx0, robot_y - ry0)
+                if moved > 0.1:
+                    self.reactive_drive_progress_ref_xy = (robot_x, robot_y)
+                    self.reactive_drive_progress_ref_time = now
+                elif self.reactive_drive_progress_ref_time is not None:
+                    stuck = (now - self.reactive_drive_progress_ref_time).nanoseconds / 1e9
+                    if stuck > self.reactive_drive_no_progress_sec:
+                        self.get_logger().warn(
+                            'REACTIVE DRIVE: no progress for %.1fs (moved %.2fm) '
+                            'after %.2fm — wedged, backing up'
+                            % (stuck, moved, distance_traveled)
+                        )
+                        self.reactive_drive_state = 'backup'
+                        self.reactive_drive_backup_ref_xy = None
+                        return True
+
+            # Drive forward
+            twist = Twist()
+            twist.linear.x = 0.2
+            self.cmd_vel_pub.publish(twist)
+            return True
+
+        # Unknown state → cleanup
+        self._finish_reactive_drive()
+        return False
+
+    def _finish_reactive_drive(self) -> None:
+        """Clean up reactive drive state and allow fresh heading pushes."""
+        self.reactive_drive_active = False
+        self.reactive_drive_state = 'idle'
+        self.reactive_drive_start_xy = None
+        # GCN: notify corridor navigator of reactive drive completion
+        if self.guided_corridor_mode and self.corridor_nav is not None:
+            robot_pose = self._lookup_robot_pose()
+            if robot_pose is not None:
+                self._gcn_handle_reactive_complete(robot_pose)
+            # Return to GUIDED_CORRIDOR mode so next tick dispatches new goal
+            self.mode = GUIDED_CORRIDOR
+        # Clear frontier_push_active since reactive drive bypassed Nav2 action
+        self.frontier_push_active = False
+        if self.eastward_push_active:
+            self.eastward_push_active = False
+            self.eastward_progress_goal_at_max = self.goal_count
+        # Clear heading push angles so the next round tries fresh angles
+        # from the new position (reactive drive may have moved the robot).
+        self.heading_push_angles_tried.clear()
+
+    def _start_reactive_drive(self, angle: float, distance: float = 1.0,
+                              min_clearance: float = 1.5) -> bool:
+        """Start a reactive drive toward angle.  Returns False if blocked.
+
+        Args:
+            angle: Target yaw in MAP frame (radians).
+            distance: How far to drive (metres).
+            min_clearance: Minimum laser range required in the target
+                           direction (metres).  Default 1.5m for general use;
+                           GCN callers pass 0.5m because the BFS guarantees the
+                           gap exists and SLAM drift may place the robot very
+                           close to a wall gap that the robot has already partly
+                           crossed.
+        """
+        if self.scan_msg is None:
+            return False
+        if self.reactive_drive_count >= self.reactive_drive_max_count:
+            self.get_logger().info(
+                'REACTIVE DRIVE: max count (%d) reached'
+                % self.reactive_drive_max_count
+            )
+            return False
+
+        robot_pose = self._lookup_robot_pose()
+        if robot_pose is None:
+            return False
+
+        _rx, _ry, robot_yaw = robot_pose
+        angle_in_robot = normalize_angle(angle - robot_yaw)
+
+        # Check laser in the desired direction
+        if not self._is_laser_clear_in_direction(
+                angle_in_robot, min_range=min_clearance,
+                cone_half_angle=math.radians(20)):
+            self.get_logger().info(
+                'REACTIVE DRIVE: direction %.0f° blocked (min_range=%.1fm)'
+                % (math.degrees(angle), min_clearance)
+            )
+            return False
+
+        self.reactive_drive_active = True
+        self.reactive_drive_state = 'rotating'
+        self.reactive_drive_target_yaw = angle
+        self.reactive_drive_target_distance = distance
+        self.reactive_drive_start_xy = None
+        self.reactive_drive_count += 1
+        # Arm the watchdog (sim clock).
+        self.reactive_drive_start_time = self.get_clock().now()
+        self.reactive_drive_progress_ref_xy = None
+        self.reactive_drive_progress_ref_time = None
+        self.reactive_drive_backup_ref_xy = None
+        self.reactive_drive_rot_ref_yaw = None
+        self.reactive_drive_rot_ref_time = None
+
+        self.get_logger().warn(
+            'REACTIVE DRIVE: #%d — angle=%.0f° dist=%.1fm '
+            '(bypassing Nav2 planner due to SLAM drift cage)'
+            % (self.reactive_drive_count, math.degrees(angle), distance)
+        )
+        return True
+
+    def _start_reactive_drive_gcn(self, prefer_angle: float,
+                                   distance: float = 1.0) -> bool:
+        """Start a GCN reactive drive with angular search if direct path blocked.
+
+        GCN corridors are pre-validated by BFS so the gap is guaranteed to exist.
+        SLAM drift may place the robot at the gap edge rather than centered,
+        causing the direct laser check to fail.  This method searches ±5°..±25°
+        for a clear path before giving up.
+
+        Returns True if reactive drive started, False if all angles blocked.
+        """
+        # Try direct angle first with reduced clearance (BFS guarantees gap)
+        if self._start_reactive_drive(prefer_angle, distance=distance,
+                                      min_clearance=0.5):
+            return True
+
+        # Direct path blocked — search angular offsets for the gap
+        for offset_deg in [5, -5, 10, -10, 15, -15, 20, -20, 25, -25]:
+            try_angle = prefer_angle + math.radians(offset_deg)
+            if self._start_reactive_drive(try_angle, distance=distance * 0.7,
+                                          min_clearance=0.5):
+                self.get_logger().info(
+                    'GCN: reactive drive found gap at %.0f° (offset %+d° from %.0f°)'
+                    % (math.degrees(try_angle), offset_deg,
+                       math.degrees(prefer_angle))
+                )
+                return True
+
+        self.get_logger().warn(
+            'GCN: reactive drive blocked at ALL angles ±25° from %.0f°'
+            % math.degrees(prefer_angle)
+        )
+        return False
+
+    def _find_best_reactive_angle(self, prefer_angle: float) -> Optional[float]:
+        """Find the best reactive drive angle using laser scan corridor detection.
+
+        Scans the laser in sectors and picks the one with the longest clear
+        range, weighted toward prefer_angle (typically angle_to_exit).
+
+        Returns angle in MAP frame, or None if no viable direction.
+        """
+        if self.scan_msg is None:
+            return None
+        scan = self.scan_msg
+        robot_pose = self._lookup_robot_pose()
+        if robot_pose is None:
+            return None
+        _rx, _ry, robot_yaw = robot_pose
+        prefer_in_robot = normalize_angle(prefer_angle - robot_yaw)
+
+        # Scan in 30° sectors, find the one with longest median range
+        # IMPORTANT: only consider sectors within ±90° of the exit direction.
+        # Previous version picked the longest corridor (often perpendicular or
+        # opposite to exit), driving the robot AWAY from the goal.
+        sector_width = math.radians(30)
+        best_angle_robot: Optional[float] = None
+        best_score: float = 0.0
+
+        for sector_center_deg in range(-180, 180, 30):
+            sector_center = math.radians(sector_center_deg)
+
+            # Skip directions more than ±90° from exit — never drive backwards
+            angle_diff = abs(normalize_angle(sector_center - prefer_in_robot))
+            if angle_diff > math.pi / 2:
+                continue
+
+            # Collect ranges in this sector
+            ranges_in_sector: list[float] = []
+            for i in range(len(scan.ranges)):
+                r = scan.ranges[i]
+                if not math.isfinite(r):
+                    continue
+                scan_angle = scan.angle_min + i * scan.angle_increment
+                if abs(normalize_angle(scan_angle - sector_center)) <= sector_width / 2:
+                    ranges_in_sector.append(r)
+
+            if not ranges_in_sector:
+                continue
+
+            # Use 25th percentile (robust to occasional noisy readings)
+            sorted_r = sorted(ranges_in_sector)
+            p25 = sorted_r[len(sorted_r) // 4]
+            median_r = sorted_r[len(sorted_r) // 2]
+
+            # Need at least 1.0m clearance to consider this sector
+            if p25 < 1.0:
+                continue
+
+            # Score: cosine weighting strongly prefers alignment with exit.
+            # alignment goes from 1.0 (exact exit direction) to 0.0 (±90°).
+            alignment = math.cos(angle_diff)
+            score = median_r * alignment
+            if score > best_score:
+                best_score = score
+                best_angle_robot = sector_center
+
+        if best_angle_robot is None:
+            return None
+
+        # Convert back to map frame
+        result_angle = normalize_angle(best_angle_robot + robot_yaw)
+        return result_angle
+
+    def _is_laser_clear_in_direction(self, direction: float, min_range: float,
+                                      cone_half_angle: float) -> bool:
+        """Check laser scan for clear path in direction (robot frame)."""
+        if self.scan_msg is None:
+            return False
+        scan = self.scan_msg
+        for i in range(len(scan.ranges)):
+            r = scan.ranges[i]
+            if not math.isfinite(r):
+                continue
+            scan_angle = scan.angle_min + i * scan.angle_increment
+            if abs(normalize_angle(scan_angle - direction)) <= cone_half_angle:
+                if r < min_range:
+                    return False
+        return True
+
+    def _is_laser_clear_ahead(self, min_range: float, cone_half_angle: float) -> bool:
+        """Check laser scan for clear path directly ahead (0° robot frame)."""
+        return self._is_laser_clear_in_direction(0.0, min_range, cone_half_angle)
 
     def _enter_terminal_state(self, terminal_mode: str, terminal_reason: str, robot_pose: Optional[RobotPose] = None) -> None:
         self.mode = terminal_mode
@@ -3025,8 +4747,44 @@ class MazeExplorer(Node):
             return True
         self.goal_settle_until = None
         if self.mode == 'SETTLING':
+            # Check for pending explore-goal retry before transitioning to
+            # AT_NODE_ANALYZE.  This handles transient Nav2 aborts caused by
+            # TF buffer clears without marking the branch as BLOCKED.
+            if self.explore_retry_pending:
+                now = self.get_clock().now()
+                if self.explore_retry_after is not None and now < self.explore_retry_after:
+                    # Still waiting for retry delay to elapse
+                    return True  # keep SETTLING
+                self.explore_retry_pending = False
+                self._dispatch_explore_retry()
+                return False
             self.mode = AT_NODE_ANALYZE
         return False
+
+    def _dispatch_explore_retry(self) -> None:
+        """Dispatch a previously-saved explore goal as a retry."""
+        if self.explore_retry_target is None:
+            self.get_logger().warn('explore retry: no saved target; falling back to AT_NODE_ANALYZE')
+            self.explore_retry_count = 0
+            self.mode = AT_NODE_ANALYZE
+            return
+        # Restore the branch context so _send_goal has the right topology
+        self.active_start_node_id = self.explore_retry_start_node_id
+        self.active_branch = self.explore_retry_branch
+        target = self.explore_retry_target
+        yaw = self.explore_retry_yaw or 0.0
+        self.get_logger().info(
+            'dispatching explore retry: target=(%.3f, %.3f) yaw=%.3f retry=%d/%d'
+            % (target[0], target[1], yaw, self.explore_retry_count, self.explore_max_retries)
+        )
+        # Reset retry state after dispatching
+        saved_target = self.explore_retry_target
+        self.explore_retry_target = None
+        self.explore_retry_start_node_id = None
+        self.explore_retry_branch = None
+        self.explore_retry_yaw = None
+        self._send_goal(saved_target, yaw, 'explore', skip_two_step_staging=True)
+        self.mode = WAIT_FOR_NAV2
 
     def _goal_settle_remaining_sec(self) -> float:
         if self.goal_settle_until is None:
@@ -3912,10 +5670,501 @@ class MazeExplorer(Node):
         self.goal_events_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
     def _mark_exhausted(self, reason: str) -> None:
+        # Before giving up, try frontier push: scan the SLAM map for frontier
+        # cells (free adjacent to unknown) in the exit direction and dispatch
+        # a goal to push the exploration boundary outward. This breaks through
+        # cases where DFS has explored all known junctions but the explored
+        # region doesn't reach the exit yet.
+        if self._maybe_frontier_push(reason):
+            return
+        # Before truly giving up, try resetting BLOCKED branches for DFS retry.
+        if self._maybe_dfs_reset(reason):
+            return
         self._enter_terminal_state(FAILED_EXHAUSTED, terminal_reason=reason)
         if not self.exhausted_logged:
             self.exhausted_logged = True
             self.get_logger().warn('MAZE_EXPLORER_EXHAUSTED reason=%s' % reason)
+
+    def _maybe_frontier_push(self, exhaustion_reason: str) -> bool:
+        """Attempt a frontier push goal before declaring FAILED_EXHAUSTED.
+
+        Scans the SLAM map for frontier cells (free cells adjacent to unknown)
+        reachable from the robot's position via connected free space.  Cycles
+        through different candidates so that repeated failures don't retry the
+        same unreachable target.
+
+        Returns True if a frontier push goal was dispatched (exhaustion deferred).
+        Returns False if no viable frontier target found or max attempts reached.
+        """
+        # Fast-fail on early stuck: if the robot hasn't made meaningful eastward
+        # progress (max_x < 5.0) after <15 goals, SLAM drift has likely corrupted
+        # the costmap.  Limit frontier pushes to 3 instead of 25 to avoid wasting
+        # 10+ minutes on clearly doomed runs.
+        effective_max_attempts = self.frontier_push_max_attempts
+        if (self.goal_count < 15
+                and self.eastward_progress_max_x < 5.0):
+            effective_max_attempts = 3
+            if self.frontier_push_attempts == 0:
+                self.get_logger().warn(
+                    'FRONTIER PUSH: early stuck detected (goal #%d, max_x=%.1f); '
+                    'limiting to %d frontier push attempts instead of %d'
+                    % (self.goal_count, self.eastward_progress_max_x,
+                       effective_max_attempts, self.frontier_push_max_attempts)
+                )
+
+        if self.frontier_push_attempts >= effective_max_attempts:
+            self.get_logger().info(
+                'FRONTIER PUSH: max attempts (%d) reached; clearing tried targets'
+                % effective_max_attempts
+            )
+            self.frontier_push_tried_targets.clear()
+            return False
+
+        if self.map_view is None:
+            return False
+
+        robot_pose = self._lookup_robot_pose()
+        if robot_pose is None:
+            return False
+
+        robot_xy = (robot_pose[0], robot_pose[1])
+        robot_exit_dist = math.hypot(robot_xy[0] - self.exit_x, robot_xy[1] - self.exit_y)
+
+        # If robot is already very close to exit, don't frontier push
+        if robot_exit_dist < 3.0:
+            return False
+
+        target = self._find_frontier_push_target(robot_xy, robot_exit_dist)
+        if target is None:
+            self.get_logger().info(
+                'FRONTIER PUSH: no viable frontier target found '
+                '(tried %d, exhausted all reachable candidates)'
+                % len(self.frontier_push_tried_targets)
+            )
+            self.frontier_push_tried_targets.clear()
+            return False
+
+        # Critical check: if the best frontier target is FURTHER from the exit
+        # than the robot, frontier push is counterproductive — it will move us
+        # away from the goal.  Try a heading push toward the exit instead.
+        target_exit_dist = math.hypot(target[0] - self.exit_x, target[1] - self.exit_y)
+        if target_exit_dist > robot_exit_dist + 1.0:
+            self.get_logger().info(
+                'FRONTIER PUSH: best target at (%.1f, %.1f) is %.1fm from exit '
+                '(robot is %.1fm) — moving AWAY from exit; trying heading push instead [tried=%d]'
+                % (target[0], target[1], target_exit_dist, robot_exit_dist,
+                   len(self.frontier_push_tried_targets))
+            )
+            # Do NOT clear tried_targets — heading push registers its own targets
+            # in the tried set so it won't repeat the same angle/location.
+            return self._heading_push_toward_exit(robot_xy, robot_exit_dist)
+
+        # Record this target as tried using 1m grid dedup (same grid as _find_frontier_push_target)
+        target_cell = self.map_view.world_to_cell(target[0], target[1])
+        dedup_key = (target_cell[0] // 20, target_cell[1] // 20)
+        self.frontier_push_tried_targets.add(dedup_key)
+
+        self.frontier_push_attempts += 1
+        self.frontier_push_active = True
+        yaw = math.atan2(target[1] - robot_xy[1], target[0] - robot_xy[0])
+        self.get_logger().warn(
+            'FRONTIER PUSH: DFS exhausted (%s); dispatching frontier push goal #%d '
+            'to (%.3f, %.3f) — %.1fm from exit (robot at %.1fm) [tried=%d]'
+            % (exhaustion_reason, self.frontier_push_attempts,
+               target[0], target[1],
+               math.hypot(target[0] - self.exit_x, target[1] - self.exit_y),
+               robot_exit_dist, len(self.frontier_push_tried_targets))
+        )
+        self._send_goal(target, yaw=yaw, goal_kind='frontier_push', skip_two_step_staging=True)
+        return True
+
+    def _maybe_dfs_reset(self, reason: str) -> bool:
+        """Reset BLOCKED branches to UNTRIED so DFS can retry them.
+
+        Called after frontier push exhaustion.  Gives DFS a second chance by
+        reopening corridors that were blocked by Nav2 failures — with SLAM drift
+        these corridors may now be reachable.
+
+        Returns True if branches were reset and DFS can continue.
+        Returns False if no more reset cycles remain.
+        """
+        if self.dfs_retry_cycle >= self.dfs_retry_max_cycles:
+            self.get_logger().info(
+                'DFS RESET: max cycles (%d) reached; proceeding to FAILED_EXHAUSTED'
+                % self.dfs_retry_max_cycles
+            )
+            return False
+
+        reset_count = self.topology.reset_blocked_branches()
+        if reset_count == 0:
+            self.get_logger().info(
+                'DFS RESET: no BLOCKED branches to reset; proceeding to FAILED_EXHAUSTED'
+            )
+            return False
+
+        self.dfs_retry_cycle += 1
+        # Reset frontier push state so a fresh round of frontier pushes is possible
+        self.frontier_push_tried_targets.clear()
+        self.frontier_push_attempts = 0
+        self.heading_push_angles_tried.clear()
+
+        self.get_logger().warn(
+            'DFS RESET: cycle %d/%d — reset %d BLOCKED branches to UNTRIED, '
+            'clearing frontier state for fresh round (reason: %s)'
+            % (self.dfs_retry_cycle, self.dfs_retry_max_cycles, reset_count, reason)
+        )
+        return True
+
+    def _check_eastward_stagnation(self, robot_pose: RobotPose) -> bool:
+        """Check if DFS has been stagnating (no eastward progress) and force a push.
+
+        If the robot has spent more than eastward_progress_stagnation_limit goals
+        without advancing eastward by at least eastward_progress_advance_threshold,
+        dispatch a forced heading push toward the exit (east/northeast) to break
+        out of the local DFS loop.
+
+        Uses the multi-angle heading push mechanism to try different angles if
+        the direct-to-exit angle fails.
+
+        Returns True if a forced eastward push was dispatched (caller should return).
+        Returns False if no stagnation detected (caller should proceed with DFS).
+        """
+        if self.eastward_push_active:
+            return False  # already in a forced push, let goal result handle it
+
+        if self.eastward_push_attempts >= self.eastward_push_max_attempts:
+            return False  # already tried enough forced pushes
+
+        goals_since_progress = self.goal_count - self.eastward_progress_goal_at_max
+
+        if goals_since_progress < self.eastward_progress_stagnation_limit:
+            return False  # not stagnant yet
+
+        robot_xy = (robot_pose[0], robot_pose[1])
+        robot_exit_dist = math.hypot(robot_xy[0] - self.exit_x, robot_xy[1] - self.exit_y)
+
+        # Don't force push if already close to exit
+        if robot_exit_dist < 5.0:
+            return False
+
+        self.eastward_push_attempts += 1
+        self.eastward_push_active = True
+
+        self.get_logger().warn(
+            'EASTWARD STAGNATION: %d goals without eastward progress (max_x=%.1f at goal #%d, '
+            'current goal #%d). Forcing eastward push #%d/%d via heading push '
+            '(robot at (%.1f, %.1f), %.1fm from exit)'
+            % (goals_since_progress, self.eastward_progress_max_x,
+               self.eastward_progress_goal_at_max, self.goal_count,
+               self.eastward_push_attempts, self.eastward_push_max_attempts,
+               robot_xy[0], robot_xy[1], robot_exit_dist)
+        )
+
+        # Use the multi-angle heading push mechanism — it cycles through
+        # different angles (N, NNE, NNW, NE, NW) with dedup tracking
+        pushed = self._heading_push_toward_exit(robot_xy, robot_exit_dist)
+        if not pushed:
+            # All heading push angles exhausted — reset and let DFS continue
+            self.eastward_push_active = False
+            self.eastward_progress_goal_at_max = self.goal_count
+            self.get_logger().warn(
+                'EASTWARD STAGNATION: heading push exhausted all angles; '
+                'resetting stagnation counter and resuming DFS'
+            )
+        return pushed
+
+    def _heading_push_toward_exit(
+        self,
+        robot_xy: tuple[float, float],
+        robot_exit_dist: float,
+    ) -> bool:
+        """Push the robot toward the exit through unknown territory via angle cycling.
+
+        When BFS-connected frontier push can't find reachable frontier cells that
+        move closer to the exit, this method dispatches goals at multiple angles,
+        letting Nav2 plan through unknown cells (allow_unknown).
+
+        Uses SHORT micro-pushes (1.5-2.0m) that stay within or just beyond the
+        explored frontier, so Nav2 can plan through known/near-known territory.
+        After a successful micro-push, angles are cleared for a fresh round from
+        the new position.
+
+        Returns True if a heading push goal was dispatched.
+        Returns False if all candidate angles have been exhausted.
+        """
+        # Direction from robot to exit
+        dx = self.exit_x - robot_xy[0]
+        dy = self.exit_y - robot_xy[1]
+        angle_to_exit = math.atan2(dy, dx)
+
+        # Candidate angles in priority order:
+        # 1. Pure north (90°) — vertical corridors are key path to exit
+        # 2. NNE (67.5°) — slightly toward exit
+        # 3. NNW (112.5°) — slightly toward x≈18 corridor
+        # 4. NE (angle_to_exit) — straight toward exit (original behavior)
+        # 5. East (0°) — pure east along horizontal corridors
+        # 6. NW (135°) — more west, may find alternate corridor
+        # 7. ENE (22.5°) — if exit is nearly east
+        # 8. ESE (-22.5°) — southeast corridors
+        candidate_angles = [
+            math.pi / 2,                # 90°  pure north
+            math.pi / 2 - math.pi / 8,  # 67.5° NNE
+            math.pi / 2 + math.pi / 8,  # 112.5° NNW
+            angle_to_exit,               # toward exit (often NE)
+            0.0,                         # 0° pure east
+            math.pi / 2 + math.pi / 4,  # 135° NW
+            math.pi / 4,                # 45°  NE
+            -math.pi / 8,               # -22.5° ESE
+        ]
+
+        for raw_angle in candidate_angles:
+            # Normalize to [-pi, pi]
+            angle = raw_angle
+            while angle > math.pi:
+                angle -= 2 * math.pi
+            while angle < -math.pi:
+                angle += 2 * math.pi
+
+            # Skip if this angle (within 15°) has already been tried
+            if any(abs(angle - t) < math.radians(15) for t in self.heading_push_angles_tried):
+                continue
+
+            # MICRO-PUSH: 1.5-2.0m — keep target within known corridors
+            # so Nav2 can actually plan to it.  These short pushes advance
+            # the frontier incrementally instead of jumping into unknown.
+            push_dist = min(2.0, max(1.5, robot_exit_dist * 0.12))
+            push_x = robot_xy[0] + push_dist * math.cos(angle)
+            push_y = robot_xy[1] + push_dist * math.sin(angle)
+
+            # Validate target isn't in a known wall — if SLAM map shows
+            # this cell as occupied, skip this angle (it hits a wall).
+            if self.map_view is not None:
+                target_cell = self.map_view.world_to_cell(push_x, push_y)
+                if self.map_view.in_bounds(target_cell) and self.map_view.is_occupied(target_cell):
+                    self.get_logger().info(
+                        'HEADING PUSH: skipping angle %.0f° — target (%.1f, %.1f) is in a known wall'
+                        % (math.degrees(angle), push_x, push_y)
+                    )
+                    self.heading_push_angles_tried.append(angle)
+                    continue
+
+            # Register this angle as tried
+            self.heading_push_angles_tried.append(angle)
+            # Also register target in frontier dedup set
+            if self.map_view is not None:
+                target_cell = self.map_view.world_to_cell(push_x, push_y)
+                dedup_key = (target_cell[0] // 20, target_cell[1] // 20)
+                self.frontier_push_tried_targets.add(dedup_key)
+
+            self.frontier_push_attempts += 1
+            self.frontier_push_active = True
+            self.get_logger().warn(
+                'HEADING PUSH: dispatching micro-push #%d at (%.1f, %.1f) angle=%.0f° '
+                '(%.1fm from exit, robot at %.1fm, push_dist=%.1fm, angles_tried=%d)'
+                % (self.frontier_push_attempts, push_x, push_y, math.degrees(angle),
+                   math.hypot(push_x - self.exit_x, push_y - self.exit_y),
+                   robot_exit_dist, push_dist, len(self.heading_push_angles_tried))
+            )
+            self._send_goal(
+                (push_x, push_y),
+                yaw=angle,
+                goal_kind='frontier_push',
+                skip_two_step_staging=True,
+            )
+            return True
+
+        # All Nav2 heading push angles exhausted — try reactive drive
+        # which bypasses the corrupted global costmap entirely.
+        self.get_logger().warn(
+            'HEADING PUSH: all %d Nav2 candidate angles exhausted; '
+            'trying reactive drive (robot at %.1fm from exit)'
+            % (len(self.heading_push_angles_tried), robot_exit_dist)
+        )
+        # Reactive drive: use laser scan to find the best corridor
+        # direction (longest clear range, weighted toward exit).
+        # This follows the actual corridor structure instead of fixed angles.
+        laser_angle = self._find_best_reactive_angle(angle_to_exit)
+        if laser_angle is not None:
+            if self._start_reactive_drive(laser_angle, distance=1.5):
+                self.frontier_push_attempts += 1
+                self.frontier_push_active = True
+                return True
+            self.get_logger().info(
+                'REACTIVE DRIVE: laser-best angle %.0f° blocked or failed'
+                % math.degrees(laser_angle)
+            )
+
+        # Fallback: try fixed angles as last resort
+        reactive_angles = [
+            angle_to_exit,    # straight toward exit (often NE)
+            math.pi / 2,      # pure north
+            math.pi / 4,      # northeast
+            0.0,               # pure east
+            -math.pi / 4,     # southeast
+            3 * math.pi / 4,  # northwest
+        ]
+        for r_angle in reactive_angles:
+            if self._start_reactive_drive(r_angle, distance=1.5):
+                self.frontier_push_attempts += 1
+                self.frontier_push_active = True
+                return True
+
+        # Reactive drive also failed — truly stuck
+        self.get_logger().warn(
+            'HEADING PUSH: Nav2 angles + reactive drive all failed '
+            '(robot at %.1fm from exit)'
+            % robot_exit_dist
+        )
+        return False
+
+    def _find_frontier_push_target(
+        self,
+        robot_xy: tuple[float, float],
+        robot_exit_dist: float,
+    ) -> Optional[Point]:
+        """Find the best frontier cell to push exploration toward the exit.
+
+        Two-phase approach:
+        1. BFS from robot cell to find all reachable free cells (connected component).
+        2. Among reachable frontier cells, score by exit proximity, angular alignment,
+           and unexplored volume beyond the frontier.  Skip previously-tried targets.
+
+        Returns the (x, y) world coordinates of the best untried frontier target, or None.
+        """
+        if self.map_view is None:
+            return None
+
+        res = self.map_view.info.resolution
+        robot_cell = self.map_view.world_to_cell(robot_xy[0], robot_xy[1])
+
+        # Direction from robot to exit for angular bias
+        exit_angle = math.atan2(self.exit_y - robot_xy[1], self.exit_x - robot_xy[0])
+
+        # Phase 1: BFS to find all free cells reachable from the robot.
+        # This ensures we only consider frontier cells the robot can actually
+        # navigate to through the SLAM map, avoiding targets separated by walls.
+        reachable: set[tuple[int, int]] = set()
+        bfs_queue: list[tuple[int, int]] = [robot_cell]
+        reachable.add(robot_cell)
+        scan_radius_cells = int(math.ceil(self.frontier_push_scan_radius_m / res))
+        rx, ry = robot_cell
+
+        while bfs_queue:
+            cx, cy = bfs_queue.pop(0)
+            for ndx, ndy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                nx, ny = cx + ndx, cy + ndy
+                # Stay within scan radius
+                if abs(nx - rx) > scan_radius_cells or abs(ny - ry) > scan_radius_cells:
+                    continue
+                neighbor = (nx, ny)
+                if neighbor in reachable:
+                    continue
+                if not self.map_view.in_bounds(neighbor):
+                    continue
+                if not self.map_view.is_free(neighbor):
+                    continue
+                reachable.add(neighbor)
+                bfs_queue.append(neighbor)
+
+        self.get_logger().info(
+            'FRONTIER PUSH: BFS found %d reachable free cells within %.0fm radius'
+            % (len(reachable), self.frontier_push_scan_radius_m)
+        )
+
+        # Phase 2: Score reachable frontier cells.
+        stride = max(3, int(0.15 / res))
+        unknown_check_r = int(2.0 / res)  # 2m radius for unknown volume count
+        candidates: list[tuple[float, float, float, int]] = []  # (x, y, score, unknown_count)
+
+        for cell in reachable:
+            # Only evaluate at stride intervals to keep scoring fast
+            if (cell[0] - rx) % stride != 0 or (cell[1] - ry) % stride != 0:
+                continue
+
+            # Check if this is a frontier cell (free with at least one unknown neighbor)
+            has_unknown_neighbor = False
+            for ndx, ndy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                neighbor = (cell[0] + ndx, cell[1] + ndy)
+                if self.map_view.is_unknown(neighbor):
+                    has_unknown_neighbor = True
+                    break
+            if not has_unknown_neighbor:
+                continue
+
+            # Skip previously tried targets using 1m grid dedup
+            # (20 cells = 1m at 0.05 resolution — coarse enough to avoid nearby re-tries)
+            dedup_key = (cell[0] // 20, cell[1] // 20)
+            if dedup_key in self.frontier_push_tried_targets:
+                continue
+
+            # Convert to world coordinates
+            wx, wy = self.map_view.cell_to_world(cell[0], cell[1])
+
+            # Use relaxed clearance: allow unknown cells within radius
+            if not self.map_view.world_point_has_clearance(
+                wx, wy, self.clearance_radius_m, unknown_is_safe=True,
+            ):
+                continue
+
+            # Distance from robot
+            dist_from_robot = math.hypot(wx - robot_xy[0], wy - robot_xy[1])
+            if dist_from_robot < 1.0:
+                continue  # Too close — DFS should handle nearby frontiers
+            if dist_from_robot > 12.0:
+                continue  # Too far — Nav2 unlikely to plan path through unknown
+
+            # Count unknown cells in a 2m radius — measures unexplored volume
+            unknown_count = 0
+            for udy in range(-unknown_check_r, unknown_check_r + 1, stride):
+                for udx in range(-unknown_check_r, unknown_check_r + 1, stride):
+                    uc = (cell[0] + udx, cell[1] + udy)
+                    if self.map_view.is_unknown(uc):
+                        unknown_count += 1
+
+            # Exit proximity score: how much closer to exit vs robot (0 to ~1)
+            cell_exit_dist = math.hypot(wx - self.exit_x, wy - self.exit_y)
+            closeness = max(0.0, (robot_exit_dist - cell_exit_dist) / max(robot_exit_dist, 0.01))
+
+            # Angular alignment with exit direction (0 = opposite, 1 = aligned)
+            cell_angle = math.atan2(wy - robot_xy[1], wx - robot_xy[0])
+            angle_diff = abs(cell_angle - exit_angle)
+            if angle_diff > math.pi:
+                angle_diff = 2 * math.pi - angle_diff
+            angular_score = max(0.0, 1.0 - angle_diff / math.pi)
+
+            # Combined score: exit proximity + alignment + unexplored volume - distance
+            # Heavy weight on exit proximity to avoid being dominated by unknown volume
+            # in areas far from exit. Unknown volume is a tiebreaker, not the main driver.
+            score = (
+                closeness * 5.0          # 0-5 points for being closer to exit (MAIN driver)
+                + angular_score * 3.0    # 0-3 points for exit-direction alignment
+                + unknown_count * 0.002  # small bonus for large unknown areas (tiebreaker)
+                - dist_from_robot * 0.1  # moderate distance penalty to prefer nearby frontiers
+            )
+            candidates.append((wx, wy, score, unknown_count))
+
+        if not candidates:
+            return None
+
+        # Pick the best-scoring untried candidate
+        candidates.sort(key=lambda c: c[2], reverse=True)
+        best = candidates[0]
+        # Log top 3 for debugging
+        for i, c in enumerate(candidates[:3]):
+            self.get_logger().info(
+                'FRONTIER PUSH: candidate #%d at (%.3f, %.3f) score=%.2f '
+                'unknown_vol=%d (%.1fm from exit, %.1fm from robot)'
+                % (i + 1, c[0], c[1], c[2], c[3],
+                   math.hypot(c[0] - self.exit_x, c[1] - self.exit_y),
+                   math.hypot(c[0] - robot_xy[0], c[1] - robot_xy[1]))
+            )
+        self.get_logger().info(
+            'FRONTIER PUSH: %d candidates found (tried=%d, reachable=%d); '
+            'best at (%.3f, %.3f) score=%.2f'
+            % (len(candidates), len(self.frontier_push_tried_targets),
+               len(reachable), best[0], best[1], best[2])
+        )
+        return (best[0], best[1])
 
     def _state_payload(self) -> None:
         """Compatibility marker: state payload includes self.last_topology_sampling_diagnostics."""

@@ -7,7 +7,9 @@ tests exercise the maze search policy cheaply without Gazebo/Nav2.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
+import heapq
 import math
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -50,11 +52,40 @@ class BranchOption:
     failures: int = 0
     failure_reason: Optional[str] = None
 
-    def score_for_exit(self, node_xy: Point, exit_xy: Point, exit_bias_weight: float) -> float:
-        """Higher score is better; nearby-to-exit targets win among untried branches."""
+    def score_for_exit(
+        self,
+        node_xy: Point,
+        exit_xy: Point,
+        exit_bias_weight: float,
+        exploration_bonus_weight: float = 0.0,
+        known_positions: Optional[List[Point]] = None,
+        distance_to_exit_weight: float = 1.0,
+    ) -> float:
+        """Higher score is better.
+
+        Components:
+        - -distance_to_exit_weight * distance_to_exit: prefer branches closer to exit
+        - exit_bias_weight * heading_alignment: prefer branches pointing toward exit
+        - exploration_bonus_weight * novelty: prefer branches in unexplored territory
+
+        distance_to_exit_weight scales the raw distance penalty.  Default 1.0 is
+        legacy behaviour; values ~0.1 bring it to comparable magnitude with the
+        other terms so that novelty and heading can actually influence selection.
+        """
         target_distance_to_exit = _distance(self.target_xy, exit_xy)
-        heading_alignment = math.cos(_angle_delta(self.angle_rad, math.atan2(exit_xy[1] - node_xy[1], exit_xy[0] - node_xy[0])))
-        return -target_distance_to_exit + exit_bias_weight * heading_alignment
+        heading_alignment = math.cos(_angle_delta(
+            self.angle_rad,
+            math.atan2(exit_xy[1] - node_xy[1], exit_xy[0] - node_xy[0]),
+        ))
+        score = -distance_to_exit_weight * target_distance_to_exit + exit_bias_weight * heading_alignment
+
+        if exploration_bonus_weight > 0 and known_positions:
+            min_dist = min(_distance(self.target_xy, p) for p in known_positions)
+            # Cap novelty at 5.0m to prevent extreme bonuses
+            novelty = min(min_dist, 5.0)
+            score += exploration_bonus_weight * novelty
+
+        return score
 
 
 @dataclass
@@ -111,6 +142,8 @@ class MazeTopology:
         max_failures_per_branch: int = 2,
         max_backtrack_failures_per_node: int = 2,
         backtrack_goal_tolerance_m: float = 0.35,
+        exploration_bonus_weight: float = 0.0,
+        distance_to_exit_weight: float = 1.0,
     ) -> None:
         self.junction_merge_radius_m = float(junction_merge_radius_m)
         self.exit_bias_weight = float(exit_bias_weight)
@@ -120,6 +153,8 @@ class MazeTopology:
         self.max_failures_per_branch = int(max_failures_per_branch)
         self.max_backtrack_failures_per_node = int(max_backtrack_failures_per_node)
         self.backtrack_goal_tolerance_m = float(backtrack_goal_tolerance_m)
+        self.exploration_bonus_weight = float(exploration_bonus_weight)
+        self.distance_to_exit_weight = float(distance_to_exit_weight)
         self.nodes: Dict[int, TopoNode] = {}
         self.edges: Dict[int, TopoEdge] = {}
         self.visit_stack: List[int] = []
@@ -224,13 +259,208 @@ class MazeTopology:
                 continue
         return None
 
+    def farthest_stack_backtrack_target(self, current_node_id: int, current_xy: Point) -> Optional[TopoNode]:
+        """Find the best junction on the visit stack for stagnation backtracking.
+
+        Scores by untried_count * min(distance, 15m) to prefer moderately distant
+        junctions with many untried branches. Caps distance at 15m to avoid
+        overshooting back to the entrance (which can be 20+m away). Falls back
+        to the best available candidate if none exceed the minimum distance.
+        """
+        MIN_STAGNATION_DISTANCE_M = 3.0
+        DISTANCE_CAP_M = 15.0
+        candidates: list[tuple[float, int, float, 'TopoNode']] = []
+        seen_ids: set[int] = {current_node_id}
+        for node_id in self.visit_stack:
+            if node_id in seen_ids:
+                continue
+            seen_ids.add(node_id)
+            node = self.nodes[node_id]
+            if (node.node_type == 'junction'
+                    and node.has_untried_branches()
+                    and node.backtrack_failures < self.max_backtrack_failures_per_node):
+                dist = _distance(node.xy, current_xy)
+                untried = sum(1 for b in node.branches if b.state in SELECTABLE_BRANCH_STATES)
+                effective_dist = min(dist, DISTANCE_CAP_M)
+                score = untried * effective_dist
+                candidates.append((score, untried, dist, node))
+        if not candidates:
+            return None
+        # Prefer candidates at least 3m away to break out of local loops
+        distant = [(s, u, d, n) for s, u, d, n in candidates if d >= MIN_STAGNATION_DISTANCE_M]
+        pool = distant if distant else candidates
+        # Sort by score descending, then by untried count, then by distance
+        pool.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
+        return pool[0][3]
+
     def choose_next_branch(self, node_id: int, exit_xy: Point) -> Optional[BranchOption]:
         node = self.nodes[node_id]
         self._apply_blacklist_to_node(node)
         candidates = [branch for branch in node.branches if branch.state in SELECTABLE_BRANCH_STATES]
         if not candidates:
             return None
-        return max(candidates, key=lambda branch: branch.score_for_exit(node.xy, exit_xy, self.exit_bias_weight))
+        known_positions = self.get_known_positions() if self.exploration_bonus_weight > 0 else None
+        return max(candidates, key=lambda branch: branch.score_for_exit(
+            node.xy, exit_xy, self.exit_bias_weight,
+            self.exploration_bonus_weight, known_positions,
+            self.distance_to_exit_weight,
+        ))
+
+    def get_known_positions(self) -> List[Point]:
+        """Return all node positions for exploration novelty calculation."""
+        return [node.xy for node in self.nodes.values()]
+
+    def _build_dijkstra_adjacency(self, blocked_penalty: float = 2.0) -> Dict[int, List[Tuple[int, float]]]:
+        """Build undirected adjacency for Dijkstra pathfinding.
+
+        EXPLORED and IN_PROGRESS edges use Euclidean distance.
+        BLOCKED edges are included with a penalty multiplier — the edge was
+        blocked due to Nav2 failure at the branch target, but the topological
+        connection still exists and junctions beyond may have valid untried branches.
+        DEAD_END edges are excluded entirely (nothing useful beyond them).
+
+        Args:
+            blocked_penalty: Distance multiplier for BLOCKED edges (default 2.0).
+        """
+        adj: Dict[int, List[Tuple[int, float]]] = defaultdict(list)
+        for edge in self.edges.values():
+            s, e = edge.start_node_id, edge.end_node_id
+            d = _distance(self.nodes[s].xy, self.nodes[e].xy)
+            if edge.state in (EXPLORED, IN_PROGRESS):
+                adj[s].append((e, d))
+                adj[e].append((s, d))
+            elif edge.state == BLOCKED:
+                adj[s].append((e, d * blocked_penalty))
+                adj[e].append((s, d * blocked_penalty))
+        return adj
+
+    def dijkstra_nearest_unexplored(self, start_node_id: int) -> Optional[Tuple[List[int], TopoNode]]:
+        """Find the nearest junction with untried branches via shortest explored-edge path.
+
+        Uses Dijkstra with Euclidean edge weights on the known topology graph.
+        Transits through fully-explored junctions (all branches terminal) but
+        never stops at them — the target must have at least one untried branch.
+        BLOCKED edges are included with a penalty to keep the graph connected.
+
+        Returns (path_node_ids, target_node) or None if no unexplored junction is reachable.
+        """
+        adj = self._build_dijkstra_adjacency()
+
+        # Dijkstra search
+        dist: Dict[int, float] = {start_node_id: 0.0}
+        prev: Dict[int, Optional[int]] = {start_node_id: None}
+        heap: List[Tuple[float, int]] = [(0.0, start_node_id)]
+
+        while heap:
+            d, u = heapq.heappop(heap)
+            if d > dist.get(u, float('inf')):
+                continue
+            node = self.nodes[u]
+            # Target: junction with untried branches, not the start, within failure limit
+            if (u != start_node_id
+                    and node.node_type == 'junction'
+                    and node.has_untried_branches()
+                    and node.backtrack_failures < self.max_backtrack_failures_per_node):
+                path: List[int] = []
+                curr: Optional[int] = u
+                while curr is not None:
+                    path.append(curr)
+                    curr = prev.get(curr)
+                path.reverse()
+                return (path, node)
+            for v, w in adj.get(u, []):
+                nd = d + w
+                if nd < dist.get(v, float('inf')):
+                    dist[v] = nd
+                    prev[v] = u
+                    heapq.heappush(heap, (nd, v))
+
+        return None
+
+    def dijkstra_farthest_unexplored(
+        self,
+        start_node_id: int,
+        exit_xy: Optional[Point] = None,
+        current_xy: Optional[Point] = None,
+    ) -> Optional[Tuple[List[int], TopoNode]]:
+        """Find the best junction with untried branches for stagnation recovery.
+
+        When exit_xy and current_xy are provided, uses exit-directed scoring that
+        prefers junctions CLOSER to the exit with untried branches.  This prevents
+        stagnation recovery from sending the robot backward toward the entrance
+        (which the legacy distance-based scoring often does).
+
+        Score formula (exit-directed):
+            score = untried_count * (1.0 + max(0, exit_closeness_improvement))
+        Where exit_closeness_improvement = dist(current, exit) - dist(junction, exit).
+        A junction 3m closer to exit with 2 untried: 2*(1+3) = 8.  A junction 3m
+        further with 4 untried: 4*1 = 4.  Exit-closer junctions win unless a
+        far-junction has substantially more untried branches.
+
+        When exit_xy/current_xy are not provided, falls back to legacy scoring:
+            score = untried_count * dijkstra_distance
+        BLOCKED edges are included with a penalty to keep the graph connected.
+        """
+        adj = self._build_dijkstra_adjacency()
+
+        # Full Dijkstra to compute shortest distances to all reachable nodes
+        dist: Dict[int, float] = {start_node_id: 0.0}
+        prev: Dict[int, Optional[int]] = {start_node_id: None}
+        heap: List[Tuple[float, int]] = [(0.0, start_node_id)]
+
+        while heap:
+            d, u = heapq.heappop(heap)
+            if d > dist.get(u, float('inf')):
+                continue
+            for v, w in adj.get(u, []):
+                nd = d + w
+                if nd < dist.get(v, float('inf')):
+                    dist[v] = nd
+                    prev[v] = u
+                    heapq.heappush(heap, (nd, v))
+
+        # Collect candidates: junctions with untried branches, reachable, not start
+        candidates: List[Tuple[int, TopoNode]] = []
+        for uid, d in dist.items():
+            if uid == start_node_id:
+                continue
+            node = self.nodes[uid]
+            if (node.node_type == 'junction'
+                    and node.has_untried_branches()
+                    and node.backtrack_failures < self.max_backtrack_failures_per_node):
+                candidates.append((uid, node))
+
+        if not candidates:
+            return None
+
+        if exit_xy is not None and current_xy is not None:
+            # Exit-directed scoring: prefer junctions closer to the exit
+            current_exit_dist = _distance(current_xy, exit_xy)
+
+            def _score(item: Tuple[int, TopoNode]) -> float:
+                uid, node = item
+                untried = sum(1 for b in node.branches if b.state in SELECTABLE_BRANCH_STATES)
+                exit_dist = _distance(node.xy, exit_xy)
+                exit_closeness_improvement = current_exit_dist - exit_dist
+                return untried * (1.0 + max(0.0, exit_closeness_improvement))
+        else:
+            # Legacy scoring: prefer far junctions with many untried branches
+            def _score(item: Tuple[int, TopoNode]) -> float:
+                uid, node = item
+                d = dist[uid]
+                untried = sum(1 for b in node.branches if b.state in SELECTABLE_BRANCH_STATES)
+                return untried * d
+
+        best_uid, best_node = max(candidates, key=_score)
+
+        # Reconstruct path
+        path: List[int] = []
+        curr: Optional[int] = best_uid
+        while curr is not None:
+            path.append(curr)
+            curr = prev.get(curr)
+        path.reverse()
+        return (path, best_node)
 
     def blacklist_goal(self, xy: Point, reason: str = BLOCKED_NAV2) -> None:
         self.blacklist.append(BlacklistedGoal(xy=(float(xy[0]), float(xy[1])), reason=reason))
@@ -295,6 +525,24 @@ class MazeTopology:
 
     def exhausted(self) -> bool:
         return not any(node.has_untried_branches() for node in self.nodes.values())
+
+    def reset_blocked_branches(self) -> int:
+        """Reset BLOCKED branches to UNTRIED so DFS can retry them.
+
+        Called after frontier push exhaustion to give DFS a second chance.
+        Also clears failure counts on the reset branches so they can fail
+        again without immediately re-blocking.  Returns the number of
+        branches that were reset.
+        """
+        reset_count = 0
+        for node in self.nodes.values():
+            for branch in node.branches:
+                if branch.state == BLOCKED:
+                    branch.state = UNTRIED
+                    branch.failures = 0
+                    branch.failure_reason = None
+                    reset_count += 1
+        return reset_count
 
     def _find_matching_branch(self, branches: Iterable[BranchOption], option: BranchOption) -> Optional[BranchOption]:
         for branch in branches:
