@@ -166,6 +166,14 @@ class MazeExplorer(Node):
         self.maze_bound_y_max = float(self.declare_parameter('maze_bound_y_max', 20.5).value)
         self.entry_direct_enabled = bool(self.declare_parameter('entry_direct_enabled', True).value)
         self.entry_direct_distance_m = float(self.declare_parameter('entry_direct_distance_m', 1.5).value)
+        # Use reactive forward drive (not Nav2) for the entry move. Nav2 entry
+        # goals frequently fail at the entrance before the costmap populates,
+        # and each failure triggers Nav2's BackUp recovery which shoves the
+        # robot backward out the entrance (observed drift to x=-2.0). Reactive
+        # drive needs only scan+TF, drives straight in, and never invokes Nav2
+        # recovery — so the robot reliably ends up inside the maze.
+        self.entry_direct_use_reactive = bool(
+            self.declare_parameter('entry_direct_use_reactive', True).value)
         self.entry_direct_dispatch_timeout_sec = float(
             self.declare_parameter('entry_direct_dispatch_timeout_sec', 90.0).value
         )
@@ -681,6 +689,8 @@ class MazeExplorer(Node):
             self._publish_state()
             return
 
+        self._map_jump_diagnostic()
+
         robot_pose = self._lookup_robot_pose()
         if robot_pose is None:
             self._publish_state()
@@ -823,10 +833,15 @@ class MazeExplorer(Node):
                 self._publish_state()
                 return
             self.entry_direct_retry_after = None  # delay elapsed
-            if nav2_active and action_ready and tf_ok and scan_ok:
+            # Reactive entry needs only TF + scan (no Nav2). Dispatch as soon as
+            # those are ready so the robot drives in immediately, before Nav2
+            # entry-goal failures can back it out the entrance.
+            entry_ready = (tf_ok and scan_ok) if self.entry_direct_use_reactive \
+                else (nav2_active and action_ready and tf_ok and scan_ok)
+            if entry_ready:
                 self.get_logger().info(
-                    'ENTRY_DIRECT: readiness gate passed (nav2=%s action=%s tf=%s scan=%s map=%s); dispatching first goal'
-                    % (nav2_active, action_ready, tf_ok, scan_ok, map_ok)
+                    'ENTRY_DIRECT: readiness gate passed (reactive=%s nav2=%s action=%s tf=%s scan=%s map=%s); dispatching first goal'
+                    % (self.entry_direct_use_reactive, nav2_active, action_ready, tf_ok, scan_ok, map_ok)
                 )
                 self.mode = ENTRY_DIRECT
                 self._dispatch_entry_direct_goal(robot_pose)
@@ -1594,6 +1609,24 @@ class MazeExplorer(Node):
         target_y = self.entrance_y + math.sin(self.entrance_yaw) * d
         target_yaw = self.entrance_yaw
         self.entry_direct_dispatched = True
+
+        if self.entry_direct_use_reactive:
+            # Drive straight into the maze with the reactive controller (no
+            # Nav2, so no failed-goal BackUp recovery to push us back out).
+            started = self._start_reactive_drive(
+                self.entrance_yaw, distance=d, min_clearance=0.8)
+            self.get_logger().info(
+                'ENTRY_DIRECT: reactive straight-line entry %s from (%.2f,%.2f) '
+                '%.1fm @ %.0f deg' % ('started' if started else 'BLOCKED',
+                                      robot_pose[0], robot_pose[1], d,
+                                      math.degrees(self.entrance_yaw))
+            )
+            if started:
+                return
+            # If reactive is somehow blocked, fall through to a Nav2 goal.
+            self.get_logger().warn(
+                'ENTRY_DIRECT: reactive entry blocked; falling back to Nav2 goal')
+
         self.get_logger().info(
             'ENTRY_DIRECT: dispatching straight-line goal from entrance '
             '(%.3f, %.3f, yaw=%.3f) to (%.3f, %.3f, yaw=%.3f) distance=%.2f'
@@ -4884,6 +4917,39 @@ class MazeExplorer(Node):
         rotation = transform.transform.rotation
         yaw = self._yaw_from_quaternion(rotation.x, rotation.y, rotation.z, rotation.w)
         return (float(translation.x), float(translation.y), yaw)
+
+    def _lookup_odom_pose(self) -> Optional[RobotPose]:
+        """Robot pose in the odom frame (drift-free over short horizons, but
+        not loop-closed). Used to detect map-frame pose jumps from SLAM."""
+        try:
+            transform = self.tf_buffer.lookup_transform('odom', self.base_frame, rclpy.time.Time())
+        except Exception:  # noqa: BLE001
+            return None
+        t = transform.transform.translation
+        r = transform.transform.rotation
+        yaw = self._yaw_from_quaternion(r.x, r.y, r.z, r.w)
+        return (float(t.x), float(t.y), yaw)
+
+    def _map_jump_diagnostic(self) -> None:
+        """Log map-frame vs odom-frame motion each tick to expose SLAM map
+        jumps (map-frame pose teleporting while odom moves smoothly)."""
+        m = self._lookup_robot_pose()
+        o = self._lookup_odom_pose()
+        if m is None or o is None:
+            return
+        prev_m = getattr(self, '_diag_last_map_xy', None)
+        prev_o = getattr(self, '_diag_last_odom_xy', None)
+        if prev_m is not None and prev_o is not None:
+            dmap = math.hypot(m[0] - prev_m[0], m[1] - prev_m[1])
+            dodom = math.hypot(o[0] - prev_o[0], o[1] - prev_o[1])
+            jump = abs(dmap - dodom)
+            tag = '  <<< MAP JUMP' if jump > 0.3 else ''
+            self.get_logger().info(
+                'POSEDIAG map=(%.2f,%.2f) odom=(%.2f,%.2f) dmap=%.2f dodom=%.2f jump=%.2f%s'
+                % (m[0], m[1], o[0], o[1], dmap, dodom, jump, tag)
+            )
+        self._diag_last_map_xy = (m[0], m[1])
+        self._diag_last_odom_xy = (o[0], o[1])
 
     def _exit_reached(self, robot_pose: RobotPose) -> bool:
         return math.hypot(robot_pose[0] - self.exit_x, robot_pose[1] - self.exit_y) <= self.exit_radius
