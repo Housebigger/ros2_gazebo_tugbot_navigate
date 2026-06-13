@@ -156,6 +156,14 @@ class MazeExplorer(Node):
         self.exit_x = float(self.declare_parameter('exit_x', 4.0).value)
         self.exit_y = float(self.declare_parameter('exit_y', 3.0).value)
         self.exit_radius = float(self.declare_parameter('exit_radius', 0.6).value)
+        # Maze interior bounds (map frame). Exploration goals must stay inside
+        # the maze; in particular the entrance opening is at x=0, so any target
+        # with x<0 is exterior (behind the robot, out the entrance) and must be
+        # rejected — otherwise DFS wastes goals driving back outside.
+        self.maze_bound_x_min = float(self.declare_parameter('maze_bound_x_min', 0.0).value)
+        self.maze_bound_x_max = float(self.declare_parameter('maze_bound_x_max', 22.0).value)
+        self.maze_bound_y_min = float(self.declare_parameter('maze_bound_y_min', -1.0).value)
+        self.maze_bound_y_max = float(self.declare_parameter('maze_bound_y_max', 20.5).value)
         self.entry_direct_enabled = bool(self.declare_parameter('entry_direct_enabled', True).value)
         self.entry_direct_distance_m = float(self.declare_parameter('entry_direct_distance_m', 1.5).value)
         self.entry_direct_dispatch_timeout_sec = float(
@@ -988,6 +996,16 @@ class MazeExplorer(Node):
     # ──────────────────────────────────────────────────────────────────
     # Guided Corridor Navigation (GCN) methods
     # ──────────────────────────────────────────────────────────────────
+
+    def _target_in_maze(self, x: float, y: float) -> bool:
+        """True if (x, y) is inside the maze interior bounds (map frame).
+
+        Used to reject exploration/branch/frontier goals that fall outside the
+        maze (e.g. west of the entrance opening at x=0), which would send the
+        robot back out the entrance instead of deeper into the maze.
+        """
+        return (self.maze_bound_x_min <= x <= self.maze_bound_x_max
+                and self.maze_bound_y_min <= y <= self.maze_bound_y_max)
 
     def _gcn_reactive_angle(self, robot_xy) -> float:
         """Heading for reactive drive: aim at the centerline-snapped waypoint.
@@ -2214,6 +2232,30 @@ class MazeExplorer(Node):
                 clearance_radius_m=self.clearance_radius_m,
                 lateral_search_m=self.lateral_centering_search_m,
             )
+            if target is not None and not self._target_in_maze(target[0], target[1]):
+                # Lateral centering pushed the target outside the maze (common
+                # at the entrance, where free space opens west into the entrance
+                # chamber and biases the centroid). Fall back to the straight
+                # projection along the direction, which stays in the corridor.
+                straight = (
+                    robot_pose[0] + math.cos(direction.angle_rad) * self.branch_goal_step_m,
+                    robot_pose[1] + math.sin(direction.angle_rad) * self.branch_goal_step_m,
+                )
+                if self._target_in_maze(straight[0], straight[1]):
+                    self.get_logger().info(
+                        'DFS: centered target (%.2f,%.2f) out of maze; using '
+                        'straight projection (%.2f,%.2f) at %.0f deg'
+                        % (target[0], target[1], straight[0], straight[1],
+                           math.degrees(direction.angle_rad))
+                    )
+                    target = straight
+                else:
+                    self.get_logger().info(
+                        'DFS: rejecting out-of-maze branch target (%.2f, %.2f) '
+                        'at angle %.0f deg' % (target[0], target[1],
+                                               math.degrees(direction.angle_rad))
+                    )
+                    target = None
             if target is not None:
                 branch_options.append(BranchOption(angle_rad=direction.angle_rad, target_xy=target))
         self.topology.set_branch_options(node.node_id, branch_options)
@@ -6120,6 +6162,11 @@ class MazeExplorer(Node):
 
             # Convert to world coordinates
             wx, wy = self.map_view.cell_to_world(cell[0], cell[1])
+
+            # Reject frontier targets outside the maze interior (e.g. exterior
+            # space west of the entrance opening).
+            if not self._target_in_maze(wx, wy):
+                continue
 
             # Use relaxed clearance: allow unknown cells within radius
             if not self.map_view.world_point_has_clearance(

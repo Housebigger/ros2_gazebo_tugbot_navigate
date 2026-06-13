@@ -41,7 +41,7 @@ ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     explorer_type:=maze_dfs \
     guided_corridor_mode:=false \
     entry_direct_enabled:=true \
-    entry_direct_distance_m:=1.5 \
+    entry_direct_distance_m:=2.0 \
     max_goals:="${MAX_GOALS}" \
     > "$ART/launch.log" 2>&1 &
 LAUNCH_PID=$!
