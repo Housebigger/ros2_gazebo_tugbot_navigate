@@ -181,9 +181,15 @@ class MazeExplorer(Node):
         self.exploration_rate_hz = float(self.declare_parameter('exploration_rate_hz', 0.5).value)
         self.publish_debug_state_hz = float(self.declare_parameter('publish_debug_state_hz', 1.0).value)
         self.junction_merge_radius_m = float(self.declare_parameter('junction_merge_radius_m', 0.75).value)
-        self.exit_bias_weight = float(self.declare_parameter('exit_bias_weight', 0.5).value)
-        self.exploration_bonus_weight = float(self.declare_parameter('exploration_bonus_weight', 0.0).value)
-        self.distance_to_exit_weight = float(self.declare_parameter('distance_to_exit_weight', 0.1).value)
+        # Branch scoring. Pure exit-bias (exploration_bonus=0) makes DFS greedy
+        # toward the exit and unable to take corridors that lead *away* from it
+        # (e.g. the C4 westward detour) — it gets stuck where the maze requires
+        # moving away from the goal before coming back. Enabling a novelty bonus
+        # and softening the exit bias lets DFS explore those detours while still
+        # being gently pulled toward the exit.
+        self.exit_bias_weight = float(self.declare_parameter('exit_bias_weight', 0.3).value)
+        self.exploration_bonus_weight = float(self.declare_parameter('exploration_bonus_weight', 0.6).value)
+        self.distance_to_exit_weight = float(self.declare_parameter('distance_to_exit_weight', 0.15).value)
         self.branch_angle_step_deg = float(self.declare_parameter('branch_angle_step_deg', 90.0).value)
         self.branch_lookahead_m = float(self.declare_parameter('branch_lookahead_m', 1.5).value)
         self.branch_goal_step_m = float(self.declare_parameter('branch_goal_step_m', 1.0).value)
@@ -319,7 +325,12 @@ class MazeExplorer(Node):
         # push toward unexplored territory to the east/northeast.
         self.eastward_progress_max_x: float = 0.0       # farthest east (x) reached so far
         self.eastward_progress_goal_at_max: int = 0      # goal_count when max_x was last updated
-        self.eastward_progress_stagnation_limit: int = 15 # goals without eastward advance
+        # Disabled by default (huge limit): forcing eastward on stagnation is a
+        # maze-specific hack that fights legitimate west/south detours (e.g. C4).
+        # With the novelty exploration bonus enabled, systematic exploration
+        # replaces this heuristic.
+        self.eastward_progress_stagnation_limit: int = int(
+            self.declare_parameter('eastward_progress_stagnation_limit', 100000).value)
         self.eastward_progress_advance_threshold: float = 0.5  # min meters of eastward advance
         self.eastward_push_active: bool = False          # currently in forced eastward push
         self.eastward_push_attempts: int = 0
@@ -452,11 +463,15 @@ class MazeExplorer(Node):
                 'GCN: Guided Corridor Navigation mode enabled — %d corridors loaded'
                 % len(self.corridor_nav.corridors)
             )
-            # Publish maze boundary OccupancyGrid so Nav2's global costmap knows
-            # about ALL maze walls from the start, preventing it from routing
-            # through unmapped exterior space (the root cause of the robot
-            # repeatedly escaping outside the maze).
-            self._publish_maze_boundary_map()
+        # Publish maze boundary OccupancyGrid so Nav2's global costmap knows
+        # about ALL maze walls from the start, preventing it from routing
+        # through unmapped exterior space. REQUIRED in every mode: the global
+        # costmap config has a maze_boundary_layer (StaticLayer subscribed to
+        # /maze_boundary_map, transient-local). If nothing publishes that topic,
+        # the layer never receives a map and the whole global costmap reports
+        # "Costmap timed out waiting for update", aborting every Nav2 plan. This
+        # used to be GCN-only, which silently broke all DFS (autonomous) planning.
+        self._publish_maze_boundary_map()
 
         self.tf_buffer = tf2_ros.Buffer(cache_time=Duration(seconds=20.0))
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
