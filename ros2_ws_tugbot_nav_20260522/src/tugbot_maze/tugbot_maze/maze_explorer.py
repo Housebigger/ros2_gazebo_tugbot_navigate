@@ -335,6 +335,16 @@ class MazeExplorer(Node):
         self.eastward_push_active: bool = False          # currently in forced eastward push
         self.eastward_push_attempts: int = 0
         self.eastward_push_max_attempts: int = 10        # max forced pushes before giving up
+        # Exit-progress stagnation: if the robot's distance-to-exit hasn't
+        # improved over N goals, it is stuck in a local pocket. Force an
+        # exit-directed frontier push (the frontier scorer already prefers
+        # frontiers nearest the exit) to pull it toward the unexplored region
+        # near the exit instead of re-exploring the pocket.
+        self.exit_progress_best_dist: float = float('inf')
+        self.exit_progress_goal_at_best: int = 0
+        self.exit_progress_stagnation_limit: int = int(
+            self.declare_parameter('exit_progress_stagnation_limit', 12).value)
+        self.exit_progress_improve_threshold: float = 0.5  # metres of exit-ward gain
         # Reactive drive: bypasses Nav2 planner when SLAM drift creates
         # impassable walls in the global costmap.  Uses direct cmd_vel
         # with laser scan safety to drive through SLAM artifact walls.
@@ -2337,6 +2347,11 @@ class MazeExplorer(Node):
         # unexplored territory.  This prevents DFS from getting stuck exploring
         # junctions with many branches in the same western area.
         if self._check_eastward_stagnation(robot_pose):
+            return
+
+        # Exit-progress stagnation: stuck in a pocket not advancing toward the
+        # exit -> force an exit-directed frontier push to escape toward the goal.
+        if self._check_exit_progress_stagnation(robot_pose):
             return
 
         chosen = self.topology.choose_next_branch(node.node_id, exit_xy=(self.exit_x, self.exit_y))
@@ -5958,6 +5973,34 @@ class MazeExplorer(Node):
             % (self.dfs_retry_cycle, self.dfs_retry_max_cycles, reset_count, reason)
         )
         return True
+
+    def _check_exit_progress_stagnation(self, robot_pose: RobotPose) -> bool:
+        """If the robot hasn't gotten closer to the exit over N goals, it is
+        stuck in a local pocket. Force an exit-directed frontier push (the
+        frontier scorer prefers frontiers nearest the exit), which pulls the
+        robot toward the unexplored region near the exit instead of re-exploring
+        the pocket. Returns True if a frontier push was dispatched.
+        """
+        robot_xy = (robot_pose[0], robot_pose[1])
+        d = self._distance_to_exit(robot_xy)
+        if d < self.exit_progress_best_dist - self.exit_progress_improve_threshold \
+                or self.exit_progress_best_dist == float('inf'):
+            self.exit_progress_best_dist = d
+            self.exit_progress_goal_at_best = self.goal_count
+            return False
+        if d < self.exit_radius * 2.5:
+            return False  # close to exit; let normal/near-exit logic finish
+        goals_since = self.goal_count - self.exit_progress_goal_at_best
+        if goals_since < self.exit_progress_stagnation_limit:
+            return False
+        self.get_logger().warn(
+            'EXIT-PROGRESS STAGNATION: %d goals without exit-ward gain '
+            '(best=%.1fm, now=%.1fm at (%.1f,%.1f)); forcing exit-directed frontier push'
+            % (goals_since, self.exit_progress_best_dist, d, robot_xy[0], robot_xy[1])
+        )
+        # Reset the window so we don't fire every tick while the push runs.
+        self.exit_progress_goal_at_best = self.goal_count
+        return self._maybe_frontier_push('exit_progress_stagnation')
 
     def _check_eastward_stagnation(self, robot_pose: RobotPose) -> bool:
         """Check if DFS has been stagnating (no eastward progress) and force a push.
