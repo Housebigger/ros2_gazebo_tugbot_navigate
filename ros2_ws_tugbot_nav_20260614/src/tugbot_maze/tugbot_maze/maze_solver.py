@@ -30,7 +30,7 @@ from tugbot_maze.grid_utils import OccupancyGridInfo, OccupancyGridView
 from tugbot_maze import maze_perception as perception
 from tugbot_maze.tremaux_solver import (
     TremauxSolver, EXPLORE, REROUTE, BACK_OUT, DONE,
-    OUT_WALL, OUT_WEDGED,
+    OUT_WALL, OUT_WEDGED, OUT_SUCCESS,
 )
 from tugbot_maze.reactive_pilot import ReactivePilot, WALL_AHEAD, WEDGED
 from tugbot_maze.dead_end_classifier import is_true_dead_end
@@ -83,6 +83,7 @@ class MazeSolver(Node):
 
         self.create_timer(0.1, self._reactive_tick)   # 10 Hz pilot
         self.create_timer(0.5, self._control_tick)     # 2 Hz brain
+        self.create_timer(5.0, self._diag_tick)
         self.start_time = self.get_clock().now()
         self.get_logger().info('maze_solver started (Trémaux autonomous).')
 
@@ -286,7 +287,19 @@ class MazeSolver(Node):
                 self.brain.report_outcome(OUT_WALL)
             elif res == WEDGED:
                 self.brain.report_outcome(OUT_WEDGED)
+            else:  # SUCCESS: branch driven to target → mark explored so brain advances
+                self.brain.report_outcome(OUT_SUCCESS)
         self.phase = 'deciding'
+
+
+    def _diag_tick(self):
+        pose = self._lookup_pose()
+        if pose is None:
+            return
+        dist = math.hypot(pose[0] - self.exit_x, pose[1] - self.exit_y)
+        self.get_logger().info(
+            'DIAG pose=(%.2f, %.2f) yaw=%.2f dist_to_exit=%.2f goal=%d phase=%s'
+            % (pose[0], pose[1], pose[2], dist, self.goal_count, self.phase))
 
 
 def main(args=None):

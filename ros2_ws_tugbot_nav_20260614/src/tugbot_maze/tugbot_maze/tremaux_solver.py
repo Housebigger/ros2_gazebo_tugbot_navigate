@@ -153,8 +153,9 @@ class TremauxSolver:
 
     def report_outcome(self, outcome: str) -> None:
         """Called by the node after a pilot action completes without arriving
-        at a new node (wall confirmed, or wedged/timeout). SUCCESS is handled
-        implicitly by the next update() connecting the edge.
+        at a new node (wall confirmed, wedged/timeout, or explicit success).
+        OUT_SUCCESS marks the branch EXPLORED and clears active_branch so the
+        idempotency guard does not re-commit to it on the next update().
         """
         branch = self.active_branch
         if branch is None:
@@ -168,4 +169,10 @@ class TremauxSolver:
                 branch.state = EXPLORED  # give up WITHOUT blacklisting the corridor
             else:
                 branch.state = UNTRIED   # retry on a later visit
+            self.active_branch = None
+        elif outcome == OUT_SUCCESS:
+            # Branch was driven to its target successfully → mark traversed so the
+            # brain advances (picks a new branch / reroutes) instead of the
+            # idempotency guard re-committing to it forever.
+            branch.state = EXPLORED
             self.active_branch = None

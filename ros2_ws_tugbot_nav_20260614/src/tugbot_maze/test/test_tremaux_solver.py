@@ -143,3 +143,22 @@ def test_active_branch_tracks_driven_branch_after_repeat_update():
     other = [b for b in node.branches if b not in driven]
     assert driven and driven[0].state == 'dead_end'
     assert other and other[0].state == 'untried'
+
+
+def test_report_outcome_success_marks_branch_explored_and_advances():
+    from tugbot_maze.tremaux_solver import OUT_SUCCESS
+    solver = TremauxSolver(exit_xy=(20.0, 18.0))
+    j = _local('junction', [
+        (0.0, (1.5, 0.0), 1.5),
+        (math.pi / 2, (0.0, 1.5), 1.5),
+        (-math.pi / 2, (0.0, -1.5), 1.5),
+    ])
+    a = solver.update((0.0, 0.0), 0.0, j)
+    assert a.kind == EXPLORE
+    solver.report_outcome(OUT_SUCCESS)
+    assert solver.active_branch is None
+    # Re-deciding at the same node (robot didn't register a new node) must NOT
+    # re-commit the same branch — the explored branch is skipped for a new one.
+    nxt = solver.update((0.0, 0.0), 0.0, j)
+    assert nxt.kind == EXPLORE
+    assert nxt.target_xy != a.target_xy
