@@ -59,10 +59,13 @@ class MazeSolver(Node):
         self.max_goals = int(self.declare_parameter('max_goals', 400).value)
         self.startup_delay_sec = float(self.declare_parameter('startup_delay_sec', 3.0).value)
         self.use_frontier_coverage = bool(self.declare_parameter('use_frontier_coverage', True).value)
-        self.frontier_exit_bias = float(self.declare_parameter('frontier_exit_bias', 0.5).value)
+        self.frontier_exit_bias = float(self.declare_parameter('frontier_exit_bias', 0.8).value)
         self.min_frontier_size = int(self.declare_parameter('min_frontier_size', 4).value)
         self.max_failed_frontiers = int(self.declare_parameter('max_failed_frontiers', 8).value)
         self.max_coverage_done_retries = int(self.declare_parameter('max_coverage_done_retries', 3).value)
+        self.exit_dash_cooldown_goals = int(self.declare_parameter('exit_dash_cooldown_goals', 5).value)
+        self.exit_dash_nav_timeout_sec = float(self.declare_parameter('exit_dash_nav_timeout_sec', 40.0).value)
+        self.frontier_nav_timeout_sec = float(self.declare_parameter('frontier_nav_timeout_sec', 12.0).value)
 
         self.action_client = ActionClient(self, NavigateToPose, self.action_name)
         # /map is latched by slam_toolbox/map_server (TRANSIENT_LOCAL); a plain
@@ -78,7 +81,8 @@ class MazeSolver(Node):
         self.map_view: Optional[OccupancyGridView] = None
         self.scan_msg: Optional[LaserScan] = None
         self.brain = TremauxSolver(exit_xy=(self.exit_x, self.exit_y))
-        self.pilot = ReactivePilot(self, self.action_client, nav_timeout_sec=self.goal_timeout_sec)
+        self.pilot = ReactivePilot(self, self.action_client, nav_timeout_sec=self.goal_timeout_sec,
+                                   no_progress_sec=2.0, no_rot_sec=2.0)
         self.goal_count = 0
         self.phase = 'startup'          # startup | entering | deciding | busy | done
         self.pending_action = None
@@ -87,6 +91,8 @@ class MazeSolver(Node):
         self._failed_frontiers = []          # recent unreachable frontier goals (FIFO)
         self._pending_frontier_goal = None   # frontier goal currently being driven
         self._coverage_done_retries = 0      # consecutive 'no frontier, drive-to-exit' attempts
+        self._exit_dash_cooldown_until = 0   # goal_count until which dashing is suppressed
+        self._last_was_exit_dash = False
 
         self._publish_maze_boundary_map()
 
@@ -250,6 +256,24 @@ class MazeSolver(Node):
             self._decide_tremaux(pose)
 
     def _decide_frontier(self, pose):
+        # Exit dash: once the exit cell is mapped FREE (reachable), drive straight
+        # there via Nav2's global planner instead of general coverage. A failed dash
+        # triggers a cooldown so we don't re-dash every tick.
+        exit_mapped = self.map_view.world_point_has_clearance(
+            self.exit_x, self.exit_y, self.clearance_radius_m, unknown_is_safe=False)
+        if exit_mapped and self.goal_count >= self._exit_dash_cooldown_until:
+            self.goal_count += 1
+            self._pending_frontier_goal = (self.exit_x, self.exit_y)
+            self._last_was_exit_dash = True
+            self.pilot.nav_timeout_sec = self.exit_dash_nav_timeout_sec
+            self._publish_event('explore goal #%d kind=exit_dash' % self.goal_count)
+            self.get_logger().info('exit area mapped — dashing to exit (%.2f, %.2f)'
+                                   % (self.exit_x, self.exit_y))
+            self.phase = 'busy'
+            self.pilot.drive_to((self.exit_x, self.exit_y))
+            return
+
+        self._last_was_exit_dash = False
         goal = frontier_coverage.coverage_goal(
             self.map_view, (pose[0], pose[1]), (self.exit_x, self.exit_y),
             clearance_m=self.clearance_radius_m,
@@ -267,12 +291,15 @@ class MazeSolver(Node):
             self.get_logger().info('coverage complete — driving to exit (attempt %d)'
                                    % self._coverage_done_retries)
             self._pending_frontier_goal = (self.exit_x, self.exit_y)
+            self._last_was_exit_dash = True   # treat as a dash for cooldown purposes
+            self.pilot.nav_timeout_sec = self.exit_dash_nav_timeout_sec
             self.phase = 'busy'
             self.pilot.drive_to((self.exit_x, self.exit_y))
             return
         self._coverage_done_retries = 0
         self.goal_count += 1
         self._pending_frontier_goal = goal
+        self.pilot.nav_timeout_sec = self.frontier_nav_timeout_sec
         self._publish_event('explore goal #%d kind=frontier' % self.goal_count)
         self.get_logger().info('frontier goal #%d -> (%.2f, %.2f) dist=%.2f'
                                % (self.goal_count, goal[0], goal[1],
@@ -332,14 +359,20 @@ class MazeSolver(Node):
     def _handle_result_frontier(self):
         res = self.pilot.result
         self.pilot.result = None
-        if res in (WALL_AHEAD, WEDGED) and self._pending_frontier_goal is not None:
-            # Frontier goal unreachable → exclude it briefly so we don't re-pick it.
-            self._failed_frontiers.append(self._pending_frontier_goal)
-            if len(self._failed_frontiers) > self.max_failed_frontiers:
-                self._failed_frontiers.pop(0)
-            self.get_logger().info('frontier goal failed (%s) — excluding %s'
-                                   % (res, self._pending_frontier_goal))
+        if res in (WALL_AHEAD, WEDGED):
+            if self._last_was_exit_dash:
+                self._exit_dash_cooldown_until = self.goal_count + self.exit_dash_cooldown_goals
+                self.get_logger().info('exit dash failed (%s) — frontier coverage for %d goals'
+                                       % (res, self.exit_dash_cooldown_goals))
+            elif self._pending_frontier_goal is not None:
+                # Frontier goal unreachable → exclude it briefly so we don't re-pick it.
+                self._failed_frontiers.append(self._pending_frontier_goal)
+                if len(self._failed_frontiers) > self.max_failed_frontiers:
+                    self._failed_frontiers.pop(0)
+                self.get_logger().info('frontier goal failed (%s) — excluding %s'
+                                       % (res, self._pending_frontier_goal))
         self._pending_frontier_goal = None
+        self._last_was_exit_dash = False
         self.phase = 'deciding'
 
     def _handle_result_tremaux(self):
