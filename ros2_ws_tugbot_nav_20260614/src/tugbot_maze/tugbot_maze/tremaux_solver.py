@@ -1,10 +1,18 @@
 """ROS-free Trémaux maze-solving brain.
 
 Decides the next exploration action from the current local topology and a
-persistent junction graph with per-edge traversal counts (Trémaux marks). A
-corridor is never permanently discarded because of a navigation failure — only a
-physically-traversed-twice edge or a geometry-confirmed wall is excluded. This is
-the correctness core; it has no ROS dependencies and is fully unit-tested.
+persistent junction graph with per-edge traversal counts (Trémaux marks).
+
+Corridor exclusion is state-based: a branch is skipped only when its state is
+EXPLORED or DEAD_END; UNTRIED branches are the frontier.  A navigation failure
+(wedge, timeout) never permanently blacklists a corridor — the branch retries
+until max_soft_failures is reached, after which it is marked EXPLORED (give up,
+no blacklist).  visit_count is the persisted per-edge Trémaux mark (1 = corridor
+traversed once, 2 = traversed both ways or geometry-confirmed wall) maintained
+for the coverage guarantee; it is not read to make exclusion decisions.
+
+This is the correctness core; it has no ROS dependencies and is fully
+unit-tested.
 """
 from __future__ import annotations
 
@@ -66,12 +74,6 @@ class TremauxSolver:
     def _yaw(a: Point, b: Point) -> float:
         return math.atan2(b[1] - a[1], b[0] - a[0])
 
-    def _edge_between(self, a_id: int, b_id: int):
-        for edge in self.topology.edges.values():
-            if {edge.start_node_id, edge.end_node_id} == {a_id, b_id}:
-                return edge
-        return None
-
     def _register_node(self, robot_xy: Point, local) -> TopoNode:
         if local.kind == perception.JUNCTION and len(local.open_directions) >= 3:
             center = perception.compute_junction_center(robot_xy, local.open_directions)
@@ -93,6 +95,17 @@ class TremauxSolver:
 
     def update(self, robot_xy: Point, robot_yaw: float, local) -> Action:
         node = self._register_node(robot_xy, local)
+        # Idempotency guard: if update() is called again at the same node while
+        # we are still committed to an in-progress branch (robot hasn't moved
+        # yet), re-issue that branch rather than re-deciding — re-deciding would
+        # detach active_branch from the branch actually being driven and let a
+        # later dead-end/outcome mark the WRONG branch.
+        if (self.active_start_node_id == node.node_id
+                and self.active_branch is not None
+                and local.kind != perception.DEAD_END):
+            return Action(EXPLORE, target_xy=self.active_branch.target_xy,
+                          yaw=self.active_branch.angle_rad,
+                          reason='already committed to in-progress branch')
         edge = None
         if self.active_start_node_id is not None and node.node_id != self.active_start_node_id:
             edge = self.topology.connect_nodes(self.active_start_node_id, node.node_id, state=EXPLORED)
@@ -133,6 +146,7 @@ class TremauxSolver:
             # next update() does not add a spurious shortcut edge on arrival.
             self.active_start_node_id = None
             self.active_branch = None
+            # path_xy[0] is the current node; consumer drives follow_path(path_xy[1:])
             return Action(REROUTE, path_xy=path, reason='reroute to nearest untried junction')
 
         return Action(DONE, reason='full coverage: no untried branch reachable')

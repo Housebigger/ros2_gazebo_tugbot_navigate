@@ -2,7 +2,7 @@ import math
 from collections import namedtuple
 
 from tugbot_maze.tremaux_solver import (
-    TremauxSolver, EXPLORE, REROUTE, BACK_OUT, OUT_WALL, OUT_WEDGED,
+    TremauxSolver, EXPLORE, REROUTE, BACK_OUT, OUT_WEDGED,
 )
 
 Dir = namedtuple('Dir', 'angle_rad target_xy distance_m')

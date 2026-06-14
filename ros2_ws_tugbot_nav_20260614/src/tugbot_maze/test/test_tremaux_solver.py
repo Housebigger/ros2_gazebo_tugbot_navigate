@@ -86,3 +86,60 @@ def test_report_outcome_wall_marks_branch_dead_end():
     assert solver.active_branch is None
     nxt = solver.update((0.0, 0.0), 0.0, j)
     assert nxt.kind == EXPLORE and nxt.target_xy != a.target_xy
+
+
+def test_done_when_all_branches_exhausted():
+    from tugbot_maze.tremaux_solver import OUT_WALL, DONE
+    solver = TremauxSolver(exit_xy=(20.0, 18.0))
+    j = _local('junction', [
+        (0.0, (1.5, 0.0), 1.5),
+        (math.pi, (-1.5, 0.0), 1.5),
+    ])
+    solver.update((0.0, 0.0), 0.0, j)
+    solver.report_outcome(OUT_WALL)
+    solver.update((0.0, 0.0), 0.0, j)
+    solver.report_outcome(OUT_WALL)
+    final = solver.update((0.0, 0.0), 0.0, j)
+    assert final.kind == DONE
+
+
+def test_wedged_gives_up_after_max_soft_failures_without_blacklist():
+    from tugbot_maze.tremaux_solver import OUT_WEDGED, DONE
+    solver = TremauxSolver(exit_xy=(20.0, 18.0), max_soft_failures=3)
+    j = _local('junction', [(0.0, (1.5, 0.0), 1.5)])
+    for _ in range(3):
+        act = solver.update((0.0, 0.0), 0.0, j)
+        assert act.kind == EXPLORE
+        solver.report_outcome(OUT_WEDGED)
+    node = solver.topology.nodes[solver.active_start_node_id]
+    b = node.branches[0]
+    assert b.state == 'explored'
+    assert b.state not in ('blocked', 'blacklisted')
+    final = solver.update((0.0, 0.0), 0.0, j)
+    assert final.kind == DONE
+
+
+def test_active_branch_tracks_driven_branch_after_repeat_update():
+    """A repeat update() at the same pose must re-issue the committed branch,
+    not re-decide. The branch actually driven gets the dead-end mark; the other
+    stays untried. (Regression for the active_branch desync.)"""
+    from tugbot_maze.tremaux_solver import BACK_OUT
+    solver = TremauxSolver(exit_xy=(20.0, 18.0))
+    j = _local('junction', [
+        (0.0, (1.5, 0.0), 1.5),
+        (math.pi, (-1.5, 0.0), 1.5),
+    ])
+    a1 = solver.update((0.0, 0.0), 0.0, j)
+    a2 = solver.update((0.0, 0.0), 0.0, j)
+    assert a2.kind == EXPLORE
+    assert a2.target_xy == a1.target_xy
+    back = solver.update(a1.target_xy, a1.yaw,
+                         _local('dead_end', [(a1.yaw + math.pi, (0.0, 0.0), 1.0)]))
+    assert back.kind == BACK_OUT
+    node = solver.topology.nodes[1]
+    driven = [b for b in node.branches
+              if abs(b.target_xy[0] - a1.target_xy[0]) < 0.5
+              and abs(b.target_xy[1] - a1.target_xy[1]) < 0.5]
+    other = [b for b in node.branches if b not in driven]
+    assert driven and driven[0].state == 'dead_end'
+    assert other and other[0].state == 'untried'
