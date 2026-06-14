@@ -5,7 +5,6 @@ goal and fall back to a 10 Hz reactive /cmd_vel_nav state machine (rotate ->
 drive) with watchdog + unwedge; back_out reverses out of a dead end. Extracted
 from the proven GCN reactive drive in maze_explorer.py. Mode-free.
 """
-from __future__ import annotations
 
 import math
 
@@ -28,6 +27,12 @@ _UNWEDGE_BACKUP_M = 0.4                 # reverse distance for a jam unwedge (m)
 
 
 class ReactivePilot:
+    """Nav2-hop-with-reactive-fallback locomotion for the Trémaux solver.
+
+    Caller must poll is_active() and only issue a new drive_to/follow_path/back_out
+    when not active.
+    """
+
     def __init__(self, node, action_client, *, nav_timeout_sec=18.0,
                  max_seconds=12.0, no_progress_sec=3.0, no_rot_sec=3.0,
                  forward_speed=0.2, turn_speed=0.5, reverse_speed=0.15):
@@ -60,6 +65,7 @@ class ReactivePilot:
         self.nav_succeeded = False
         self.nav_deadline = None
         self._nav_goal_handle = None
+        self._nav_seq = 0          # monotonic goal token; stale callbacks ignored
         # True => current 'backup' is an intentional back_out (reverse the full
         # requested distance, finish SUCCESS).  False => a mid-rotate/drive jam
         # unwedge (reverse a short safety distance, finish WEDGED).
@@ -99,7 +105,9 @@ class ReactivePilot:
 
     # ------------------------------------------------------------- Nav2 hop
     def _dispatch_nav(self, target_xy):
-        if not self.action_client.wait_for_server(timeout_sec=2.0):
+        # Non-blocking readiness gate: a blocking wait_for_server() would freeze
+        # the single-threaded executor (no cmd_vel/scan) during the 10 Hz loop.
+        if not self.action_client.server_is_ready():
             self._fallback_reactive(); return
         pose = self.node._lookup_pose()
         yaw = math.atan2(target_xy[1] - pose[1], target_xy[0] - pose[0]) if pose else 0.0
@@ -113,17 +121,31 @@ class ReactivePilot:
         self.nav_succeeded = False
         self.nav_deadline = self.node.get_clock().now().nanoseconds / 1e9 + self.nav_timeout_sec
         self.state = 'nav'
+        self._nav_seq += 1
+        seq = self._nav_seq
         fut = self.action_client.send_goal_async(goal)
-        fut.add_done_callback(self._on_goal_response)
+        fut.add_done_callback(lambda f: self._on_goal_response(f, seq))
 
-    def _on_goal_response(self, fut):
+    # Nav2 callbacks. Assumes rclpy's default single-threaded executor (these
+    # callbacks and tick() serialize); the seq-token also makes it safe under a
+    # MultiThreadedExecutor — a stale callback from a cancelled/superseded goal
+    # (seq != self._nav_seq) is ignored.
+    def _on_goal_response(self, fut, seq):
         gh = fut.result()
         if not gh.accepted:
-            self.nav_done = True; self.nav_succeeded = False; return
+            if seq == self._nav_seq:
+                self.nav_done = True
+                self.nav_succeeded = False
+            return
         self._nav_goal_handle = gh
         gh.get_result_async().add_done_callback(
-            lambda f: (setattr(self, 'nav_succeeded', f.result().status == 4),
-                       setattr(self, 'nav_done', True)))
+            lambda f: self._on_nav_result(f, seq))
+
+    def _on_nav_result(self, fut, seq):
+        if seq != self._nav_seq:
+            return  # stale result from a cancelled/superseded goal
+        self.nav_succeeded = (fut.result().status == 4)
+        self.nav_done = True
 
     def _fallback_reactive(self):
         pose = self.node._lookup_pose()
@@ -154,24 +176,34 @@ class ReactivePilot:
             now = self.node.get_clock().now().nanoseconds / 1e9
             if self.nav_done:
                 if self.nav_succeeded:
-                    self._on_hop_reached(robot_pose)
+                    self._on_hop_reached()
                 else:
                     self._fallback_reactive()
             elif now > self.nav_deadline:
                 self._cancel_nav(); self._fallback_reactive()
             return
 
+        if robot_pose is None:
+            return
+
         # ---- Ported reactive state machine (maze_explorer.py:4429-4580) ----
         robot_x, robot_y, robot_yaw = robot_pose
         now = self.node.get_clock().now()
 
-        # Watchdog: hard timeout for the whole reactive drive.
+        # Watchdog: hard timeout for the whole reactive drive. An intentional
+        # back_out can legitimately take longer (reverse the full target_distance),
+        # so scale the limit by the expected reverse time in that case.
         if self.start_time is not None:
             elapsed = (now - self.start_time).nanoseconds / 1e9
-            if elapsed > self.max_seconds:
+            if self._reverse_is_backout:
+                effective_max = max(self.max_seconds,
+                                    self.target_distance / self.reverse_speed + 4.0)
+            else:
+                effective_max = self.max_seconds
+            if elapsed > effective_max:
                 self.node.get_logger().warn(
-                    'PILOT: watchdog timeout after %.1fs (state=%s) — aborting'
-                    % (elapsed, self.state))
+                    'PILOT: watchdog timeout after %.1fs (state=%s, limit=%.1fs) — aborting'
+                    % (elapsed, self.state, effective_max))
                 self._finish(WEDGED)
                 return
 
@@ -245,7 +277,7 @@ class ReactivePilot:
             if self.start_xy is not None:
                 dx = robot_x - self.start_xy[0]
                 dy = robot_y - self.start_xy[1]
-                distance_traveled = math.sqrt(dx * dx + dy * dy)
+                distance_traveled = math.hypot(dx, dy)
             else:
                 distance_traveled = 0.0
 
@@ -254,7 +286,7 @@ class ReactivePilot:
                 self.node.get_logger().info(
                     'PILOT: completed %.2fm / %.1fm'
                     % (distance_traveled, self.target_distance))
-                self._on_hop_reached(robot_pose)
+                self._on_hop_reached()
                 return
 
             # Safety: check laser ahead.
@@ -297,7 +329,7 @@ class ReactivePilot:
         # Unknown state → finish defensively.
         self._finish(WEDGED)
 
-    def _on_hop_reached(self, robot_pose):
+    def _on_hop_reached(self):
         self.node.cmd_vel_pub.publish(Twist())
         if self.queue:
             self.queue.pop(0)
@@ -312,6 +344,7 @@ class ReactivePilot:
                 self._nav_goal_handle.cancel_goal_async()
         except Exception:
             pass
+        self._nav_goal_handle = None
         self.nav_done = True; self.nav_succeeded = False
 
     def _finish(self, result):
