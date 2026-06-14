@@ -127,6 +127,7 @@ class TopoEdge:
     start_node_id: int
     end_node_id: int
     state: str = IN_PROGRESS
+    visit_count: int = 0
 
 
 class MazeTopology:
