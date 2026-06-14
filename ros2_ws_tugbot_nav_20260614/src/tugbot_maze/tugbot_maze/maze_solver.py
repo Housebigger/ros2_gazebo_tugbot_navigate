@@ -59,13 +59,13 @@ class MazeSolver(Node):
         self.max_goals = int(self.declare_parameter('max_goals', 400).value)
         self.startup_delay_sec = float(self.declare_parameter('startup_delay_sec', 3.0).value)
         self.use_frontier_coverage = bool(self.declare_parameter('use_frontier_coverage', True).value)
-        self.frontier_exit_bias = float(self.declare_parameter('frontier_exit_bias', 0.8).value)
+        self.frontier_exit_bias = float(self.declare_parameter('frontier_exit_bias', 0.5).value)
         self.min_frontier_size = int(self.declare_parameter('min_frontier_size', 4).value)
         self.max_failed_frontiers = int(self.declare_parameter('max_failed_frontiers', 8).value)
         self.max_coverage_done_retries = int(self.declare_parameter('max_coverage_done_retries', 3).value)
         self.exit_dash_cooldown_goals = int(self.declare_parameter('exit_dash_cooldown_goals', 5).value)
         self.exit_dash_nav_timeout_sec = float(self.declare_parameter('exit_dash_nav_timeout_sec', 40.0).value)
-        self.frontier_nav_timeout_sec = float(self.declare_parameter('frontier_nav_timeout_sec', 12.0).value)
+        self.frontier_nav_timeout_sec = float(self.declare_parameter('frontier_nav_timeout_sec', 18.0).value)
 
         self.action_client = ActionClient(self, NavigateToPose, self.action_name)
         # /map is latched by slam_toolbox/map_server (TRANSIENT_LOCAL); a plain
@@ -82,7 +82,7 @@ class MazeSolver(Node):
         self.scan_msg: Optional[LaserScan] = None
         self.brain = TremauxSolver(exit_xy=(self.exit_x, self.exit_y))
         self.pilot = ReactivePilot(self, self.action_client, nav_timeout_sec=self.goal_timeout_sec,
-                                   no_progress_sec=2.0, no_rot_sec=2.0)
+                                   no_progress_sec=3.0, no_rot_sec=3.0)
         self.goal_count = 0
         self.phase = 'startup'          # startup | entering | deciding | busy | done
         self.pending_action = None
