@@ -136,3 +136,22 @@ class TremauxSolver:
             return Action(REROUTE, path_xy=path, reason='reroute to nearest untried junction')
 
         return Action(DONE, reason='full coverage: no untried branch reachable')
+
+    def report_outcome(self, outcome: str) -> None:
+        """Called by the node after a pilot action completes without arriving
+        at a new node (wall confirmed, or wedged/timeout). SUCCESS is handled
+        implicitly by the next update() connecting the edge.
+        """
+        branch = self.active_branch
+        if branch is None:
+            return
+        if outcome == OUT_WALL:
+            branch.state = BRANCH_DEAD_END
+            self.active_branch = None
+        elif outcome == OUT_WEDGED:
+            branch.failures += 1
+            if branch.failures >= self.max_soft_failures:
+                branch.state = EXPLORED  # give up WITHOUT blacklisting the corridor
+            else:
+                branch.state = UNTRIED   # retry on a later visit
+            self.active_branch = None

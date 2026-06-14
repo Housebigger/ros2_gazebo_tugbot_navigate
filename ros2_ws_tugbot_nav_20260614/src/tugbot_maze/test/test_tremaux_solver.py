@@ -33,3 +33,56 @@ def test_first_update_at_junction_returns_explore():
     action = solver.update((0.0, 0.0), 0.0, local)
     assert action.kind == EXPLORE
     assert action.target_xy is not None
+
+
+def test_explored_branch_not_rechosen_after_traversal():
+    solver = TremauxSolver(exit_xy=(20.0, 18.0))
+    j = _local('junction', [
+        (0.0, (1.5, 0.0), 1.5),
+        (math.pi / 2, (0.0, 1.5), 1.5),
+        (-math.pi / 2, (0.0, -1.5), 1.5),
+    ])
+    first = solver.update((0.0, 0.0), 0.0, j)
+    solver.update(first.target_xy, first.yaw, _local('corridor', [
+        (first.yaw, (first.target_xy[0] + 1.0, first.target_xy[1]), 1.0),
+        (first.yaw + math.pi, (0.0, 0.0), 1.0),
+    ]))
+    second = solver.update((0.0, 0.0), 0.0, j)
+    assert second.kind == EXPLORE
+    assert second.target_xy != first.target_xy
+
+
+def test_dead_end_returns_back_out_toward_previous_node():
+    solver = TremauxSolver(exit_xy=(20.0, 18.0))
+    j = _local('junction', [
+        (0.0, (1.5, 0.0), 1.5),
+        (math.pi / 2, (0.0, 1.5), 1.5),
+        (-math.pi / 2, (0.0, -1.5), 1.5),
+    ])
+    a = solver.update((0.0, 0.0), 0.0, j)
+    back = solver.update(a.target_xy, a.yaw,
+                         _local('dead_end', [(a.yaw + math.pi, (0.0, 0.0), 1.0)]))
+    assert back.kind == BACK_OUT
+    assert math.hypot(back.target_xy[0], back.target_xy[1]) < 0.8
+
+
+def test_done_when_single_corridor_dead_ends_both_ways():
+    solver = TremauxSolver(exit_xy=(20.0, 18.0))
+    solver.update((0.0, 0.0), 0.0, _local('dead_end', [(0.0, (1.0, 0.0), 1.0)]))
+    final = solver.update((0.0, 0.0), 0.0, _local('dead_end', [(0.0, (1.0, 0.0), 1.0)]))
+    assert final.kind in (DONE, BACK_OUT)
+
+
+def test_report_outcome_wall_marks_branch_dead_end():
+    from tugbot_maze.tremaux_solver import OUT_WALL
+    solver = TremauxSolver(exit_xy=(20.0, 18.0))
+    j = _local('junction', [
+        (0.0, (1.5, 0.0), 1.5),
+        (math.pi / 2, (0.0, 1.5), 1.5),
+        (-math.pi / 2, (0.0, -1.5), 1.5),
+    ])
+    a = solver.update((0.0, 0.0), 0.0, j)
+    solver.report_outcome(OUT_WALL)
+    assert solver.active_branch is None
+    nxt = solver.update((0.0, 0.0), 0.0, j)
+    assert nxt.kind == EXPLORE and nxt.target_xy != a.target_xy
