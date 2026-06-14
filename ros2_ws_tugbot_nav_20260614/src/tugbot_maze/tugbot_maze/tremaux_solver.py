@@ -115,6 +115,22 @@ class TremauxSolver:
         self.topology.visit_node(node.node_id)
         self._set_branches(node, local)
 
+        # Mark the branch pointing back toward the node we just came from as
+        # EXPLORED, so the robot commits to forward exploration instead of
+        # retracing the edge it just traversed (the main cause of local
+        # oscillation). Genuine backtracking is handled by REROUTE / dead-end.
+        if (self.active_start_node_id is not None
+                and self.active_start_node_id != node.node_id
+                and self.active_start_node_id in self.topology.nodes):
+            prev = self.topology.nodes[self.active_start_node_id]
+            back_angle = math.atan2(prev.y - node.y, prev.x - node.x)
+            for b in node.branches:
+                if b.state == UNTRIED:
+                    delta = abs(math.atan2(math.sin(b.angle_rad - back_angle),
+                                           math.cos(b.angle_rad - back_angle)))
+                    if delta < math.radians(35):
+                        b.state = EXPLORED
+
         if local.kind == perception.DEAD_END:
             if edge is not None:
                 edge.visit_count = 2

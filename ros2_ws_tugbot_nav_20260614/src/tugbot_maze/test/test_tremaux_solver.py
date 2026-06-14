@@ -162,3 +162,27 @@ def test_report_outcome_success_marks_branch_explored_and_advances():
     nxt = solver.update((0.0, 0.0), 0.0, j)
     assert nxt.kind == EXPLORE
     assert nxt.target_xy != a.target_xy
+
+
+def test_came_from_branch_is_marked_explored_on_arrival():
+    solver = TremauxSolver(exit_xy=(20.0, 18.0))
+    j = _local('junction', [
+        (0.0, (1.5, 0.0), 1.5),
+        (math.pi / 2, (0.0, 1.5), 1.5),
+        (math.pi, (-1.5, 0.0), 1.5),
+    ])
+    solver.update((0.0, 0.0), 0.0, j)
+    # Arrive ~2 m east. The branch pointing back west (toward the origin we came
+    # from) must be EXPLORED, not offered as a fresh untried branch.
+    solver.update((2.0, 0.0), 0.0, _local('junction', [
+        (0.0, (3.5, 0.0), 1.5),          # forward (east)
+        (math.pi, (0.5, 0.0), 1.5),      # back (west, toward origin)
+        (math.pi / 2, (2.0, 1.5), 1.5),  # side (north)
+    ]))
+    node = min(solver.topology.nodes.values(),
+               key=lambda n: math.hypot(n.x - 2.0, n.y - 0.0))
+    west = [b for b in node.branches
+            if abs(math.atan2(math.sin(b.angle_rad - math.pi),
+                              math.cos(b.angle_rad - math.pi))) < 0.3]
+    assert west, 'expected a west-pointing branch at the arrival node'
+    assert west[0].state == 'explored'
