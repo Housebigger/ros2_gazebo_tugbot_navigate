@@ -79,10 +79,62 @@ class MazeSolver(Node):
         self.max_false_dead_end_resamples = int(self.declare_parameter('max_false_dead_end_resamples', 4).value)
         self._false_dead_end_count = 0
 
+        self._publish_maze_boundary_map()
+
         self.create_timer(0.1, self._reactive_tick)   # 10 Hz pilot
         self.create_timer(0.5, self._control_tick)     # 2 Hz brain
         self.start_time = self.get_clock().now()
         self.get_logger().info('maze_solver started (Trémaux autonomous).')
+
+    def _publish_maze_boundary_map(self) -> None:
+        """Publish a rectangular exterior boundary as a static OccupancyGrid on
+        /maze_boundary_map (transient-local). The Nav2 global_costmap's
+        maze_boundary_layer subscribes to this; without a publisher the costmap
+        never updates and every plan aborts ("no map received"). Exterior cells
+        are occupied (100), interior is unknown (-1) so SLAM's static_layer
+        provides the real walls; a bottom-left entrance gap stays open.
+        """
+        import numpy as np
+        resolution = 24.0 / 359.0
+        width, height = 360, 360
+        origin_x, origin_y = -0.989, -2.975
+        maze_x_min, maze_x_max = 0.0, 22.0
+        maze_y_min, maze_y_max = -1.5, 22.0
+        entrance_x_min, entrance_x_max = -0.5, 3.0
+        entrance_y_min, entrance_y_max = origin_y, -0.5
+
+        xs = np.arange(width) * resolution + origin_x
+        ys = np.arange(height) * resolution + origin_y
+        XX, YY = np.meshgrid(xs, ys)
+        outside = ((XX < maze_x_min) | (XX > maze_x_max) |
+                   (YY < maze_y_min) | (YY > maze_y_max))
+        in_entrance = ((XX >= entrance_x_min) & (XX <= entrance_x_max) &
+                       (YY >= entrance_y_min) & (YY <= entrance_y_max))
+        grid = np.full((height, width), -1, dtype=np.int8)
+        grid[outside & ~in_entrance] = 100
+
+        grid_msg = OccupancyGrid()
+        grid_msg.header.stamp = self.get_clock().now().to_msg()
+        grid_msg.header.frame_id = 'map'
+        grid_msg.info.resolution = resolution
+        grid_msg.info.width = width
+        grid_msg.info.height = height
+        grid_msg.info.origin.position.x = origin_x
+        grid_msg.info.origin.position.y = origin_y
+        grid_msg.info.origin.position.z = 0.0
+        grid_msg.info.origin.orientation.w = 1.0
+        grid_msg.data = grid.flatten().tolist()
+
+        self._boundary_map_pub = self.create_publisher(
+            OccupancyGrid, '/maze_boundary_map',
+            QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
+                       reliability=ReliabilityPolicy.RELIABLE,
+                       durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self._boundary_map_pub.publish(grid_msg)
+        blocked = int((grid == 100).sum())
+        self.get_logger().info(
+            'published maze boundary map (%dx%d, %d exterior cells blocked)'
+            % (width, height, blocked))
 
     @staticmethod
     def _map_qos_profile() -> QoSProfile:
@@ -209,6 +261,8 @@ class MazeSolver(Node):
         self.goal_count += 1
         self.pending_action = action
         self._publish_event('explore goal #%d kind=%s' % (self.goal_count, action.kind))
+        self.get_logger().info('explore goal #%d kind=%s reason=%s'
+                               % (self.goal_count, action.kind, action.reason))
         if action.kind == DONE:
             self.get_logger().warn('FAILED_EXHAUSTED: brain reports full coverage w/o exit')
             self._publish_event('FAILED_EXHAUSTED'); self.phase = 'done'; return
