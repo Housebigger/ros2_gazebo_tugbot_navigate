@@ -285,3 +285,64 @@ def test_coverage_goal_returns_none_when_fully_known():
     grid = build_grid(8, 8, default=0)          # everything free, nothing unknown
 
     assert coverage_goal(grid, robot_xy=(1.0, 1.0), exit_xy=(6.0, 6.0)) is None
+
+
+# --------------------------------------------------------------------------- #
+# 9. Max-clearance goal selection
+# --------------------------------------------------------------------------- #
+def test_goal_picks_max_clearance_cell():
+    """Within a frontier the goal must be the cell with the highest clearance,
+    not the nearest cell (which may be wall-adjacent).
+
+    Grid: 10x8 at resolution=0.5 m, default=unknown (-1).
+    Free cells  : (2,4),(3,4),(4,4),(5,4) -- a 4-cell horizontal row.
+    Occupied    : (1,4)                   -- left-hand wall.
+
+    All four free cells border unknown space (all other neighbours are either
+    free or unknown), so all four are frontier cells in a single cluster.
+
+    Clearance (nearest_obstacle_distance, unknown NOT obstacle, max_radius_m=0.8):
+      cell (2,4) world (1.25, 2.25): nearest occupied (1,4) at 0.5 m  → c = 0.5 m
+      cell (3,4) world (1.75, 2.25): nearest occupied (1,4) at 1.0 m  → c = 0.8 m (cap)
+      cell (4,4) world (2.25, 2.25): nearest occupied at > 0.8 m      → c = 0.8 m
+      cell (5,4) world (2.75, 2.25): nearest occupied at > 0.8 m      → c = 0.8 m
+
+    All four cells pass the basic world_point_has_clearance(0.35) check because
+    the occupied neighbour (1,4) is 0.5 m away, which is outside the 0.35 m disk.
+
+    Robot is placed closest to the wall-adjacent cell (2,4) so that old
+    nearest-first logic would wrongly return it.  New max-clearance logic must
+    return one of the open cells; the nearest-robot tiebreaker then picks (3,4).
+    """
+    grid = build_grid(
+        10, 8, resolution=0.5, default=-1,
+        free=[(2, 4), (3, 4), (4, 4), (5, 4)],
+        occupied=[(1, 4)],
+    )
+
+    cells = detect_frontier_cells(grid)
+    assert set(cells) == {(2, 4), (3, 4), (4, 4), (5, 4)}
+
+    frontiers = cluster_frontiers(cells, grid, min_size=4)
+    assert len(frontiers) == 1
+
+    # Sanity-check the clearance values the test relies on.
+    c_wall = grid.nearest_obstacle_distance(1.25, 2.25, max_radius_m=0.8, unknown_is_obstacle=False)
+    c_open = grid.nearest_obstacle_distance(1.75, 2.25, max_radius_m=0.8, unknown_is_obstacle=False)
+    assert c_open > c_wall, f"expected open cell clearance {c_open} > wall-adj {c_wall}"
+
+    # Robot is closest to the wall-adjacent cell (2,4) at world (1.25, 2.25).
+    robot = (0.75, 2.25)
+    exit_xy = (5.0, 2.25)
+
+    goal = select_frontier(frontiers, robot, exit_xy, grid, exit_bias=0.0)
+
+    # Wall-adjacent cell (2,4) at (1.25, 2.25) must NOT be the chosen goal.
+    assert goal is not None
+    assert goal != pytest.approx((1.25, 2.25)), (
+        "selected the wall-adjacent cell; expected a higher-clearance cell"
+    )
+    # Among the open cells (equal clearance), the nearest to robot is (3,4).
+    assert goal == pytest.approx((1.75, 2.25)), (
+        f"expected cell (3,4) at (1.75, 2.25) — nearest open cell; got {goal}"
+    )

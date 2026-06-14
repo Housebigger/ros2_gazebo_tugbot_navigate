@@ -97,22 +97,28 @@ def _best_goal_cell(
     grid: OccupancyGridView,
     clearance_m: float,
 ) -> Optional[Point]:
-    """World point of the frontier's clearance-valid cell nearest the robot, or None.
+    """World point of the frontier's highest-clearance valid cell, or None.
 
-    Frontier cells border unknown space, so ``unknown_is_safe=True`` -- only occupied
-    (or out-of-bounds) cells within the clearance disk disqualify a candidate.
+    Among cells that pass the basic robot-radius ``clearance_m`` validity check
+    (``unknown_is_safe=True`` -- frontiers legitimately border unknown), return the
+    cell whose obstacle distance is greatest (unknown NOT treated as obstacle, since
+    frontier cells are supposed to border unknown space), biasing the goal toward the
+    most open part of the frontier away from walls.  Distance to the robot is used as
+    a tiebreaker for equal clearance, then world coordinates for full determinism.
     """
-    best_point: Optional[Point] = None
-    best_dist: Optional[float] = None
+    candidates = []
     for cx, cy in frontier.cells:
         wx, wy = grid.cell_to_world(cx, cy)
         if not grid.world_point_has_clearance(wx, wy, clearance_m, unknown_is_safe=True):
             continue
+        c = grid.nearest_obstacle_distance(wx, wy, max_radius_m=0.8, unknown_is_obstacle=False)
         dist = math.dist(robot_xy, (wx, wy))
-        if best_dist is None or dist < best_dist or (dist == best_dist and (wx, wy) < best_point):
-            best_point = (wx, wy)
-            best_dist = dist
-    return best_point
+        # Sort key: highest clearance first (-c), nearest robot second, coords third.
+        candidates.append((-c, dist, wx, wy))
+    if not candidates:
+        return None
+    candidates.sort()
+    return (candidates[0][2], candidates[0][3])
 
 
 def select_frontier(
@@ -122,6 +128,7 @@ def select_frontier(
     grid: OccupancyGridView,
     *,
     clearance_m: float = 0.35,
+    goal_clearance_m: float = 0.45,
     exit_bias: float = 0.5,
     size_weight: float = 0.05,
     exclude: Tuple[Point, ...] = (),
@@ -134,6 +141,11 @@ def select_frontier(
         -distance_to_robot + exit_bias * exit_closeness_improvement + size_weight * size
     where distance_to_robot = dist(robot, goal) and
           exit_closeness_improvement = dist(robot, exit) - dist(goal, exit).
+
+    Within each frontier the goal is the highest-clearance valid cell (see
+    ``_best_goal_cell``).  ``goal_clearance_m`` is a soft preference that documents
+    the desired clearance budget; the implementation already prefers maximum clearance
+    so no hard threshold is applied.
 
     Frontiers whose returned GOAL is within ``exclude_radius_m`` of any excluded point
     (recently-failed frontiers) are skipped, as are frontiers without a clearance-valid
@@ -173,6 +185,7 @@ def coverage_goal(
     exit_xy: Point,
     *,
     clearance_m: float = 0.35,
+    goal_clearance_m: float = 0.45,
     min_frontier_size: int = 4,
     exit_bias: float = 0.5,
     exclude: Tuple[Point, ...] = (),
@@ -192,6 +205,7 @@ def coverage_goal(
         exit_xy,
         grid,
         clearance_m=clearance_m,
+        goal_clearance_m=goal_clearance_m,
         exit_bias=exit_bias,
         exclude=exclude,
     )
