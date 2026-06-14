@@ -192,6 +192,7 @@ global_costmap:
       track_unknown_space: true
       plugins:
       - static_layer
+      - maze_boundary_layer
       - obstacle_layer
       - inflation_layer
       obstacle_layer:
@@ -211,6 +212,11 @@ global_costmap:
       static_layer:
         plugin: nav2_costmap_2d::StaticLayer
         map_subscribe_transient_local: true
+      maze_boundary_layer:
+        plugin: nav2_costmap_2d::StaticLayer
+        map_topic: /maze_boundary_map
+        map_subscribe_transient_local: true
+        subscribe_to_updates: false
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         cost_scaling_factor: 3.0
