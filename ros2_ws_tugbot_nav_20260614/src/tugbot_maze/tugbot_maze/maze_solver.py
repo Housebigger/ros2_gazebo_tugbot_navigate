@@ -34,6 +34,7 @@ from tugbot_maze.tremaux_solver import (
 )
 from tugbot_maze.reactive_pilot import ReactivePilot, WALL_AHEAD, WEDGED
 from tugbot_maze.dead_end_classifier import is_true_dead_end
+from tugbot_maze import frontier_coverage
 
 
 class MazeSolver(Node):
@@ -57,6 +58,11 @@ class MazeSolver(Node):
         self.goal_timeout_sec = float(self.declare_parameter('goal_timeout_sec', 18.0).value)
         self.max_goals = int(self.declare_parameter('max_goals', 400).value)
         self.startup_delay_sec = float(self.declare_parameter('startup_delay_sec', 3.0).value)
+        self.use_frontier_coverage = bool(self.declare_parameter('use_frontier_coverage', True).value)
+        self.frontier_exit_bias = float(self.declare_parameter('frontier_exit_bias', 0.5).value)
+        self.min_frontier_size = int(self.declare_parameter('min_frontier_size', 4).value)
+        self.max_failed_frontiers = int(self.declare_parameter('max_failed_frontiers', 8).value)
+        self.max_coverage_done_retries = int(self.declare_parameter('max_coverage_done_retries', 3).value)
 
         self.action_client = ActionClient(self, NavigateToPose, self.action_name)
         # /map is latched by slam_toolbox/map_server (TRANSIENT_LOCAL); a plain
@@ -78,6 +84,9 @@ class MazeSolver(Node):
         self.pending_action = None
         self.max_false_dead_end_resamples = int(self.declare_parameter('max_false_dead_end_resamples', 4).value)
         self._false_dead_end_count = 0
+        self._failed_frontiers = []          # recent unreachable frontier goals (FIFO)
+        self._pending_frontier_goal = None   # frontier goal currently being driven
+        self._coverage_done_retries = 0      # consecutive 'no frontier, drive-to-exit' attempts
 
         self._publish_maze_boundary_map()
 
@@ -235,6 +244,43 @@ class MazeSolver(Node):
             self._decide(pose)
 
     def _decide(self, pose):
+        if self.use_frontier_coverage:
+            self._decide_frontier(pose)
+        else:
+            self._decide_tremaux(pose)
+
+    def _decide_frontier(self, pose):
+        goal = frontier_coverage.coverage_goal(
+            self.map_view, (pose[0], pose[1]), (self.exit_x, self.exit_y),
+            clearance_m=self.clearance_radius_m,
+            min_frontier_size=self.min_frontier_size,
+            exit_bias=self.frontier_exit_bias,
+            exclude=tuple(self._failed_frontiers))
+        if goal is None:
+            # No frontiers remain → whole reachable area mapped. Head to the exit.
+            self._coverage_done_retries += 1
+            if self._coverage_done_retries > self.max_coverage_done_retries:
+                self.get_logger().warn('FAILED_EXHAUSTED: coverage complete but exit unreachable')
+                self._publish_event('FAILED_EXHAUSTED'); self.phase = 'done'; return
+            self.goal_count += 1
+            self._publish_event('explore goal #%d kind=coverage_done' % self.goal_count)
+            self.get_logger().info('coverage complete — driving to exit (attempt %d)'
+                                   % self._coverage_done_retries)
+            self._pending_frontier_goal = (self.exit_x, self.exit_y)
+            self.phase = 'busy'
+            self.pilot.drive_to((self.exit_x, self.exit_y))
+            return
+        self._coverage_done_retries = 0
+        self.goal_count += 1
+        self._pending_frontier_goal = goal
+        self._publish_event('explore goal #%d kind=frontier' % self.goal_count)
+        self.get_logger().info('frontier goal #%d -> (%.2f, %.2f) dist=%.2f'
+                               % (self.goal_count, goal[0], goal[1],
+                                  math.hypot(goal[0] - pose[0], goal[1] - pose[1])))
+        self.phase = 'busy'
+        self.pilot.drive_to(goal)
+
+    def _decide_tremaux(self, pose):
         local = perception.classify_local_topology(
             self.map_view, pose, lookahead_m=self.lookahead_m,
             clearance_radius_m=self.clearance_radius_m,
@@ -278,6 +324,25 @@ class MazeSolver(Node):
             self.pilot.drive_to(action.target_xy)
 
     def _handle_result(self):
+        if self.use_frontier_coverage:
+            self._handle_result_frontier()
+        else:
+            self._handle_result_tremaux()
+
+    def _handle_result_frontier(self):
+        res = self.pilot.result
+        self.pilot.result = None
+        if res in (WALL_AHEAD, WEDGED) and self._pending_frontier_goal is not None:
+            # Frontier goal unreachable → exclude it briefly so we don't re-pick it.
+            self._failed_frontiers.append(self._pending_frontier_goal)
+            if len(self._failed_frontiers) > self.max_failed_frontiers:
+                self._failed_frontiers.pop(0)
+            self.get_logger().info('frontier goal failed (%s) — excluding %s'
+                                   % (res, self._pending_frontier_goal))
+        self._pending_frontier_goal = None
+        self.phase = 'deciding'
+
+    def _handle_result_tremaux(self):
         res = self.pilot.result
         self.pilot.result = None
         act = self.pending_action
