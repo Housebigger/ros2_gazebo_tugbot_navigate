@@ -28,6 +28,7 @@ setup(
             'maze_goal_monitor = tugbot_maze.maze_goal_monitor:main',
             'maze_image_to_world = tugbot_maze.maze_image_to_world:main',
             'maze_explorer = tugbot_maze.maze_explorer:main',
+            'maze_solver = tugbot_maze.maze_solver:main',
             'phase64_5_first_dispatch_visual_overlay = tugbot_maze.phase64_5_first_dispatch_visual_overlay:main',
             'phase67_goal1_timeout_visual_overlay = tugbot_maze.phase67_goal1_timeout_visual_overlay:main',
         ],
