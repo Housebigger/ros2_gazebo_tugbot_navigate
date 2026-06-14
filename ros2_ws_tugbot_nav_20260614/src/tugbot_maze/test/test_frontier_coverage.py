@@ -5,6 +5,7 @@ detection, clustering, goal selection (nearest / exit-bias / clearance / exclude
 and the end-to-end coverage_goal convenience wrapper.
 """
 
+import math
 import sys
 from pathlib import Path
 
@@ -217,9 +218,9 @@ def test_frontier_without_clearance_is_skipped():
 # 7. Exclude list
 # --------------------------------------------------------------------------- #
 def test_excluded_frontier_is_skipped():
+    """Excluding the returned GOAL (not the centroid) suppresses that frontier."""
     grid, pocket_l, pocket_r = two_frontier_grid()
     frontiers = cluster_frontiers(detect_frontier_cells(grid), grid, min_size=4)
-    left = min(frontiers, key=lambda f: f.centroid[0])    # pocket L (smaller x)
 
     robot = (2.0, 2.5)          # nearest to L
     exit_xy = (9.5, 9.5)
@@ -228,11 +229,41 @@ def test_excluded_frontier_is_skipped():
     goal_plain = select_frontier(frontiers, robot, exit_xy, grid, exit_bias=0.0)
     assert goal_plain == pytest.approx((1.5, 2.5))
 
-    # Excluding L's centroid (within default radius) forces selection of R.
+    # Excluding L's returned goal (goal-based, not centroid-based) forces selection of R.
     goal_excl = select_frontier(
-        frontiers, robot, exit_xy, grid, exit_bias=0.0, exclude=(left.centroid,)
+        frontiers, robot, exit_xy, grid, exit_bias=0.0, exclude=(goal_plain,)
     )
     assert goal_excl == pytest.approx((8.5, 5.5))
+
+
+def test_goal_based_exclusion_uses_returned_goal():
+    """Goal-based exclusion: capture G from first call; second call must avoid G.
+
+    This is the regression guard for the centroid-vs-goal bug: the node adds the
+    failed GOAL to the exclude list; select_frontier must suppress any frontier
+    whose returned goal (not its centroid) is within exclude_radius_m of G.
+    """
+    grid, _, _ = two_frontier_grid()
+    frontiers = cluster_frontiers(detect_frontier_cells(grid), grid, min_size=4)
+    assert len(frontiers) == 2
+
+    robot = (2.0, 2.5)
+    exit_xy = (9.5, 9.5)
+    excl_r = 1.2          # default exclude_radius_m
+
+    # First call: get the preferred goal G (nearest frontier wins with exit_bias=0).
+    goal_g = select_frontier(frontiers, robot, exit_xy, grid, exit_bias=0.0)
+    assert goal_g is not None
+
+    # Second call: exclude G → returned goal must be far enough from G.
+    goal_after_excl = select_frontier(
+        frontiers, robot, exit_xy, grid, exit_bias=0.0,
+        exclude=(goal_g,), exclude_radius_m=excl_r,
+    )
+    assert goal_after_excl is not None, "expected fallback to second frontier"
+    assert math.hypot(goal_after_excl[0] - goal_g[0], goal_after_excl[1] - goal_g[1]) > excl_r, (
+        "returned goal is still within exclude_radius_m of the excluded point"
+    )
 
 
 # --------------------------------------------------------------------------- #

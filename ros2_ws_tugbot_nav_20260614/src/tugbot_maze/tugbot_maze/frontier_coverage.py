@@ -125,7 +125,7 @@ def select_frontier(
     exit_bias: float = 0.5,
     size_weight: float = 0.05,
     exclude: Tuple[Point, ...] = (),
-    exclude_radius_m: float = 1.0,
+    exclude_radius_m: float = 1.2,
 ) -> Optional[Point]:
     """Choose the best reachable frontier GOAL (a clearance-valid world point near a
     frontier), or None if there are no usable frontiers (coverage complete).
@@ -135,20 +135,22 @@ def select_frontier(
     where distance_to_robot = dist(robot, goal) and
           exit_closeness_improvement = dist(robot, exit) - dist(goal, exit).
 
-    Frontiers whose centroid is within ``exclude_radius_m`` of any excluded point
+    Frontiers whose returned GOAL is within ``exclude_radius_m`` of any excluded point
     (recently-failed frontiers) are skipped, as are frontiers without a clearance-valid
-    cell. Returns the goal of the highest-scoring frontier, or None.
+    cell. The exclusion is tested against the actual returned goal (not the cluster
+    centroid), so a failed goal is reliably suppressed even when goal != centroid.
+    Returns the goal of the highest-scoring frontier, or None.
     """
     robot_to_exit = math.dist(robot_xy, exit_xy)
     best_goal: Optional[Point] = None
     best_score: Optional[float] = None
 
     for frontier in frontiers:
-        # Skip recently-failed frontiers (centroid near an excluded point).
-        if any(math.dist(frontier.centroid, ex) <= exclude_radius_m for ex in exclude):
-            continue
         goal = _best_goal_cell(frontier, robot_xy, grid, clearance_m)
         if goal is None:
+            continue
+        # Skip recently-failed frontiers (returned goal near an excluded point).
+        if any(math.hypot(goal[0] - ex[0], goal[1] - ex[1]) <= exclude_radius_m for ex in exclude):
             continue
 
         distance_to_robot = math.dist(robot_xy, goal)
