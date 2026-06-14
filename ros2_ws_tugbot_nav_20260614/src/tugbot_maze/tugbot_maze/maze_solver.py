@@ -30,9 +30,9 @@ from tugbot_maze.grid_utils import OccupancyGridInfo, OccupancyGridView
 from tugbot_maze import maze_perception as perception
 from tugbot_maze.tremaux_solver import (
     TremauxSolver, EXPLORE, REROUTE, BACK_OUT, DONE,
-    OUT_SUCCESS, OUT_WALL, OUT_WEDGED,
+    OUT_WALL, OUT_WEDGED,
 )
-from tugbot_maze.reactive_pilot import ReactivePilot, SUCCESS, WALL_AHEAD, WEDGED
+from tugbot_maze.reactive_pilot import ReactivePilot, WALL_AHEAD, WEDGED
 from tugbot_maze.dead_end_classifier import is_true_dead_end
 
 
@@ -76,7 +76,8 @@ class MazeSolver(Node):
         self.goal_count = 0
         self.phase = 'startup'          # startup | entering | deciding | busy | done
         self.pending_action = None
-        self.entered = False
+        self.max_false_dead_end_resamples = int(self.declare_parameter('max_false_dead_end_resamples', 4).value)
+        self._false_dead_end_count = 0
 
         self.create_timer(0.1, self._reactive_tick)   # 10 Hz pilot
         self.create_timer(0.5, self._control_tick)     # 2 Hz brain
@@ -136,9 +137,9 @@ class MazeSolver(Node):
     def _reactive_tick(self):
         if not self.pilot.is_active():
             return
-        pose = self._lookup_pose()
-        if pose is not None:
-            self.pilot.tick(pose)
+        # Pass pose even if None — the pilot runs its elapsed-watchdog regardless,
+        # so a TF dropout during a drive can't pin us active forever.
+        self.pilot.tick(self._lookup_pose())
 
     def _control_tick(self):
         pose = self._lookup_pose()
@@ -149,6 +150,7 @@ class MazeSolver(Node):
                 self.phase = 'done'
                 self.get_logger().info('EXIT_REACHED (maze_solver)')
                 self._publish_event('EXIT_REACHED')
+                self.cmd_vel_pub.publish(Twist())   # stop the robot at the exit
             return
         if self.phase == 'done':
             return
@@ -169,7 +171,6 @@ class MazeSolver(Node):
                 self.pilot.reactive_drive(self.entrance_yaw, self.entry_direct_distance_m)
                 return
             self.pilot.result = None
-            self.entered = True
             self.phase = 'deciding'
             return
 
@@ -188,7 +189,22 @@ class MazeSolver(Node):
         )
         if local.kind == perception.DEAD_END and not is_true_dead_end(
                 local.kind, self._forward_min_range()):
-            return  # false alarm: re-sample next tick instead of condemning it
+            # Map says DEAD_END (corridor ahead still UNKNOWN in SLAM) but the live
+            # scan reads open ahead. Re-sample a few times in case the map fills in;
+            # if it persists, the robot is frozen in a corridor — nudge forward to
+            # force SLAM to map the ahead-region and break the tie. The scan has
+            # already confirmed >= ~1.36 m clearance, so a short reactive push is safe.
+            self._false_dead_end_count += 1
+            if self._false_dead_end_count < self.max_false_dead_end_resamples:
+                return
+            self.get_logger().warn(
+                'false DEAD_END x%d (map unknown ahead, scan open) — nudging forward'
+                % self._false_dead_end_count)
+            self._false_dead_end_count = 0
+            self.phase = 'busy'
+            self.pilot.reactive_drive(pose[2], 0.6)
+            return
+        self._false_dead_end_count = 0   # reset on any real decision
         action = self.brain.update((pose[0], pose[1]), pose[2], local)
         self.goal_count += 1
         self.pending_action = action
@@ -198,6 +214,8 @@ class MazeSolver(Node):
             self._publish_event('FAILED_EXHAUSTED'); self.phase = 'done'; return
         self.phase = 'busy'
         if action.kind == BACK_OUT:
+            # Fixed reverse with laser safety; intentionally ignores action.target_xy
+            # (the pilot reverses a set distance rather than planning to prev_xy).
             self.pilot.back_out(self.goal_step_m, pose)
         elif action.kind == REROUTE:
             self.pilot.follow_path(action.path_xy[1:])   # skip the current node

@@ -183,18 +183,13 @@ class ReactivePilot:
                 self._cancel_nav(); self._fallback_reactive()
             return
 
-        if robot_pose is None:
-            return
-
-        # ---- Ported reactive state machine (maze_explorer.py:4429-4580) ----
-        robot_x, robot_y, robot_yaw = robot_pose
-        now = self.node.get_clock().now()
-
         # Watchdog: hard timeout for the whole reactive drive. An intentional
         # back_out can legitimately take longer (reverse the full target_distance),
-        # so scale the limit by the expected reverse time in that case.
+        # so scale the limit by the expected reverse time in that case. Runs BEFORE
+        # the pose guard so a TF dropout mid-drive can't pin the pilot active forever
+        # (it needs only the clock + target_distance/reverse_speed, not the pose).
         if self.start_time is not None:
-            elapsed = (now - self.start_time).nanoseconds / 1e9
+            elapsed = (self.node.get_clock().now() - self.start_time).nanoseconds / 1e9
             if self._reverse_is_backout:
                 effective_max = max(self.max_seconds,
                                     self.target_distance / self.reverse_speed + 4.0)
@@ -206,6 +201,13 @@ class ReactivePilot:
                     % (elapsed, self.state, effective_max))
                 self._finish(WEDGED)
                 return
+
+        if robot_pose is None:
+            return
+
+        # ---- Ported reactive state machine (maze_explorer.py:4429-4580) ----
+        robot_x, robot_y, robot_yaw = robot_pose
+        now = self.node.get_clock().now()
 
         if self.state == 'backup':
             # Reverse to recover. Two uses, selected by _reverse_is_backout:
