@@ -105,3 +105,28 @@ class MazeSim:
         rng = t.min(axis=1)                                       # (B,)
         rng = np.clip(rng - self.wall_half_thickness_m, 0.0, max_range)
         return rng.tolist(), angle_min, angle_inc
+
+    def _point_seg_dists(self, x, y):
+        if self.segs.shape[0] == 0:
+            return np.empty((0,))
+        p = np.array([x, y])
+        ap = p[None, :] - self._a                                 # (S,2)
+        ee = np.sum(self._e * self._e, axis=1)                    # (S,)
+        t = np.where(ee > 1e-12, np.sum(ap * self._e, axis=1) / np.maximum(ee, 1e-12), 0.0)
+        t = np.clip(t, 0.0, 1.0)
+        proj = self._a + t[:, None] * self._e                     # (S,2)
+        return np.linalg.norm(p[None, :] - proj, axis=1)          # (S,)
+
+    def collides(self, x, y) -> bool:
+        d = self._point_seg_dists(x, y)
+        if d.size == 0:
+            return False
+        return bool(np.any(d < self.robot_radius_m + self.wall_half_thickness_m))
+
+    def step(self, v, w, dt):
+        nx = self.x + v * math.cos(self.yaw) * dt
+        ny = self.y + v * math.sin(self.yaw) * dt
+        if not self.collides(nx, ny):
+            self.x, self.y = nx, ny
+        # Rotation always applies (turning in place is safe; lets TURN_AWAY recover).
+        self.yaw = math.atan2(math.sin(self.yaw + w * dt), math.cos(self.yaw + w * dt))
