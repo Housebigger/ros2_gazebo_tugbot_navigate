@@ -103,8 +103,10 @@ Control-loop integration:
   `ranges` before `sectorize`. If pose is momentarily unavailable, skip fusion that
   tick (harmless — the seal is a safety net, not the only thing keeping it inside once
   it commits to an interior wall).
-- New params: `entrance_seal_enabled` (default `true`), seal endpoints
-  (`seal_x0,seal_y0,seal_x1,seal_y1`, defaults from `entrance_seal_segment`).
+- New params: `entrance_seal_enabled` (default `true`) and semantic seal geometry
+  `seal_center_x` / `seal_center_y` / `seal_width_m` / `seal_side` (defaults `0.95`, `0.0`,
+  `2.072423`, `left`), fed through `entrance_seal_segment`. (Chosen over raw endpoints so a
+  partial launch override cannot garble the segment — see the Implementation outcome below.)
 
 `_sectors()` gains an optional fused-ranges path; the `WallFollower` policy and
 `sectorize` are unchanged.
@@ -176,3 +178,14 @@ Update the default `follow_side` in: `wall_follow_solver.py` param default, the 
 - Changing the Gazebo world or the robot spawn pose (the perception seal makes physical
   world edits unnecessary).
 - The `20260522` GCN solver (already accepted; it follows a known interior route).
+
+## Implementation outcome (2026-06-15)
+
+Implemented via subagent-driven TDD. Offline guarantee (sealed): left reaches the
+exit in 5595 sim-steps, right in 9320, **both with 0 samples outside the outer-wall
+box**; the three start-perturbations are robust on the sealed left hand. `follow_side`
+stays `left` (the faster legitimate hand) — it did NOT flip to `right` as the design
+guessed, because the seal converts left from a 1611-exterior-sample cheat into a clean
+interior solve. The live solver arms the seal on the entering→follow transition and
+fuses it into `/scan` with the same geometry. Gazebo re-validation: see the re-run
+trajectory plot (0 samples outside the box, EXIT_REACHED from the interior).
