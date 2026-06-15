@@ -121,6 +121,8 @@ class WallFollower:
         if state != self.state:
             self.state = state
             self._ticks_in_state = 0
+            if state == State.FOLLOW:
+                self._prev_err = 0.0
 
     def update(self, s: Sectors) -> Command:
         self._ticks_in_state += 1
