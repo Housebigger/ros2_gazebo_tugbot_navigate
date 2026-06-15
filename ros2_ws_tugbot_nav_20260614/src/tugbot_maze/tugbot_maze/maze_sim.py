@@ -1,6 +1,7 @@
 """Test-only 2-D maze simulator: a vectorized raycaster + unicycle integrator
-over the REAL 20260528 wall segments, used to prove the wall-follower reaches the
-exit offline and to select the faster hand. Not imported by any ROS node.
+over the REAL 20260528 wall segments. Offline proof ground for the maze solvers:
+the wall-follower's exit-reaching guarantee, and the flood-fill solver's cell-edge
+model (`ground_truth_edge_open`) + inertia-aware locomotion. Not imported by any ROS node.
 
 px -> map-frame transform for the scaled2x 20260528 world (verified three ways:
 derivation, entrance gap, exit gap):
@@ -71,9 +72,23 @@ def outer_boundary_box(path: Optional[str] = None) -> Tuple[float, float, float,
     return (min(xs), max(xs), min(ys), max(ys))
 
 
+def ground_truth_edge_open(sim: "MazeSim", a, b, samples: int = 10) -> bool:
+    """True if the robot can traverse from cell-center a to cell-center b without
+    colliding (samples the straight connector against the real wall segments).
+    a, b are (cx, cy) cells with centers at (2*cx, 2*cy)."""
+    ax, ay = 2.0 * a[0], 2.0 * a[1]
+    bx, by = 2.0 * b[0], 2.0 * b[1]
+    for i in range(samples + 1):
+        t = i / samples
+        if sim.collides(ax + (bx - ax) * t, ay + (by - ay) * t):
+            return False
+    return True
+
+
 class MazeSim:
     def __init__(self, segments, start_xy, start_yaw, *, robot_radius_m=0.35,
-                 wall_half_thickness_m=0.12, max_range_m=12.0):
+                 wall_half_thickness_m=0.12, max_range_m=12.0, inertia=False,
+                 v_max=0.5, w_max=0.5, lin_accel=0.5, ang_accel=0.8):
         self.segs = np.asarray(segments, dtype=float).reshape(-1, 4)
         self.x = float(start_xy[0])
         self.y = float(start_xy[1])
@@ -88,6 +103,13 @@ class MazeSim:
         else:
             self._a = np.empty((0, 2))
             self._e = np.empty((0, 2))
+        self.inertia = inertia
+        self.v_max = v_max
+        self.w_max = w_max
+        self.lin_accel = lin_accel
+        self.ang_accel = ang_accel
+        self.v_cur = 0.0
+        self.w_cur = 0.0
 
     @property
     def pose(self) -> Tuple[float, float, float]:
@@ -147,6 +169,12 @@ class MazeSim:
         return bool(np.any(d < self.robot_radius_m + self.wall_half_thickness_m))
 
     def step(self, v, w, dt):
+        if self.inertia:
+            v_cmd = max(-self.v_max, min(self.v_max, v))
+            w_cmd = max(-self.w_max, min(self.w_max, w))
+            self.v_cur += max(-self.lin_accel * dt, min(self.lin_accel * dt, v_cmd - self.v_cur))
+            self.w_cur += max(-self.ang_accel * dt, min(self.ang_accel * dt, w_cmd - self.w_cur))
+            v, w = self.v_cur, self.w_cur
         nx = self.x + v * math.cos(self.yaw) * dt
         ny = self.y + v * math.sin(self.yaw) * dt
         if not self.collides(nx, ny):
