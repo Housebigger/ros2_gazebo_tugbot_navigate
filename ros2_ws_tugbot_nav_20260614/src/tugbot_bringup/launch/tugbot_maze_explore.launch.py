@@ -265,7 +265,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_composition', default_value='False', description='Use Nav2 composed bringup.'),
         DeclareLaunchArgument('use_respawn', default_value='False', description='Respawn Nav2 nodes if they crash.'),
         DeclareLaunchArgument('log_level', default_value='info', description='Nav2 log level.'),
-        DeclareLaunchArgument('explorer_type', default_value='maze_dfs', description='Explorer implementation: maze_dfs, frontier, tremaux, or wall_follower.'),
+        DeclareLaunchArgument('explorer_type', default_value='maze_dfs', description='Explorer implementation: maze_dfs, frontier, tremaux, wall_follower, or flood_fill.'),
         DeclareLaunchArgument('follow_side', default_value='left', description='Wall-follower hand for explorer_type:=wall_follower: left or right. The maze_sim guarantee proof selected left as faster and robust.'),
         DeclareLaunchArgument('exploration_strategy', default_value='perimeter_then_frontier', description='Fallback inherited 0514 frontier/perimeter strategy when explorer_type:=frontier.'),
         DeclareLaunchArgument('max_goals', default_value='350', description='Maximum exploration goals.'),

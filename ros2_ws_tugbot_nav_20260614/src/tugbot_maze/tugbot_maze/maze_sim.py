@@ -19,6 +19,8 @@ from typing import List, Optional, Tuple
 import numpy as np
 import yaml
 
+from tugbot_maze.flood_fill_brain import CELL_SIZE_M
+
 Segment = Tuple[float, float, float, float]   # (x0, y0, x1, y1), map frame
 
 _PX_SCALE = 24.0 / 359.0
@@ -75,9 +77,9 @@ def outer_boundary_box(path: Optional[str] = None) -> Tuple[float, float, float,
 def ground_truth_edge_open(sim: "MazeSim", a, b, samples: int = 10) -> bool:
     """True if the robot can traverse from cell-center a to cell-center b without
     colliding (samples the straight connector against the real wall segments).
-    a, b are (cx, cy) cells with centers at (2*cx, 2*cy)."""
-    ax, ay = 2.0 * a[0], 2.0 * a[1]
-    bx, by = 2.0 * b[0], 2.0 * b[1]
+    a, b are (cx, cy) cells with centers at (CELL_SIZE_M*cx, CELL_SIZE_M*cy)."""
+    ax, ay = CELL_SIZE_M * a[0], CELL_SIZE_M * a[1]
+    bx, by = CELL_SIZE_M * b[0], CELL_SIZE_M * b[1]
     for i in range(samples + 1):
         t = i / samples
         if sim.collides(ax + (bx - ax) * t, ay + (by - ay) * t):
