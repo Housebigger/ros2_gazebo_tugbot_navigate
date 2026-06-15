@@ -1,6 +1,8 @@
+import math
 import pytest
 from tugbot_maze.wall_follow_control import (
-    exit_reached, entering_done, StallWatchdog, entrance_seal_segment)
+    exit_reached, entering_done, StallWatchdog,
+    entrance_seal_segment, fuse_virtual_segment)
 
 
 def test_exit_reached_within_radius():
@@ -59,3 +61,39 @@ def test_entrance_seal_segment_top_is_horizontal():
 def test_entrance_seal_segment_bad_side_raises():
     with pytest.raises(ValueError):
         entrance_seal_segment((0.0, 0.0), 1.0, 'sideways')
+
+
+def test_fuse_virtual_segment_beam_hits_seal():
+    # single beam pointing west (yaw=pi, beam angle 0) -> hits the seal at x=0.95
+    seg = (0.95, -1.0, 0.95, 1.0)
+    fused = fuse_virtual_segment([12.0], 0.0, 0.0, (2.0, 0.0, math.pi), seg,
+                                 wall_half_thickness_m=0.12, max_range=12.0)
+    assert fused[0] == pytest.approx(0.93, abs=1e-6)   # 1.05 - 0.12
+
+
+def test_fuse_virtual_segment_beam_pointing_away_unchanged():
+    # beam pointing east (yaw=0) -> seal is behind the ray -> range unchanged
+    seg = (0.95, -1.0, 0.95, 1.0)
+    fused = fuse_virtual_segment([5.0], 0.0, 0.0, (2.0, 0.0, 0.0), seg)
+    assert fused[0] == pytest.approx(5.0)
+
+
+def test_fuse_virtual_segment_keeps_nearer_real_obstacle():
+    # a real return at 0.5 m is nearer than the seal (0.93) -> keep 0.5
+    seg = (0.95, -1.0, 0.95, 1.0)
+    fused = fuse_virtual_segment([0.5], 0.0, 0.0, (2.0, 0.0, math.pi), seg)
+    assert fused[0] == pytest.approx(0.5)
+
+
+def test_fuse_virtual_segment_nonfinite_real_uses_seal():
+    seg = (0.95, -1.0, 0.95, 1.0)
+    fused = fuse_virtual_segment([float('inf')], 0.0, 0.0, (2.0, 0.0, math.pi), seg)
+    assert fused[0] == pytest.approx(0.93, abs=1e-6)
+
+
+def test_fuse_virtual_segment_parallel_beam_no_crash():
+    # beam pointing +y (up); the seal segment is also vertical -> denom ~= 0 ->
+    # guarded (|denom| <= 1e-12), so no crash and the range is unchanged.
+    seg = (0.95, -1.0, 0.95, 1.0)
+    fused = fuse_virtual_segment([5.0], math.pi / 2, 0.0, (2.0, 0.0, 0.0), seg)
+    assert fused[0] == pytest.approx(5.0)
