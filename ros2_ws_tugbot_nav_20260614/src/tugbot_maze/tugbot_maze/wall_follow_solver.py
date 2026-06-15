@@ -1,7 +1,7 @@
 """Thin ROS 2 node: reactive wall-following autonomous maze solver.
 
 All control is delegated to the ROS-free `WallFollower` policy; this node owns
-only ROS plumbing (scan subscription, TF pose, a 10 Hz control timer, a 5 Hz DIAG
+only ROS plumbing (scan subscription, TF pose, a 10 Hz control timer, a 0.2 Hz DIAG (every 5 s)
 timer) plus entry, stall recovery, and the exit self-check. The control loop needs
 only /scan; SLAM (map->base_link TF) is used solely for the exit distance check.
 
