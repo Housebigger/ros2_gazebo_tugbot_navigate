@@ -177,6 +177,26 @@ def generate_launch_description():
         }],
     )
 
+    wall_follow_solver_node = Node(
+        package='tugbot_maze',
+        executable='wall_follow_solver',
+        name='wall_follow_solver',
+        output='screen',
+        condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'wall_follower'"])),
+        parameters=[{
+            'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
+            'scan_topic': '/scan',
+            'base_frame': 'base_link',
+            'map_frame': 'map',
+            'goal_events_topic': LaunchConfiguration('goal_events_topic'),
+            'exit_x': ParameterValue(LaunchConfiguration('exit_x'), value_type=float),
+            'exit_y': ParameterValue(LaunchConfiguration('exit_y'), value_type=float),
+            'exit_radius': ParameterValue(LaunchConfiguration('exit_radius'), value_type=float),
+            'entry_direct_distance_m': ParameterValue(LaunchConfiguration('entry_direct_distance_m'), value_type=float),
+            'follow_side': LaunchConfiguration('follow_side'),
+        }],
+    )
+
     frontier_explorer = Node(
         package='tugbot_exploration',
         executable='frontier_explorer',
@@ -238,7 +258,8 @@ def generate_launch_description():
         DeclareLaunchArgument('use_composition', default_value='False', description='Use Nav2 composed bringup.'),
         DeclareLaunchArgument('use_respawn', default_value='False', description='Respawn Nav2 nodes if they crash.'),
         DeclareLaunchArgument('log_level', default_value='info', description='Nav2 log level.'),
-        DeclareLaunchArgument('explorer_type', default_value='maze_dfs', description='Explorer implementation: maze_dfs, frontier, or tremaux.'),
+        DeclareLaunchArgument('explorer_type', default_value='maze_dfs', description='Explorer implementation: maze_dfs, frontier, tremaux, or wall_follower.'),
+        DeclareLaunchArgument('follow_side', default_value='left', description='Wall-follower hand for explorer_type:=wall_follower: left or right. The maze_sim guarantee proof selected left as faster and robust.'),
         DeclareLaunchArgument('exploration_strategy', default_value='perimeter_then_frontier', description='Fallback inherited 0514 frontier/perimeter strategy when explorer_type:=frontier.'),
         DeclareLaunchArgument('max_goals', default_value='350', description='Maximum exploration goals.'),
         DeclareLaunchArgument('enable_cleanup_mode', default_value='true', description='Enable inherited frontier residual unknown cleanup.'),
@@ -299,6 +320,6 @@ def generate_launch_description():
         DeclareLaunchArgument('corridor_max_nav2_fails', default_value='6', description='GCN: max Nav2 failures per corridor before declaring it exhausted.'),
         DeclareLaunchArgument('corridor_max_reactive', default_value='5', description='GCN: max reactive drive attempts per corridor.'),
         maze_slam_nav_launch,
-        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node]),
+        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node]),
         TimerAction(period=14.0, actions=[maze_goal_monitor]),
     ])
