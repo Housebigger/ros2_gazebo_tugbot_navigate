@@ -92,8 +92,8 @@ class WallFollower:
     """
 
     def __init__(self, *, target_wall_m=0.6, front_block_m=0.7, wall_lost_m=1.2,
-                 engage_m=1.0, cruise_v=0.3, corner_v=0.18, corner_w=0.6,
-                 turn_w=0.7, w_max=0.8, kp=1.5, kd=0.4, follow_side='right',
+                 engage_m=1.0, cruise_v=0.3, corner_v=1.0, corner_w=0.8,
+                 turn_w=2.2, w_max=0.8, kp=1.5, kd=0.4, follow_side='right',
                  min_state_ticks=2):
         if follow_side not in ('right', 'left'):
             raise ValueError("follow_side must be 'right' or 'left'")
