@@ -51,4 +51,20 @@ def test_sectorize_sanitizes_inf_nan_and_nonpositive():
 def test_sectorize_clamps_to_max_range():
     ranges, amin, ainc = _ranges_at(lambda ang: 99.0)
     s = sectorize(ranges, amin, ainc, 'right', max_range=12.0)
-    assert s.front == 12.0
+    assert s.front == 12.0 and s.side == 12.0 and s.front_side == 12.0
+
+
+def test_sectorize_invalid_follow_side_raises():
+    with pytest.raises(ValueError):
+        sectorize([1.0], -math.pi, math.pi, 'center')
+
+
+def test_sectorize_front_side_window_right_hand():
+    # Wall close at -45 deg (right-forward diagonal) at 1.0 m.
+    def a2r(ang):
+        return 1.0 if abs(math.atan2(math.sin(ang + math.pi / 4),
+                                     math.cos(ang + math.pi / 4))) <= math.radians(10) else 5.0
+    ranges, amin, ainc = _ranges_at(a2r)
+    s = sectorize(ranges, amin, ainc, 'right')
+    assert s.front_side == pytest.approx(1.0, abs=1e-6)
+    assert s.front == pytest.approx(5.0, abs=1e-6)
