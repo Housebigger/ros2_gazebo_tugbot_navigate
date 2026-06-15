@@ -92,8 +92,8 @@ class WallFollower:
     """
 
     def __init__(self, *, target_wall_m=0.6, front_block_m=0.7, wall_lost_m=1.2,
-                 engage_m=1.0, cruise_v=0.3, corner_v=1.0, corner_w=0.8,
-                 turn_w=2.2, w_max=0.8, kp=1.5, kd=0.4, follow_side='right',
+                 engage_m=1.0, cruise_v=0.3, corner_v=0.45, corner_w=0.6,
+                 turn_w=1.0, w_max=1.0, kp=1.5, kd=0.4, follow_side='right',
                  min_state_ticks=2):
         if follow_side not in ('right', 'left'):
             raise ValueError("follow_side must be 'right' or 'left'")
@@ -131,7 +131,8 @@ class WallFollower:
         #    in place (inside corner / T-stem).
         if s.front < self.front_block_m:
             self._enter(State.TURN_AWAY)
-            return Command(v=0.0, w=self.open_turn * self.turn_w)
+            w = max(-self.w_max, min(self.w_max, self.open_turn * self.turn_w))
+            return Command(v=0.0, w=w)
 
         # 2. FIND_WALL: nothing engaged yet -> creep straight until any wall comes
         #    within engage range. CORNER is gated out here, or an open start (every
@@ -149,7 +150,8 @@ class WallFollower:
                (cornering and (s.side > self.target_wall_m
                                or self._ticks_in_state < self.min_state_ticks)):
                 self._enter(State.CORNER)
-                return Command(v=self.corner_v, w=-self.open_turn * self.corner_w)
+                w = max(-self.w_max, min(self.w_max, -self.open_turn * self.corner_w))
+                return Command(v=self.corner_v, w=w)
 
         # 4. FOLLOW: PID on lateral offset. err > 0 (too far) -> steer toward wall.
         self._enter(State.FOLLOW)
