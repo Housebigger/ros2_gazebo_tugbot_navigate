@@ -20,7 +20,7 @@ setup(
     zip_safe=True,
     maintainer='Housebigger',
     maintainer_email='housebigger@example.com',
-    description='Maze utilities for Tugbot entrance-to-exit autonomous exploration.',
+    description='Maze world metadata, exit monitoring, and autonomous maze-solving nodes for the Tugbot (reactive wall-following solver, plus Trémaux/frontier/DFS explorers and guided-corridor navigation).',
     license='MIT',
     tests_require=['pytest'],
     entry_points={

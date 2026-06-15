@@ -2,7 +2,7 @@
 <package format="3">
   <name>tugbot_maze</name>
   <version>0.1.0</version>
-  <description>Maze-specific world generation, metadata, and exit monitoring utilities for Tugbot navigation experiments.</description>
+  <description>Maze world metadata, exit monitoring, and autonomous maze-solving nodes for the Tugbot (reactive wall-following solver, plus Trémaux/frontier/DFS explorers and guided-corridor navigation).</description>
   <maintainer email="housebigger@example.com">Housebigger</maintainer>
   <license>MIT</license>
   <exec_depend>rclpy</exec_depend>
