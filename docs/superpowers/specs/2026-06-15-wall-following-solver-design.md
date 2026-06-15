@@ -200,3 +200,13 @@ A new control path selected by `explorer_type:=wall_follower`. Responsibilities:
 2. A headless Gazebo run logs `EXIT_REACHED` via `explorer_type:=wall_follower`.
 3. Reliability batch ≥ 4/5 `EXIT_REACHED` within 1500 s — the standing bar for "reliable
    autonomous 通关."
+
+## Implementation outcome (2026-06-15)
+
+Implemented on branch `wall-following-solver` via subagent-driven TDD (36 tests). All three success criteria met: the offline `maze_sim` guarantee proves both hands reach the exit on the real maze graph (faster hand = **left**, 1721 vs 9320 sim-steps), a headless Gazebo run logged `EXIT_REACHED`, and the reliability batch was **5/5** (bar ≥ 4/5).
+
+**Final shipped tuning (supersedes the proposed defaults above).** The robust operating point is `corner_v=0.45, corner_w=0.6, turn_w=1.0, w_max=1.0` (CORNER orbit radius `R = corner_v/corner_w ≈ 0.75 m`, ~cell-spacing scale), `follow_side='left'` by default; `target_wall_m=0.6, front_block_m=0.7, wall_lost_m=1.2, engage_m=1.0, cruise_v=0.3, kp=1.5, kd=0.4` unchanged. **All angular outputs (TURN_AWAY, CORNER, FOLLOW) are clamped to ±w_max** so the policy never commands a yaw rate the robot cannot execute.
+
+**Why these values (robustness lesson).** A first tuning passed the offline proof but with *overfit* params (`corner_v=1.0, turn_w=2.2`): a robustness sweep showed a razor-thin island (the apparent turn_w "sweet spot" [2.1, 2.3] actually had 2.15 failing while 2.05 passed) that survived only 10/27 start perturbations and relied on a yaw rate 2.75× over w_max — an artifact of the `dt=0.1` + reject-translation sim that would not transfer to Gazebo. The robust R≈0.75 point passes **54/54** start perturbations at `dt=0.1` and `dt=0.05`, and transferred to Gazebo on the first try (the 5/5 above). Lesson: validate reactive-controller tuning with a parameter sweep + start-perturbation robustness, not a single green run.
+
+**Stall recovery is unbounded by design.** The node's stall watchdog (no progress for `stall_s` → brief back-up + re-engage FIND_WALL) has no separate retry cap: a perfect maze cannot trap a wall-follower, so the structural guarantee plus the run-harness wall-clock cap (1500 s) are the bound. (The earlier "bounded retry counter" wording in this spec was a belt-and-suspenders idea that proved unnecessary.)

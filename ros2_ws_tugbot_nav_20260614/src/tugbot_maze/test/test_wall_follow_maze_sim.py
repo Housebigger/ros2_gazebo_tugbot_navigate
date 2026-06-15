@@ -9,9 +9,10 @@ START_XY = (2.0, 0.0)        # post-ENTRY_DIRECT: ~2 m inside the entrance mouth
 START_YAW = 0.0              # facing +x (east), into the maze
 
 
-def run_to_exit(follow_side, max_steps=20000, dt=0.1, n_beams=72):
+def run_to_exit(follow_side, max_steps=20000, dt=0.1, n_beams=72,
+                start_xy=START_XY, start_yaw=START_YAW):
     segs = load_segments()
-    sim = MazeSim(segs, start_xy=START_XY, start_yaw=START_YAW)
+    sim = MazeSim(segs, start_xy=start_xy, start_yaw=start_yaw)
     assert not sim.collides(START_XY[0], START_XY[1]), "start must be collision-free"
     wf = WallFollower(follow_side=follow_side)
     closest = float('inf')
@@ -48,3 +49,15 @@ def test_report_faster_hand(capsys):
               f"FASTER_HAND={faster}")
     # By construction the faster hand has the smaller (or equal) step count.
     assert min(steps_r, steps_l) == (steps_r if faster == 'right' else steps_l)
+
+
+@pytest.mark.parametrize("dx,dy,dyaw", [(0.2, 0.2, 0.1), (-0.2, -0.2, -0.1), (0.2, -0.2, 0.1)])
+def test_left_hand_robust_to_start_perturbation(dx, dy, dyaw):
+    # Bakes the validated start-perturbation robustness into the regression suite,
+    # so a future tuning change that breaks robustness can't pass silently.
+    steps, closest = run_to_exit('left',
+                                 start_xy=(START_XY[0] + dx, START_XY[1] + dy),
+                                 start_yaw=START_YAW + dyaw)
+    assert steps is not None, (
+        f"perturbed left-hand failed to reach exit; closest={closest:.2f} m "
+        f"(dx={dx}, dy={dy}, dyaw={dyaw})")

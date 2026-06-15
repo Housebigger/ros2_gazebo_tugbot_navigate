@@ -10,6 +10,8 @@
 
 ---
 
+> **Post-implementation note (2026-06-15):** the inline `WallFollower` defaults shown in Tasks 2 and 7 below (`corner_v=0.18 / turn_w=0.7 / w_max=0.8`) were the initial proposal; the **shipped** robust values are `corner_v=0.45, corner_w=0.6, turn_w=1.0, w_max=1.0` (orbit radius ≈ 0.75 m, all angular outputs clamped to `w_max`), `follow_side='left'` — validated by a 54/54 start-perturbation sweep and a 5/5 Gazebo reliability batch. See the design spec's "Implementation outcome" section for why.
+
 ## Conventions for this plan
 
 - **`$WS`** = the ROS workspace root:
