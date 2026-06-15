@@ -1,5 +1,10 @@
 # Tugbot Maze Active World Status
 
+> **Note (2026-06-15):** this is the Phase35-pre *world-selection* record. The world it
+> names below is still the active one, but its "does not claim navigation success" framing
+> is historical — navigation has since been completed reliably via Guided Corridor
+> Navigation (4/4). See `../README.md` for the current navigation status and run commands.
+
 Updated: 2026-05-28
 Phase: Phase35-pre Map/World Artifact Cleanup and Active Clean World Selection
 Status: `PASS_AS_ACTIVE_CLEAN_WORLD_SELECTED_AND_OLD_ARTIFACTS_ARCHIVED`

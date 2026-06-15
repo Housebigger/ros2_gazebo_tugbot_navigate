@@ -1,10 +1,10 @@
-# ROS 2 workspace build artifacts
-ros2_ws_tugbot_20260419/build/
-ros2_ws_tugbot_20260419/install/
-ros2_ws_tugbot_20260419/log/
+# ROS 2 workspace build artifacts (all tugbot nav workspaces, current + future)
+ros2_ws_*/build/
+ros2_ws_*/install/
+ros2_ws_*/log/
 
 # Test caches
-ros2_ws_tugbot_20260419/.pytest_cache/
+**/.pytest_cache/
 **/__pycache__/
 *.pyc
 
