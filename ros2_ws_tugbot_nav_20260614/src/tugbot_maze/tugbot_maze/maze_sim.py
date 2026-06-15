@@ -48,6 +48,29 @@ def load_segments(path: Optional[str] = None) -> List[Segment]:
     return segs
 
 
+def outer_boundary_box(path: Optional[str] = None) -> Tuple[float, float, float, float]:
+    """Return (xmin, xmax, ymin, ymax) of the maze's outer boundary in map frame.
+
+    Built from the segments flagged `outer: true` in the YAML. Used by the
+    guarantee to assert the solver never leaves the maze (no exterior cheating).
+    """
+    if path is None:
+        path = default_segments_path()
+    with open(path) as f:
+        doc = yaml.safe_load(f)
+    xs: List[float] = []
+    ys: List[float] = []
+    for s in doc['segments']:
+        if s.get('outer'):
+            x0, y0 = px_to_map(float(s['p0_px'][0]), float(s['p0_px'][1]))
+            x1, y1 = px_to_map(float(s['p1_px'][0]), float(s['p1_px'][1]))
+            xs += [x0, x1]
+            ys += [y0, y1]
+    if not xs:
+        raise RuntimeError(f"no 'outer: true' segments found in {path!r}")
+    return (min(xs), max(xs), min(ys), max(ys))
+
+
 class MazeSim:
     def __init__(self, segments, start_xy, start_yaw, *, robot_radius_m=0.35,
                  wall_half_thickness_m=0.12, max_range_m=12.0):
