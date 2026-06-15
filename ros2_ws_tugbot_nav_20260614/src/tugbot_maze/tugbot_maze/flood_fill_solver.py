@@ -1,7 +1,7 @@
 """Thin ROS 2 node: cell-grid flood-fill (micromouse) maze solver.
 
-Subscribes /map (-> OccupancyGridView) and uses map->base_link TF for pose. Each
-control tick: localize to a maze cell, sense its edges (cell_walls), ask the
+Subscribes /scan (LaserScan) and uses map->base_link TF for pose. Each control tick:
+localize to a maze cell, sense its 4 edges from the live LIDAR (cell_walls), ask the
 FloodFillBrain for the next cell, and drive there with hop_command. Owns the entry
 drive, a per-hop stall watchdog, and the exit self-check. No LIDAR entrance seal is
 needed here: the brain only ever targets interior cells (cx 1..10), so the robot is
@@ -14,13 +14,11 @@ from typing import Optional
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSHistoryPolicy
 from geometry_msgs.msg import Twist
-from nav_msgs.msg import OccupancyGrid
+from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 import tf2_ros
 
-from tugbot_maze.grid_utils import OccupancyGridInfo, OccupancyGridView
 from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, DIRS, in_grid, cell_center, pose_to_cell)
 from tugbot_maze.cell_walls import sense_cell_walls
@@ -31,7 +29,7 @@ from tugbot_maze.wall_follow_control import exit_reached, entering_done
 class FloodFillSolver(Node):
     def __init__(self):
         super().__init__('flood_fill_solver')
-        self.scan_topic = self.declare_parameter('map_topic', '/map').value
+        self.scan_topic = self.declare_parameter('scan_topic', '/scan').value
         self.base_frame = self.declare_parameter('base_frame', 'base_link').value
         self.map_frame = self.declare_parameter('map_frame', 'map').value
         self.goal_events_topic = self.declare_parameter('goal_events_topic', '/maze/goal_events').value
@@ -46,8 +44,8 @@ class FloodFillSolver(Node):
         self.cruise_v = float(self.declare_parameter('cruise_v', 0.3).value)
 
         self.brain = FloodFillBrain(exit_cell=EXIT_CELL)
-        self.map_view: Optional[OccupancyGridView] = None
-        self.create_subscription(OccupancyGrid, self.scan_topic, self._map_cb, self._map_qos())
+        self.scan_msg: Optional[LaserScan] = None
+        self.create_subscription(LaserScan, self.scan_topic, self._scan_cb, 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_nav', 10)
         self.goal_events_pub = self.create_publisher(String, self.goal_events_topic, 10)
         self.tf_buffer = tf2_ros.Buffer()
@@ -63,18 +61,8 @@ class FloodFillSolver(Node):
         self.start_time = self.get_clock().now()
         self.get_logger().info('flood_fill_solver started.')
 
-    def _map_qos(self):
-        return QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-                          reliability=QoSReliabilityPolicy.RELIABLE,
-                          history=QoSHistoryPolicy.KEEP_LAST)
-
-    def _map_cb(self, msg):
-        self.map_view = OccupancyGridView(
-            info=OccupancyGridInfo(width=int(msg.info.width), height=int(msg.info.height),
-                                   resolution=float(msg.info.resolution),
-                                   origin_x=float(msg.info.origin.position.x),
-                                   origin_y=float(msg.info.origin.position.y)),
-            data=list(msg.data))
+    def _scan_cb(self, msg):
+        self.scan_msg = msg
 
     def _lookup_pose(self):
         try:
@@ -88,13 +76,13 @@ class FloodFillSolver(Node):
     def _publish_cmd(self, v, w):
         m = Twist(); m.linear.x = float(v); m.angular.z = float(w); self.cmd_vel_pub.publish(m)
 
-    def _sense(self, cur):
-        if self.map_view is None:
+    def _sense(self, cur, yaw):
+        if self.scan_msg is None:
             return
-        walls = sense_cell_walls(self.map_view, cur)
+        s = self.scan_msg
+        walls = sense_cell_walls(s.ranges, s.angle_min, s.angle_increment, yaw)
         for d, is_wall in walls.items():
-            if is_wall is not None:
-                self.brain.mark(cur, d, is_wall)
+            self.brain.mark(cur, d, is_wall)
 
     def _control_tick(self):
         now = self.get_clock().now(); t = now.nanoseconds / 1e9
@@ -134,7 +122,7 @@ class FloodFillSolver(Node):
         if self.target_xy is not None and hop_command(pose, self.target_xy)[2]:
             self.target_xy = None
         if self.target_xy is None:
-            self._sense(cur)
+            self._sense(cur, pose[2])
             nxt = self.brain.next_cell(cur)
             if nxt is None:                             # connected maze -> only at exit (caught above)
                 self._publish_cmd(0.0, 0.0); return
