@@ -197,6 +197,13 @@ def generate_launch_description():
         }],
     )
 
+    flood_fill_solver_node = Node(
+        package='tugbot_maze', executable='flood_fill_solver', name='flood_fill_solver',
+        output='screen',
+        parameters=[{'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}],
+        condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'flood_fill'"])),
+    )
+
     frontier_explorer = Node(
         package='tugbot_exploration',
         executable='frontier_explorer',
@@ -320,6 +327,6 @@ def generate_launch_description():
         DeclareLaunchArgument('corridor_max_nav2_fails', default_value='6', description='GCN: max Nav2 failures per corridor before declaring it exhausted.'),
         DeclareLaunchArgument('corridor_max_reactive', default_value='5', description='GCN: max reactive drive attempts per corridor.'),
         maze_slam_nav_launch,
-        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node]),
+        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node, flood_fill_solver_node]),
         TimerAction(period=14.0, actions=[maze_goal_monitor]),
     ])
