@@ -66,3 +66,11 @@ def test_fully_enclosed_cell_returns_none():
     for d in DIRS:
         b.mark((5, 5), d, is_wall=True)
     assert b.next_cell((5, 5)) is None
+
+
+def test_tie_break_prefers_exit_dominant_direction():
+    # Open maze: from (1,4), N->(1,5) and E->(2,4) both cut Manhattan distance equally,
+    # but (2,4) is closer to the exit (10,9), so the tie-break picks E (toward the exit).
+    # This keeps the robot heading into the interior even if wall sensing is imperfect.
+    b = FloodFillBrain()
+    assert b.next_cell((1, 4)) == (2, 4)

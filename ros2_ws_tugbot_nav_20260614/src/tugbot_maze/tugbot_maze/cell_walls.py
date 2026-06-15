@@ -1,9 +1,13 @@
 """Sense a maze cell's N/E/S/W edges from a SLAM OccupancyGridView.
 
-The maze cell grid is 2 m (cell (cx,cy) centered at (2*cx, 2*cy)). Each edge is
-the boundary line ~1 m from the center toward a neighbor. We sample occupancy at
-points across that edge: mostly-occupied -> WALL (True), clearly free -> OPEN
-(False), too-unknown -> None (leave UNKNOWN, re-sense later).
+Connector-based: for each neighbor, sample the straight center->neighbor-center line
+(2 m) on the occupancy grid. Return True (WALL) if any sampled cell is occupied,
+None (UNKNOWN) if too much of the line is unmapped (off-grid or unknown -> re-sense
+later), else False (OPEN). This mirrors maze_sim.ground_truth_edge_open (which the
+offline guarantee uses), so live SLAM sensing matches the offline proof's notion of
+"can the robot traverse center-to-center" -- and a real wall (which blocks the whole
+traversal) is detected by ANY occupied sample, not a fraction of an edge line. The
+maze cell grid is 2 m: cell (cx,cy) is centered at (CELL_SIZE_M*cx, CELL_SIZE_M*cy).
 """
 from __future__ import annotations
 from typing import Dict, Optional
@@ -12,29 +16,26 @@ from tugbot_maze.flood_fill_brain import CELL_SIZE_M, DIRS
 
 
 def sense_cell_walls(grid_view, cell, *, cell_size: float = CELL_SIZE_M,
-                     n_samples: int = 5, occupied_frac: float = 0.34,
-                     unknown_frac: float = 0.6) -> Dict[str, Optional[bool]]:
-    if n_samples < 2:
-        raise ValueError("n_samples must be >= 2 (need both edge endpoints)")
+                     n_samples: int = 9, unknown_frac: float = 0.5) -> Dict[str, Optional[bool]]:
+    if n_samples < 1:
+        raise ValueError("n_samples must be >= 1")
     cx, cy = cell
     ccx, ccy = cell_size * cx, cell_size * cy
-    half = cell_size / 2.0
     out: Dict[str, Optional[bool]] = {}
     for d, (dx, dy) in DIRS.items():
-        # edge midpoint, and the in-plane axis to sample along
-        emx, emy = ccx + dx * half, ccy + dy * half
-        ax, ay = (0.0, 1.0) if dx != 0 else (1.0, 0.0)   # sample perpendicular to travel
+        nbx, nby = ccx + dx * cell_size, ccy + dy * cell_size   # neighbor center
         occ = unk = 0
-        for i in range(n_samples):
-            t = (i / (n_samples - 1) - 0.5) * cell_size    # -half..+half along the edge
-            px, py = emx + ax * t, emy + ay * t
-            gcell = grid_view.world_to_cell(px, py)
-            if grid_view.is_unknown(gcell):
-                unk += 1
-            elif grid_view.is_occupied(gcell):
-                occ += 1
-        if unk / n_samples >= unknown_frac:
+        for i in range(n_samples + 1):
+            t = i / n_samples
+            g = grid_view.world_to_cell(ccx + (nbx - ccx) * t, ccy + (nby - ccy) * t)
+            if (not grid_view.in_bounds(g)) or grid_view.is_unknown(g):
+                unk += 1                       # unmapped: don't commit to OPEN yet
+            elif grid_view.is_occupied(g):
+                occ += 1                       # a real wall blocks the whole traversal
+        if occ > 0:
+            out[d] = True
+        elif unk > unknown_frac * (n_samples + 1):
             out[d] = None
         else:
-            out[d] = (occ / n_samples) >= occupied_frac
+            out[d] = False
     return out

@@ -73,11 +73,16 @@ class FloodFillBrain:
         if cur == self.exit_cell:
             return None
         dist = self.flood()
-        best, best_d = None, math.inf
+        ex, ey = self.exit_cell
+        best, best_key = None, None
         for d, (dx, dy) in DIRS.items():
             nb = (cur[0] + dx, cur[1] + dy)
-            if in_grid(nb) and self._passable(cur, d) and dist.get(nb, math.inf) < best_d:
-                best, best_d = nb, dist[nb]
+            if in_grid(nb) and self._passable(cur, d):
+                # rank by flood distance-to-exit, breaking ties toward the exit
+                # (Euclidean^2) so equal-distance moves prefer the exit-dominant axis.
+                key = (dist.get(nb, math.inf), (nb[0] - ex) ** 2 + (nb[1] - ey) ** 2)
+                if best_key is None or key < best_key:
+                    best, best_key = nb, key
         return best
 
     def is_done(self, cell: Cell) -> bool:
