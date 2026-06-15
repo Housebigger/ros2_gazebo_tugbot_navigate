@@ -1,4 +1,6 @@
-from tugbot_maze.wall_follow_control import exit_reached, entering_done, StallWatchdog
+import pytest
+from tugbot_maze.wall_follow_control import (
+    exit_reached, entering_done, StallWatchdog, entrance_seal_segment)
 
 
 def test_exit_reached_within_radius():
@@ -40,3 +42,20 @@ def test_stall_watchdog_explicit_reset():
     wd.reset(10.0, 0.0, 0.0)
     assert wd.update(13.9, 0.0, 0.0) is False      # < stall_s since reset
     assert wd.update(14.1, 0.0, 0.0) is True
+
+
+def test_entrance_seal_segment_left_is_vertical():
+    # west-wall opening (vertical wall) -> seal spans y at constant x
+    seg = entrance_seal_segment((0.95, 0.0), 2.072423, 'left')
+    assert seg == pytest.approx((0.95, -1.0362115, 0.95, 1.0362115))
+
+
+def test_entrance_seal_segment_top_is_horizontal():
+    # top/bottom opening (horizontal wall) -> seal spans x at constant y
+    seg = entrance_seal_segment((4.0, 9.0), 2.0, 'top')
+    assert seg == pytest.approx((3.0, 9.0, 5.0, 9.0))
+
+
+def test_entrance_seal_segment_bad_side_raises():
+    with pytest.raises(ValueError):
+        entrance_seal_segment((0.0, 0.0), 1.0, 'sideways')

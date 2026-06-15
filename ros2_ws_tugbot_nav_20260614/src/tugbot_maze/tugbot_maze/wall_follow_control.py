@@ -1,6 +1,6 @@
 """ROS-free node-support helpers for the wall-following solver: exit detection,
-entry-distance check, and a stall watchdog. Time is injected (seconds, float) so
-these stay pure and unit-testable.
+entry-distance check, a stall watchdog, and entrance-seal geometry. Time is
+injected (seconds, float) so these stay pure and unit-testable.
 """
 from __future__ import annotations
 import math
@@ -43,3 +43,20 @@ class StallWatchdog:
 
     def reset(self, t, x, y) -> None:
         self._anchor_t, self._anchor_xy = t, (x, y)
+
+
+def entrance_seal_segment(center_xy, width_m, opening_side) -> Tuple[float, float, float, float]:
+    """Return a map-frame segment (x0, y0, x1, y1) that fills a boundary opening.
+
+    Used to "close the door" so the reactive follower treats the entrance as a
+    solid wall once the robot is inside. `opening_side` 'left'/'right' is a
+    vertical boundary wall, so the seal spans y; 'top'/'bottom' is a horizontal
+    wall, so the seal spans x. width_m is the opening width.
+    """
+    cx, cy = float(center_xy[0]), float(center_xy[1])
+    half = float(width_m) / 2.0
+    if opening_side in ('left', 'right'):
+        return (cx, cy - half, cx, cy + half)
+    if opening_side in ('top', 'bottom'):
+        return (cx - half, cy, cx + half, cy)
+    raise ValueError("opening_side must be 'left', 'right', 'top', or 'bottom'")
