@@ -68,16 +68,30 @@ def test_fully_enclosed_cell_returns_none():
     assert b.next_cell((5, 5)) is None
 
 
-def test_does_not_reverse_to_came_from_unless_dead_end():
-    # On an open cell with forward options, next_cell must NOT return the cell we just
-    # left -- this commits the robot to the path and makes A->B->A ping-ponging impossible.
+def test_prefers_unmarked_edge_over_traversed():
+    # At (1,0), N->(1,1) and E->(2,0) tie on flood distance. Mark the edge to (1,1) twice
+    # (used up) -> next_cell must take the unmarked edge E->(2,0). This is how Trémaux
+    # breaks cycles: a revisited edge is avoided in favor of an unexplored one.
     b = FloodFillBrain()
-    assert b.next_cell((5, 5), came_from=(5, 4)) != (5, 4)
+    b.mark_traversal((1, 0), (1, 1))
+    b.mark_traversal((1, 0), (1, 1))
+    assert b.next_cell((1, 0)) == (2, 0)
 
 
-def test_reverses_to_came_from_only_at_dead_end():
-    # If the only passable neighbor IS the came-from cell, the robot must backtrack to it.
+def test_takes_the_only_unused_edge():
+    # Mark 3 of (5,5)'s 4 edges twice (used up); only W->(4,5) is still usable -> take it.
     b = FloodFillBrain()
-    for d in ('N', 'E', 'W'):
-        b.mark((5, 5), d, is_wall=True)
-    assert b.next_cell((5, 5), came_from=(5, 4)) == (5, 4)
+    for nb in [(5, 6), (6, 5), (5, 4)]:
+        b.mark_traversal((5, 5), nb)
+        b.mark_traversal((5, 5), nb)
+    assert b.next_cell((5, 5)) == (4, 5)
+
+
+def test_falls_back_when_all_edges_used_up():
+    # All 4 edges twice-marked -> no unused edge -> still returns a passable neighbor
+    # (degenerate safety: never returns None when a passable neighbor exists).
+    b = FloodFillBrain()
+    for nb in [(5, 6), (5, 4), (6, 5), (4, 5)]:
+        b.mark_traversal((5, 5), nb)
+        b.mark_traversal((5, 5), nb)
+    assert b.next_cell((5, 5)) is not None

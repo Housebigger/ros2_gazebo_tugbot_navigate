@@ -38,7 +38,8 @@ def in_grid(cell: Cell) -> bool:
 class FloodFillBrain:
     def __init__(self, exit_cell: Cell = EXIT_CELL):
         self.exit_cell = exit_cell
-        self._edge: Dict[Tuple[Cell, str], str] = {}   # (cell, dir) -> WALL/OPEN
+        self._edge: Dict[Tuple[Cell, str], str] = {}   # (cell, dir) -> WALL/OPEN (absent = UNKNOWN)
+        self._traversals: Dict[frozenset, int] = {}     # undirected {A,B} edge -> traversal count
 
     def _state(self, cell: Cell, d: str) -> str:
         return self._edge.get((cell, d), UNKNOWN)
@@ -57,6 +58,14 @@ class FloodFillBrain:
     def _passable(self, cell: Cell, d: str) -> bool:
         return self._state(cell, d) != WALL       # OPEN or UNKNOWN are passable
 
+    def _edge_traversal_count(self, a: Cell, b: Cell) -> int:
+        return self._traversals.get(frozenset((a, b)), 0)
+
+    def mark_traversal(self, a: Cell, b: Cell) -> None:
+        """Record that the robot traversed the undirected edge a<->b (Trémaux count)."""
+        e = frozenset((a, b))
+        self._traversals[e] = self._traversals.get(e, 0) + 1
+
     def flood(self) -> Dict[Cell, int]:
         dist = {self.exit_cell: 0}
         q = collections.deque([self.exit_cell])
@@ -69,7 +78,7 @@ class FloodFillBrain:
                     q.append(nb)
         return dist
 
-    def next_cell(self, cur: Cell, came_from: Optional[Cell] = None) -> Optional[Cell]:
+    def next_cell(self, cur: Cell) -> Optional[Cell]:
         if cur == self.exit_cell:
             return None
         dist = self.flood()
@@ -80,14 +89,16 @@ class FloodFillBrain:
                 cands.append(nb)
         if not cands:
             return None
-        # Commit to the flood-descending path: never reverse to the cell we just came
-        # from unless it is the ONLY passable option (a true dead-end). Without this the
-        # robot abandons a correct-but-away-from-exit detour midway and ping-pongs.
-        forward = [nb for nb in cands if nb != came_from]
-        pool = forward if forward else cands
-        # Descend the distance-to-exit gradient; ties break by DIRS order. (No
-        # geometric exit bias -- that sabotages necessary away-from-exit segments.)
-        return min(pool, key=lambda nb: dist.get(nb, math.inf))
+        # Trémaux: prefer the LEAST-traversed edge (unmarked over once-marked); never re-use
+        # a twice-traversed edge unless it is the only option. This bounds each edge to <=2
+        # traversals -> provably terminates -> escapes the multi-cell cycles that pure
+        # flood-descent falls into under imperfect live sensing. Ties break toward the exit
+        # (flood distance), then DIRS order. (Subsumes came-from anti-reversal: the just-used
+        # edge is marked once, so an unmarked alternative is preferred over reversing.)
+        legal = [nb for nb in cands if self._edge_traversal_count(cur, nb) < 2]
+        pool = legal if legal else cands
+        return min(pool, key=lambda nb: (self._edge_traversal_count(cur, nb),
+                                         dist.get(nb, math.inf)))
 
     def is_done(self, cell: Cell) -> bool:
         return cell == self.exit_cell
