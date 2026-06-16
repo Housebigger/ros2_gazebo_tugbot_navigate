@@ -95,3 +95,15 @@ def test_falls_back_when_all_edges_used_up():
         b.mark_traversal((5, 5), nb)
         b.mark_traversal((5, 5), nb)
     assert b.next_cell((5, 5)) is not None
+
+
+def test_exit_greedy_prefers_progress_over_unexplored_detour():
+    # Run-5 efficiency fix. At (5,5) with N walled: E->(6,5) descends the flood
+    # gradient (dist 8, closer to the exit) but is already traversed once; S->(5,4)
+    # and W->(4,5) are UNEXPLORED yet lead AWAY (dist 10). next_cell must take the
+    # exit-ward E, not wander into a farther unexplored cell. Edge-count stays a
+    # tiebreak (the <=2 cycle cap is intact) but no longer overrides flood progress.
+    b = FloodFillBrain()
+    b.mark((5, 5), 'N', is_wall=True)
+    b.mark_traversal((5, 5), (6, 5))      # E traversed once; still legal (count 1 < 2)
+    assert b.next_cell((5, 5)) == (6, 5)

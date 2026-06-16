@@ -89,16 +89,18 @@ class FloodFillBrain:
                 cands.append(nb)
         if not cands:
             return None
-        # Trémaux: prefer the LEAST-traversed edge (unmarked over once-marked); never re-use
-        # a twice-traversed edge unless it is the only option. This bounds each edge to <=2
-        # traversals -> provably terminates -> escapes the multi-cell cycles that pure
-        # flood-descent falls into under imperfect live sensing. Ties break toward the exit
-        # (flood distance), then DIRS order. (Subsumes came-from anti-reversal: the just-used
-        # edge is marked once, so an unmarked alternative is preferred over reversing.)
+        # Exit-greedy descent + Trémaux cycle cap. Among neighbors whose edge is not yet
+        # twice-traversed (the <=2 cap that bounds total motion and makes cycles provably
+        # terminate), pick the LOWEST flood distance-to-exit, breaking ties toward the
+        # least-traversed edge then DIRS order. Flood distance is PRIMARY so the robot
+        # commits to exit-ward progress instead of wandering into farther unexplored cells
+        # (the run-5 edge-count-primary failure, where it systematically explored away from
+        # the exit). The cap still subsumes came-from anti-reversal: the just-used edge
+        # counts 1, so an equal-distance unmarked alternative is preferred over reversing.
         legal = [nb for nb in cands if self._edge_traversal_count(cur, nb) < 2]
         pool = legal if legal else cands
-        return min(pool, key=lambda nb: (self._edge_traversal_count(cur, nb),
-                                         dist.get(nb, math.inf)))
+        return min(pool, key=lambda nb: (dist.get(nb, math.inf),
+                                         self._edge_traversal_count(cur, nb)))
 
     def is_done(self, cell: Cell) -> bool:
         return cell == self.exit_cell
