@@ -20,12 +20,13 @@ def run(max_hops=200, dt=0.1, max_ticks_per_hop=400):
     sim = MazeSim(segs, start, 0.0, inertia=True)
     brain = FloodFillBrain()
     outside = 0
+    came_from = None
     for hop in range(max_hops):
         cur = pose_to_cell(sim.x, sim.y)
         _sense(sim, brain, cur)
         if brain.is_done(cur):
             return True, hop, outside
-        nxt = brain.next_cell(cur)
+        nxt = brain.next_cell(cur, came_from=came_from)
         if nxt is None:
             return False, hop, outside
         target = cell_center(nxt)
@@ -36,6 +37,7 @@ def run(max_hops=200, dt=0.1, max_ticks_per_hop=400):
                 outside += 1
             if arrived:
                 break
+        came_from = cur
     return pose_to_cell(sim.x, sim.y) == EXIT_CELL, max_hops, outside
 
 

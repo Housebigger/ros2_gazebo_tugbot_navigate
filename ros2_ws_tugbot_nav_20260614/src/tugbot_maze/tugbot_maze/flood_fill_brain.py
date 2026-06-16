@@ -69,21 +69,25 @@ class FloodFillBrain:
                     q.append(nb)
         return dist
 
-    def next_cell(self, cur: Cell) -> Optional[Cell]:
+    def next_cell(self, cur: Cell, came_from: Optional[Cell] = None) -> Optional[Cell]:
         if cur == self.exit_cell:
             return None
         dist = self.flood()
-        ex, ey = self.exit_cell
-        best, best_key = None, None
+        cands = []
         for d, (dx, dy) in DIRS.items():
             nb = (cur[0] + dx, cur[1] + dy)
             if in_grid(nb) and self._passable(cur, d):
-                # rank by flood distance-to-exit, breaking ties toward the exit
-                # (Euclidean^2) so equal-distance moves prefer the exit-dominant axis.
-                key = (dist.get(nb, math.inf), (nb[0] - ex) ** 2 + (nb[1] - ey) ** 2)
-                if best_key is None or key < best_key:
-                    best, best_key = nb, key
-        return best
+                cands.append(nb)
+        if not cands:
+            return None
+        # Commit to the flood-descending path: never reverse to the cell we just came
+        # from unless it is the ONLY passable option (a true dead-end). Without this the
+        # robot abandons a correct-but-away-from-exit detour midway and ping-pongs.
+        forward = [nb for nb in cands if nb != came_from]
+        pool = forward if forward else cands
+        # Descend the distance-to-exit gradient; ties break by DIRS order. (No
+        # geometric exit bias -- that sabotages necessary away-from-exit segments.)
+        return min(pool, key=lambda nb: dist.get(nb, math.inf))
 
     def is_done(self, cell: Cell) -> bool:
         return cell == self.exit_cell

@@ -53,6 +53,7 @@ class FloodFillSolver(Node):
 
         self.phase = 'startup'        # startup | entering | hop | backup | done
         self.start_xy = None
+        self.last_cell = None         # previous maze cell, for came-from anti-reversal
         self.target_xy = None
         self.hop_deadline = 0.0
         self.backup_until = 0.0
@@ -123,11 +124,12 @@ class FloodFillSolver(Node):
             self.target_xy = None
         if self.target_xy is None:
             self._sense(cur, pose[2])
-            nxt = self.brain.next_cell(cur)
+            nxt = self.brain.next_cell(cur, came_from=self.last_cell)
             if nxt is None:                             # connected maze -> only at exit (caught above)
                 self._publish_cmd(0.0, 0.0); return
             self.target_xy = cell_center(nxt)
             self.hop_deadline = t + self.hop_timeout_s
+            self.last_cell = cur                        # committing to leave cur
         if t >= self.hop_deadline:                      # wedged -> back up and retry
             self.phase = 'backup'; self.backup_until = t + self.backup_s
             self.goal_events_pub.publish(String(data='HOP_BACKUP')); return
