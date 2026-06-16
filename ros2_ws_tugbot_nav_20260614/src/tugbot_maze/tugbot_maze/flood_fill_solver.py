@@ -23,6 +23,7 @@ from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, DIRS, in_grid, cell_center, pose_to_cell)
 from tugbot_maze.cell_walls import sense_cell_walls
 from tugbot_maze.hop_controller import hop_command
+from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw
 from tugbot_maze.wall_follow_control import exit_reached, entering_done
 
 
@@ -32,6 +33,11 @@ class FloodFillSolver(Node):
         self.scan_topic = self.declare_parameter('scan_topic', '/scan').value
         self.base_frame = self.declare_parameter('base_frame', 'base_link').value
         self.map_frame = self.declare_parameter('map_frame', 'map').value
+        self.odom_frame = self.declare_parameter('odom_frame', 'odom').value
+        # pose_source: 'slam' (live map->base_link) | 'odom_locked' (freeze map->odom
+        # once at startup, then track on wheel odometry only -- avoids slam_toolbox
+        # pose degradation in the narrow repetitive corridors).
+        self.pose_source = self.declare_parameter('pose_source', 'slam').value
         self.goal_events_topic = self.declare_parameter('goal_events_topic', '/maze/goal_events').value
         self.exit_x = float(self.declare_parameter('exit_x', 21.072562).value)
         self.exit_y = float(self.declare_parameter('exit_y', 18.083566).value)
@@ -53,25 +59,46 @@ class FloodFillSolver(Node):
 
         self.phase = 'startup'        # startup | entering | hop | backup | done
         self.start_xy = None
+        self.map_to_odom_locked = None   # frozen map->odom for pose_source='odom_locked'
         self.target_xy = None
         self.hop_deadline = 0.0
         self.backup_until = 0.0
         self.create_timer(0.1, self._control_tick)
         self.create_timer(5.0, self._diag_tick)
         self.start_time = self.get_clock().now()
-        self.get_logger().info('flood_fill_solver started.')
+        self.get_logger().info('flood_fill_solver started (pose_source=%s).' % self.pose_source)
 
     def _scan_cb(self, msg):
         self.scan_msg = msg
 
-    def _lookup_pose(self):
+    def _lookup_tf(self, parent, child):
         try:
-            t = self.tf_buffer.lookup_transform(self.map_frame, self.base_frame, rclpy.time.Time())
+            t = self.tf_buffer.lookup_transform(parent, child, rclpy.time.Time())
         except Exception:
             return None
         q = t.transform.rotation
-        yaw = math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
-        return (t.transform.translation.x, t.transform.translation.y, yaw)
+        return (t.transform.translation.x, t.transform.translation.y,
+                quat_to_yaw(q.x, q.y, q.z, q.w))
+
+    def _lookup_pose(self):
+        if self.pose_source != 'odom_locked':
+            return self._lookup_tf(self.map_frame, self.base_frame)
+        # odom_locked: pose = (frozen map->odom) o (live odom->base_link).
+        odom_base = self._lookup_tf(self.odom_frame, self.base_frame)
+        if odom_base is None:
+            return None
+        if self.map_to_odom_locked is None:
+            # During startup, let SLAM settle; report its live pose but don't freeze yet.
+            if self.phase == 'startup':
+                return self._lookup_tf(self.map_frame, self.base_frame)
+            mo = self._lookup_tf(self.map_frame, self.odom_frame)
+            if mo is None:                                  # SLAM not up yet -> fall back
+                return self._lookup_tf(self.map_frame, self.base_frame)
+            self.map_to_odom_locked = mo
+            self.get_logger().info(
+                'POSE_SOURCE=odom_locked: froze map->odom=(%.3f, %.3f, %.3f rad); '
+                'tracking on wheel odometry only from here.' % mo)
+        return compose_2d(self.map_to_odom_locked, odom_base)
 
     def _publish_cmd(self, v, w):
         m = Twist(); m.linear.x = float(v); m.angular.z = float(w); self.cmd_vel_pub.publish(m)
