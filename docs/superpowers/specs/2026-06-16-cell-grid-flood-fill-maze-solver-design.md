@@ -166,3 +166,29 @@ runner.
 - Dynamic obstacles; changing the Gazebo world or the known grid geometry.
 - Re-litigating the wall-follower: its seal + honest guarantee + the diagnostic record
   remain as history (the inertia model is promoted here as reusable infrastructure).
+
+## Status — implemented, PAUSED 2026-06-16 (branch `flood-fill-maze-solver`, unmerged)
+
+Implemented via subagent-driven TDD (7 tasks, all reviewed) + two follow-up fixes.
+Offline: the brain reaches the exit cell staying inside (~52 hops, 0 outside); LIDAR
+`cell_walls` matches the ground-truth edge model at all 360 interior edges (robust to
+yaw + 0.25 m offset). Full ROS-free suite green.
+
+Gazebo (GUI), three runs — sensing was the hard part:
+1. `cell_walls` on the SLAM occupancy grid (edge-midpoint) → stalled at the first turn
+   (cell 1,4): the sparse/laggy live map under-detected the wall.
+2. `cell_walls` connector-on-occupancy + exit-dominant tie-break → stalled at (1,1),
+   same root cause (occupancy sensing misses walls).
+3. **`cell_walls` redesigned to sense the live `/scan` (LIDAR) directly → big success:
+   3 → 22 cells explored, dist_to_exit 27 → ~10 m**, clearing every earlier stall —
+   BUT then a **2-cell ping-pong loop `(9,4)↔(10,4)`** (dist plateaued ~10.5 for the
+   whole second half; not a budget issue).
+
+**Open blocker + next step:** the offline brain solves cleanly, so the loop is
+**Gazebo-localization-induced** — at a cell boundary `pose_to_cell` flips and the
+pure-BFS flood-fill re-picks the just-left cell. Fix = a **came-from-aware
+anti-oscillation rule + short-cycle detection** in `FloodFillBrain.next_cell` (don't
+immediately re-enter the cell just left unless it is the only passable option). The
+offline sim does not reproduce this oscillation, so validate "offline solve preserved
++ provably no short cycles" and then confirm in Gazebo. The approach is demonstrably
+viable (memory-based, directed, sensing solved); only this robustness gap remains.
