@@ -70,6 +70,7 @@ class FloodFillSolver(Node):
         self.backup_until = 0.0
         self.sensed = set()              # cells sensed once already (sticky map; static maze)
         self.settle_until = 0.0
+        self._startup_scan_dumped = False   # one-time full-scan dump for footprint characterization
         self.create_timer(0.1, self._control_tick)
         self.create_timer(5.0, self._diag_tick)
         self.start_time = self.get_clock().now()
@@ -148,6 +149,14 @@ class FloodFillSolver(Node):
             return
         elapsed = (now - self.start_time).nanoseconds / 1e9
         if self.phase == 'startup':
+            if self.sense_debug and self.scan_msg is not None and not self._startup_scan_dumped:
+                s = self.scan_msg
+                full = ['%.3f' % min(float(v), 99.0) if (v is not None and math.isfinite(v) and v > 0)
+                        else 'inf' for v in s.ranges]
+                self.get_logger().info(
+                    'FULLSCAN pose=%s amin=%.5f ainc=%.6f n=%d ranges=%s'
+                    % (pose, s.angle_min, s.angle_increment, len(s.ranges), ' '.join(full)))
+                self._startup_scan_dumped = True
             if elapsed >= self.startup_delay_sec and pose is not None:
                 self.start_xy = (pose[0], pose[1]); self.phase = 'entering'
             return
