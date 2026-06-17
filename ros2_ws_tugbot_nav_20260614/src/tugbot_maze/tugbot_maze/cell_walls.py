@@ -22,12 +22,13 @@ def _norm(a: float) -> float:
     return math.atan2(math.sin(a), math.cos(a))
 
 
-def sense_cell_walls(ranges, angle_min, angle_inc, yaw, *, wall_dist_m: float = 1.3,
-                     half_window_rad: float = math.radians(22),
-                     max_range: float = 12.0) -> Dict[str, bool]:
-    """Return {'N'/'S'/'E'/'W': True if a wall is within wall_dist_m in that MAP
-    direction, else False}. `yaw` is the robot heading in the map frame; LaserScan
-    beam i points in map direction yaw + (angle_min + i*angle_inc)."""
+def cell_wall_min_ranges(ranges, angle_min, angle_inc, yaw, *,
+                         half_window_rad: float = math.radians(22),
+                         max_range: float = 12.0) -> Dict[str, float]:
+    """Min LIDAR range (m, capped at max_range) within +/-half_window of each MAP
+    cardinal. `yaw` is the robot heading in the map frame; beam i points in map
+    direction yaw + (angle_min + i*angle_inc). Returned per-direction floats are what
+    sense_cell_walls thresholds; exposed separately for diagnostics."""
     mins = {d: max_range for d in _DIR_MAP_ANGLE}
     targets = {d: _norm(a - yaw) for d, a in _DIR_MAP_ANGLE.items()}   # scan-frame angle per dir
     for i in range(len(ranges)):
@@ -39,4 +40,15 @@ def sense_cell_walls(ranges, angle_min, angle_inc, yaw, *, wall_dist_m: float = 
         for d, ta in targets.items():
             if r < mins[d] and abs(_norm(ang - ta)) <= half_window_rad:
                 mins[d] = r
+    return mins
+
+
+def sense_cell_walls(ranges, angle_min, angle_inc, yaw, *, wall_dist_m: float = 1.3,
+                     half_window_rad: float = math.radians(22),
+                     max_range: float = 12.0) -> Dict[str, bool]:
+    """Return {'N'/'S'/'E'/'W': True if a wall is within wall_dist_m in that MAP
+    direction, else False}. `yaw` is the robot heading in the map frame; LaserScan
+    beam i points in map direction yaw + (angle_min + i*angle_inc)."""
+    mins = cell_wall_min_ranges(ranges, angle_min, angle_inc, yaw,
+                                half_window_rad=half_window_rad, max_range=max_range)
     return {d: mins[d] < wall_dist_m for d in _DIR_MAP_ANGLE}

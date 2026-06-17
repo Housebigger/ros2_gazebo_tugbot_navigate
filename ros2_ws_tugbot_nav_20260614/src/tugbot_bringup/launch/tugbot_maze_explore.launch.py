@@ -201,7 +201,8 @@ def generate_launch_description():
         package='tugbot_maze', executable='flood_fill_solver', name='flood_fill_solver',
         output='screen',
         parameters=[{'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
-                     'pose_source': LaunchConfiguration('pose_source')}],
+                     'pose_source': LaunchConfiguration('pose_source'),
+                     'sense_debug': ParameterValue(LaunchConfiguration('sense_debug'), value_type=bool)}],
         condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'flood_fill'"])),
     )
 
@@ -268,6 +269,7 @@ def generate_launch_description():
         DeclareLaunchArgument('log_level', default_value='info', description='Nav2 log level.'),
         DeclareLaunchArgument('explorer_type', default_value='maze_dfs', description='Explorer implementation: maze_dfs, frontier, tremaux, wall_follower, or flood_fill.'),
         DeclareLaunchArgument('pose_source', default_value='slam', description="flood_fill localization source: 'slam' (live map->base_link) or 'odom_locked' (freeze map->odom at startup, then track wheel odometry only -- avoids SLAM degradation in narrow corridors)."),
+        DeclareLaunchArgument('sense_debug', default_value='false', description='flood_fill: log per-cell sensed walls + min LIDAR ranges (diagnostics).'),
         DeclareLaunchArgument('follow_side', default_value='left', description='Wall-follower hand for explorer_type:=wall_follower: left or right. The maze_sim guarantee proof selected left as faster and robust.'),
         DeclareLaunchArgument('exploration_strategy', default_value='perimeter_then_frontier', description='Fallback inherited 0514 frontier/perimeter strategy when explorer_type:=frontier.'),
         DeclareLaunchArgument('max_goals', default_value='350', description='Maximum exploration goals.'),

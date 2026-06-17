@@ -3,8 +3,9 @@
 # the robot drives a flood-fill solver (no Nav2 in the loop)
 # and must reach the exit on its own. Same process/SHM hygiene as run_solver_maze.sh.
 #
-# Usage: tools/run_flood_fill_maze.sh [MAX_SECONDS] [HEADLESS] [USE_RVIZ] [POSE_SOURCE]
+# Usage: tools/run_flood_fill_maze.sh [MAX_SECONDS] [HEADLESS] [USE_RVIZ] [POSE_SOURCE] [SENSE_DEBUG]
 #   POSE_SOURCE: slam (default) | odom_locked  (wheel-odometry localization)
+#   SENSE_DEBUG: false (default) | true  (log per-cell sensed walls + min LIDAR ranges)
 set +u
 WS="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$WS"
@@ -15,6 +16,7 @@ MAX_SECONDS="${1:-1500}"
 HEADLESS="${2:-true}"
 USE_RVIZ="${3:-false}"
 POSE_SOURCE="${4:-slam}"
+SENSE_DEBUG="${5:-false}"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 ART="log/flood_fill_run_${STAMP}"
 mkdir -p "$ART"
@@ -34,12 +36,12 @@ kill_all_sim
 sleep 2
 rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* 2>/dev/null
 export ROS_DOMAIN_ID=$(( ($(date +%s) % 90) + 1 ))
-echo "[FLOODFILL] artifact dir: $ART max=${MAX_SECONDS}s headless=${HEADLESS} rviz=${USE_RVIZ} pose_source=${POSE_SOURCE} DOMAIN=$ROS_DOMAIN_ID"
+echo "[FLOODFILL] artifact dir: $ART max=${MAX_SECONDS}s headless=${HEADLESS} rviz=${USE_RVIZ} pose_source=${POSE_SOURCE} sense_debug=${SENSE_DEBUG} DOMAIN=$ROS_DOMAIN_ID"
 
 ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     headless:="${HEADLESS}" use_rviz:="${USE_RVIZ}" \
     explorer_type:=flood_fill entry_direct_distance_m:=2.0 \
-    pose_source:="${POSE_SOURCE}" \
+    pose_source:="${POSE_SOURCE}" sense_debug:="${SENSE_DEBUG}" \
     > "$ART/launch.log" 2>&1 &
 LAUNCH_PID=$!
 echo "[FLOODFILL] launch PID=$LAUNCH_PID DOMAIN=$ROS_DOMAIN_ID" | tee "$ART/run_meta.txt"
@@ -55,7 +57,7 @@ done
 
 echo "[FLOODFILL] result=$RESULT" | tee -a "$ART/run_meta.txt"
 echo "$RESULT" > "$ART/result.txt"
-grep -aE "EXIT_REACHED|HOP_BACKUP|DIAG|flood_fill_solver" "$ART/launch.log" | tail -60 > "$ART/flood_fill_tail.txt" 2>/dev/null
+grep -aE "EXIT_REACHED|HOP_BACKUP|DIAG|SENSE|flood_fill_solver" "$ART/launch.log" | tail -80 > "$ART/flood_fill_tail.txt" 2>/dev/null
 
 kill -INT "$LAUNCH_PID" 2>/dev/null
 sleep 5
