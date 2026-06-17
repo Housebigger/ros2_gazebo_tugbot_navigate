@@ -126,6 +126,13 @@ class FloodFillSolver(Node):
                 % (cur, pose[0], pose[1], yaw,
                    walls['N'], walls['E'], walls['S'], walls['W'],
                    r['N'], r['E'], r['S'], r['W']))
+            # Raw downsampled scan for offline real-vs-SDF comparison (drift vs lidar-gap).
+            step = max(1, len(s.ranges) // 90)
+            ds = ['%.2f' % min(float(v), 12.0) if (v is not None and math.isfinite(v) and v > 0) else 'inf'
+                  for v in s.ranges[::step]]
+            self.get_logger().info(
+                'SCANDUMP cell=%s pose=(%.3f,%.3f) yaw=%.4f amin=%.4f ainc=%.6f step=%d ranges=%s'
+                % (cur, pose[0], pose[1], yaw, s.angle_min, s.angle_increment, step, ' '.join(ds)))
 
     def _control_tick(self):
         now = self.get_clock().now(); t = now.nanoseconds / 1e9
