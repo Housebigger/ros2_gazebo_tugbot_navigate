@@ -24,7 +24,8 @@ def centering_command(pose, ox: Optional[float], oy: Optional[float], *,
                       tol: float = 0.12, yaw_tol: float = 0.10,
                       v_max: float = 0.4, w_max: float = 0.5,
                       kp_ang: float = 1.5, kp_lin: float = 0.8,
-                      v_min: float = 0.06) -> Tuple[float, float, bool]:
+                      v_min: float = 0.06, kd_ang: float = 0.0,
+                      yaw_rate: float = 0.0) -> Tuple[float, float, bool]:
     """Re-center the robot to the current cell centre one cardinal axis at a time.
 
     (ox, oy) is the robot's offset from the cell centre in MAP axes (+x=E, +y=N), as
@@ -46,7 +47,8 @@ def centering_command(pose, ox: Optional[float], oy: Optional[float], *,
         want = -math.pi / 2 if off > 0 else math.pi / 2   # north of centre -> face south
     dyaw = _norm(want - pose[2])
     if abs(dyaw) > yaw_tol:
-        return (0.0, max(-w_max, min(w_max, kp_ang * dyaw)), False)   # face the axis first
+        w = kp_ang * dyaw - kd_ang * yaw_rate                         # PD: damp latency overshoot
+        return (0.0, max(-w_max, min(w_max, w)), False)               # face the axis first
     v = min(v_max, max(v_min, kp_lin * abs(off)))    # drive forward to null the offset
     return (v, 0.0, False)
 
