@@ -2,7 +2,7 @@
 
 Subscribes /scan (LaserScan) and uses map->base_link TF for pose. Each control tick:
 localize to a maze cell, sense its 4 edges from the live LIDAR (cell_walls), ask the
-FloodFillBrain for the next cell, and drive there with hop_command. Owns the entry
+FloodFillBrain for the next cell, and drive there with a heading-held cell hop. Owns the entry
 drive, a per-hop stall watchdog, and the exit self-check. No LIDAR entrance seal is
 needed here: the brain only ever targets interior cells (cx 1..10), so the robot is
 confined to the interior and cannot reach the entrance opening or the exterior (a
@@ -22,7 +22,7 @@ import tf2_ros
 from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, DIRS, CELL_SIZE_M, in_grid, cell_center, pose_to_cell)
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
-from tugbot_maze.hop_controller import hop_command
+from tugbot_maze.hop_controller import centering_command, hop_drive_command
 from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw
 from tugbot_maze.wall_follow_control import exit_reached, entering_done
 from tugbot_maze.wall_localize import cell_center_offset, heading_snap
@@ -60,6 +60,15 @@ class FloodFillSolver(Node):
         self.settle_s = float(self.declare_parameter('settle_s', 0.4).value)
 
         self.yaw_tol_rad = float(self.declare_parameter('yaw_tol_rad', 0.10).value)
+        # A hop counts as arrived once dead-reckoned distance reaches CELL_SIZE - slack;
+        # generous so a slightly-short straight hop still advances (re-centering fixes
+        # the residual). On a hop timeout we only mark a WALL if the front is actually
+        # blocked within front_block_m; otherwise it was a locomotion stall -> re-center
+        # and retry up to max_hop_retries (never silently fabricate a wall on an OPEN edge,
+        # the failure that trapped the robot at (1,4)).
+        self.hop_arrive_slack_m = float(self.declare_parameter('hop_arrive_slack_m', 0.5).value)
+        self.front_block_m = float(self.declare_parameter('front_block_m', 0.7).value)
+        self.max_hop_retries = int(self.declare_parameter('max_hop_retries', 2).value)
 
         self.brain = FloodFillBrain(exit_cell=EXIT_CELL)
         self.scan_msg: Optional[LaserScan] = None
@@ -82,6 +91,7 @@ class FloodFillSolver(Node):
         self.hop_target = None           # target cell for current hop
         self.hop_dir = None              # direction tuple for current hop
         self.hop_start = None            # pose xy at start of current hop
+        self.hop_retries = 0             # locomotion-stall retries for the current hop
         self.create_timer(0.1, self._control_tick)
         self.create_timer(5.0, self._diag_tick)
         self.start_time = self.get_clock().now()
@@ -198,17 +208,15 @@ class FloodFillSolver(Node):
                 return
             s = self.scan_msg
             ox, oy = cell_center_offset(s.ranges, s.angle_min, s.angle_increment, pose[2])
-            need = (ox is not None and abs(ox) > self.center_tol_m) or \
-                   (oy is not None and abs(oy) > self.center_tol_m)
-            if need and t < self.hop_deadline:                          # 1) relative move to centre
-                tx = pose[0] - (ox or 0.0)                              #    (turn-then-drive rotates us;
-                ty = pose[1] - (oy or 0.0)                              #     the cardinal snap below fixes that)
-                v, w, _ = hop_command(pose, (tx, ty), arrive_m=0.06)
+            v, w, centered = centering_command(pose, ox, oy,                # 1) cardinal-aligned
+                                               tol=self.center_tol_m,       #    1-axis centering:
+                                               yaw_tol=self.yaw_tol_rad)    #    converges, stays cardinal
+            if not centered and t < self.hop_deadline:
                 self._publish_cmd(v, w)
                 self.settle_until = t + self.settle_s
                 return
             snap_yaw, dyaw = heading_snap(pose[2])
-            if abs(dyaw) > self.yaw_tol_rad and t < self.hop_deadline:   # 2) snap to cardinal LAST,
+            if abs(dyaw) > self.yaw_tol_rad and t < self.hop_deadline:   # 2) snap to cardinal,
                 self._publish_cmd(0.0, max(-0.5, min(0.5, 1.5 * dyaw)))  #    rotating in place (stays centred),
                 self.settle_until = t + self.settle_s                   #    so we sense cardinal-aligned
                 return
@@ -226,27 +234,47 @@ class FloodFillSolver(Node):
             self.hop_dir = (nxt[0] - self.cell[0], nxt[1] - self.cell[1])
             self.hop_start = (pose[0], pose[1])
             self.hop_deadline = t + self.hop_timeout_s
+            self.hop_retries = 0
             self.phase = 'hop'
             return
-        # phase == 'hop': drive one cell in hop_dir using dead-reckoning distance from
-        # hop_start.  Drift-immune: arrival decided by distance moved, not absolute pose.
+        # phase == 'hop': drive one cell in hop_dir, HOLDING the cardinal heading the whole
+        # way (continuous steering) so the robot can't accumulate lateral drift.  Arrival is
+        # decided by dead-reckoned distance from hop_start (drift-immune).  A timeout means a
+        # locomotion stall, NOT necessarily a wall: only mark a wall if the front is actually
+        # blocked, else re-center and retry -- never fabricate a wall on a sensed-OPEN edge.
         if self.phase == 'hop':
             target_yaw = math.atan2(self.hop_dir[1], self.hop_dir[0])
-            dyaw = math.atan2(math.sin(target_yaw - pose[2]), math.cos(target_yaw - pose[2]))
-            if abs(dyaw) > self.yaw_tol_rad:                            # face the hop cardinal
-                self._publish_cmd(0.0, max(-0.5, min(0.5, 1.5 * dyaw))); return
             moved = math.hypot(pose[0] - self.hop_start[0], pose[1] - self.hop_start[1])
-            if moved >= CELL_SIZE_M - 0.10:                             # arrived in next cell
+            if moved >= CELL_SIZE_M - self.hop_arrive_slack_m:          # arrived in next cell
                 self.cell = self.hop_target                             # DISCRETE advance
                 self.phase = 'center'
                 self.settle_until = t + self.settle_s
                 self.hop_deadline = t + self.hop_timeout_s
                 return
-            if t >= self.hop_deadline:                                  # blocked -> mark wall, back up
-                self.brain.mark(self.cell, _dir_name(self.hop_dir), is_wall=True)
-                self.phase = 'backup'; self.backup_until = t + self.backup_s
-                self.goal_events_pub.publish(String(data='HOP_BACKUP')); return
-            self._publish_cmd(self.cruise_v, 0.0)
+            if t >= self.hop_deadline:                                  # stalled -> diagnose
+                front = self.front_block_m + 1.0
+                if self.scan_msg is not None:
+                    s = self.scan_msg
+                    front = cell_wall_perp_dist(s.ranges, s.angle_min, s.angle_increment,
+                                                pose[2])[_dir_name(self.hop_dir)]
+                if front < self.front_block_m or self.hop_retries >= self.max_hop_retries:
+                    self.brain.mark(self.cell, _dir_name(self.hop_dir), is_wall=True)
+                    self.goal_events_pub.publish(String(data='HOP_BLOCKED'))
+                    self.get_logger().info(
+                        'HOP_BLOCKED cell=%s dir=%s front=%.2f retries=%d -> mark wall, back up'
+                        % (self.cell, _dir_name(self.hop_dir), front, self.hop_retries))
+                    self.phase = 'backup'; self.backup_until = t + self.backup_s
+                else:
+                    self.hop_retries += 1                               # stall, front clear -> re-center & retry
+                    self.get_logger().info(
+                        'HOP_STALL cell=%s dir=%s front=%.2f moved=%.2f -> re-center & retry %d'
+                        % (self.cell, _dir_name(self.hop_dir), front, moved, self.hop_retries))
+                    self.phase = 'center'
+                    self.settle_until = t + self.settle_s
+                    self.hop_deadline = t + self.hop_timeout_s
+                return
+            v, w = hop_drive_command(pose, target_yaw, v_max=self.cruise_v)   # straight, heading-held
+            self._publish_cmd(v, w)
             return
 
     def _diag_tick(self):
