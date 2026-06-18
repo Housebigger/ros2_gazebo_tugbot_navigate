@@ -46,7 +46,9 @@ class MazeMotion:
                  wedge_slow_m: float = 0.50, wedge_stop_m: float = 0.40,
                  wedge_v_floor: float = 0.10, hop_timeout_s: float = 25.0,
                  settle_s: float = 0.4, max_hop_attempts: int = 3,
-                 center_timeout_s: float = 4.0, turn_timeout_s: float = 5.0):
+                 center_timeout_s: float = 4.0, turn_timeout_s: float = 5.0,
+                 wedge_detect_s: float = 3.0, wedge_move_eps: float = 0.08,
+                 recover_v: float = 0.15, recover_s: float = 1.5):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.kd_turn = kd_turn          # derivative damping on rotate-in-place (vs latency overshoot)
@@ -59,6 +61,8 @@ class MazeMotion:
         self.hop_timeout_s = hop_timeout_s; self.settle_s = settle_s
         self.max_hop_attempts = max_hop_attempts; self.center_timeout_s = center_timeout_s
         self.turn_timeout_s = turn_timeout_s
+        self.wedge_detect_s = wedge_detect_s; self.wedge_move_eps = wedge_move_eps
+        self.recover_v = recover_v; self.recover_s = recover_s
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -66,6 +70,7 @@ class MazeMotion:
         self.target_cardinal = 0.0
         self.hop_deadline = 0.0; self.settle_until = 0.0; self.turn_in_tol = 0
         self.hop_attempts = {}          # (cell,dir) -> failed-hop count (transient, NOT walls)
+        self.progress_pose = None; self.progress_t = None; self.recover_until = 0.0  # wedge recovery
         self.turn_start = None          # when the current turn episode began (for the timeout)
         self.center_start = None        # when the current center episode began (for the timeout)
         self.prev_yaw = None; self.prev_t = None; self.yaw_rate = 0.0   # for PD damping
@@ -87,6 +92,8 @@ class MazeMotion:
             return self._turn(pose, t)
         if self.phase == 'drive':
             return self._drive(pose, scan, t)
+        if self.phase == 'recover':
+            return self._recover(pose, t)
         return (0.0, 0.0, False)
 
     def _center(self, pose, scan, t):
@@ -166,6 +173,7 @@ class MazeMotion:
         if (settled and self.turn_in_tol >= self.turn_settle_ticks) or timed_out:
             self.hop_start = (pose[0], pose[1])           # measure the drive from here
             self.hop_deadline = t + self.hop_timeout_s
+            self.progress_pose = (pose[0], pose[1]); self.progress_t = t   # wedge-detector baseline
             self.turn_start = None
             self.phase = 'drive'
             return (0.0, 0.0, False)
@@ -183,8 +191,28 @@ class MazeMotion:
             self.center_start = None
             self.phase = 'center'
             return (0.0, 0.0, False)
-        perp = cell_wall_perp_dist(ranges, amin, ainc, yaw)
         dirn = _dir_name(self.hop_dir)
+        # Wedge detector: while driving, if the robot makes no real progress for wedge_detect_s
+        # it is physically PINNED (the ~13-14 cell plateau: pose frozen, can't move in the tight
+        # interior). Recover by reversing to free it, rather than grinding the hop timeout. Count
+        # it as a hop attempt; after max_hop_attempts give up on this edge (mark wall, re-route).
+        if math.hypot(x - self.progress_pose[0], y - self.progress_pose[1]) > self.wedge_move_eps:
+            self.progress_pose = (x, y); self.progress_t = t
+        elif (t - self.progress_t) > self.wedge_detect_s:
+            key = (self.cell, dirn)
+            self.hop_attempts[key] = self.hop_attempts.get(key, 0) + 1
+            self.center_start = None
+            self.settle_until = t + self.settle_s
+            if self.hop_attempts[key] >= self.max_hop_attempts:      # give up this edge (last resort)
+                self.brain.mark(self.cell, dirn, is_wall=True)
+                self.hop_attempts.pop(key, None)
+                self.sensed.discard(self.cell)
+                self.phase = 'center'
+            else:
+                self.recover_until = t + self.recover_s              # reverse to un-wedge
+                self.phase = 'recover'
+            return (0.0, 0.0, False)
+        perp = cell_wall_perp_dist(ranges, amin, ainc, yaw)
         front_blocked = perp[dirn] < self.front_block_m and moved > 0.3
         if front_blocked or t >= self.hop_deadline:
             # A hop toward a sensed-OPEN edge failed (a front wall appeared, or it stalled).
@@ -218,3 +246,14 @@ class MazeMotion:
                                       lookahead_m=self.lookahead_m, wedge_slow_m=self.wedge_slow_m,
                                       wedge_stop_m=self.wedge_stop_m, wedge_v_floor=self.wedge_v_floor)
         return (v, w, False)
+
+    def _recover(self, pose, t):
+        # Un-wedge: reverse straight back (the way the robot came is open) to free a physical
+        # pin, then re-center / re-sense / re-plan. The hop_attempts increment that triggered
+        # this bounds repeats (-> mark+reroute if it keeps wedging at the same edge).
+        if t < self.recover_until:
+            return (-self.recover_v, 0.0, False)
+        self.sensed.discard(self.cell)        # re-sense from the freed position
+        self.center_start = None
+        self.phase = 'center'
+        return (0.0, 0.0, False)
