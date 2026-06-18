@@ -46,7 +46,7 @@ class MazeMotion:
                  wedge_slow_m: float = 0.50, wedge_stop_m: float = 0.40,
                  wedge_v_floor: float = 0.10, hop_timeout_s: float = 25.0,
                  settle_s: float = 0.4, max_open_timeouts: int = 3,
-                 center_timeout_s: float = 3.0, turn_timeout_s: float = 5.0):
+                 center_timeout_s: float = 4.0, turn_timeout_s: float = 5.0):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.kd_turn = kd_turn          # derivative damping on rotate-in-place (vs latency overshoot)
@@ -106,6 +106,16 @@ class MazeMotion:
         if not centered and (t - self.center_start) < self.center_timeout_s:
             self.settle_until = t + self.settle_s
             return (v, w, False)
+        # Snap yaw to the nearest cardinal before sensing. At all-open junctions there is no
+        # wall for centering_command to face, so the robot would otherwise sense at its
+        # (off-cardinal) arrival yaw -- the Gazebo mis-sense source. PD-damped like the other
+        # rotate-in-place; bounded by the same center timeout (sense anyway if it can't settle).
+        snapped = round(yaw / (math.pi / 2.0)) * (math.pi / 2.0)
+        yaw_err = _norm(snapped - yaw)
+        if abs(yaw_err) > self.yaw_tol_rad and (t - self.center_start) < self.center_timeout_s:
+            w = self.kp_turn * yaw_err - self.kd_turn * self.yaw_rate
+            self.settle_until = t + self.settle_s
+            return (0.0, max(-self.turn_w_max, min(self.turn_w_max, w)), False)
         if t < self.settle_until:
             return (0.0, 0.0, False)
         # Re-anchor the discrete cell to the odom-derived cell -- but only as a BOUNDED
