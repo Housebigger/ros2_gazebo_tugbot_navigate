@@ -21,7 +21,7 @@ def cell_center_offset(ranges, angle_min, angle_inc, yaw, *,
                        ) -> Tuple[Optional[float], Optional[float]]:
     """Robot position minus true cell center, MAP axes (+x=E, +y=N). A component is
     None if that axis is an open corridor (no wall to reference)."""
-    r = cell_wall_min_ranges(ranges, angle_min, angle_inc, 0.0)
+    r = cell_wall_min_ranges(ranges, angle_min, angle_inc, yaw)
 
     def axis(d_pos, d_neg):
         pos, neg = d_pos < wall_dist_m, d_neg < wall_dist_m

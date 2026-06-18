@@ -4,12 +4,15 @@ from tugbot_maze.wall_localize import cell_center_offset, heading_snap, HALF_COR
 H = HALF_CORRIDOR_M  # 0.88
 
 
-def _scan(dN, dE, dS, dW, n=360):
-    """360-beam scan (angle_min=-pi, inc=2pi/n); one beam set per map cardinal, rest far."""
+def _scan(dN, dE, dS, dW, n=360, yaw=0.0):
+    """A ROBOT-frame scan (angle_min=-pi, inc=2pi/n) for a robot facing `yaw`: each
+    MAP cardinal's wall is placed at the beam pointing that way, i.e. robot-relative
+    angle norm(map_angle - yaw). So cell_center_offset(scan, yaw) recovers map walls."""
     amin, ainc = -math.pi, 2 * math.pi / n
     ranges = [12.0] * n
-    for ang, d in [(0.0, dE), (math.pi / 2, dN), (math.pi, dW), (-math.pi / 2, dS)]:
-        ranges[int(round((ang - amin) / ainc)) % n] = d
+    for map_ang, d in [(0.0, dE), (math.pi / 2, dN), (math.pi, dW), (-math.pi / 2, dS)]:
+        scan_ang = math.atan2(math.sin(map_ang - yaw), math.cos(map_ang - yaw))
+        ranges[int(round((scan_ang - amin) / ainc)) % n] = d
     return ranges, amin, ainc
 
 
@@ -38,7 +41,7 @@ def test_open_axis_is_none():
 
 
 def test_offset_respects_yaw():
-    ox, oy = cell_center_offset(*_scan(H, H - 0.2, H, H + 0.2), yaw=math.pi / 2)
+    ox, oy = cell_center_offset(*_scan(H, H - 0.2, H, H + 0.2, yaw=math.pi / 2), yaw=math.pi / 2)
     assert math.isclose(ox, 0.2, abs_tol=1e-6)
 
 
