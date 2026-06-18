@@ -38,7 +38,8 @@ def _dir_name(d) -> str:
 
 class MazeMotion:
     def __init__(self, brain: Optional[FloodFillBrain] = None, *, cruise_v: float = 0.3,
-                 w_max: float = 0.5, kp_turn: float = 1.2, center_tol_m: float = 0.10,
+                 w_max: float = 0.5, kp_turn: float = 0.7, turn_w_max: float = 0.35,
+                 center_tol_m: float = 0.10,
                  yaw_tol_rad: float = 0.10, turn_settle_ticks: int = 3,
                  hop_arrive_slack_m: float = 0.05, front_block_m: float = 0.7,
                  lookahead_m: float = 0.7, max_cross_track_m: float = 0.6,
@@ -48,6 +49,7 @@ class MazeMotion:
                  center_timeout_s: float = 3.0, turn_timeout_s: float = 5.0):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
+        self.turn_w_max = turn_w_max    # gentler cap for rotate-in-place (less latency overshoot)
         self.center_tol_m = center_tol_m; self.yaw_tol_rad = yaw_tol_rad
         self.turn_settle_ticks = turn_settle_ticks; self.hop_arrive_slack_m = hop_arrive_slack_m
         self.front_block_m = front_block_m; self.lookahead_m = lookahead_m
@@ -88,7 +90,8 @@ class MazeMotion:
             self.center_start = t
         ox, oy = cell_center_offset(ranges, amin, ainc, yaw)
         v, w, centered = centering_command((x, y, yaw), ox, oy,
-                                           tol=self.center_tol_m, yaw_tol=self.yaw_tol_rad)
+                                           tol=self.center_tol_m, yaw_tol=self.yaw_tol_rad,
+                                           w_max=self.turn_w_max, kp_ang=self.kp_turn)
         # Keep re-centering until converged OR the attempt times out. The timeout matters:
         # diff-drive overshoot can make 1-axis centering oscillate and never report
         # "centered"; rather than deadlock, sense anyway -- projection-median sensing is
@@ -138,7 +141,7 @@ class MazeMotion:
             self.turn_start = None
             self.phase = 'drive'
             return (0.0, 0.0, False)
-        w = max(-self.w_max, min(self.w_max, self.kp_turn * err))
+        w = max(-self.turn_w_max, min(self.turn_w_max, self.kp_turn * err))
         return (0.0, w, False)
 
     def _drive(self, pose, scan, t):

@@ -91,7 +91,7 @@ class MazeSim:
     def __init__(self, segments, start_xy, start_yaw, *, robot_radius_m=0.35,
                  wall_half_thickness_m=0.12, max_range_m=12.0, inertia=False,
                  v_max=0.5, w_max=0.5, lin_accel=0.5, ang_accel=0.8,
-                 odom_drift_per_m=0.0):
+                 odom_drift_per_m=0.0, cmd_latency_steps=0):
         self.segs = np.asarray(segments, dtype=float).reshape(-1, 4)
         self.x = float(start_xy[0])
         self.y = float(start_xy[1])
@@ -117,6 +117,12 @@ class MazeSim:
         self.ang_accel = ang_accel
         self.v_cur = 0.0
         self.w_cur = 0.0
+        # Command-pipeline latency: a (v,w) command takes effect cmd_latency_steps ticks
+        # later. Models the Gazebo velocity_smoother + diff-drive plugin delay, which (with
+        # P-control) induces the rotate-in-place overshoot/oscillation the offline inertia
+        # model alone did not reproduce. 0 = no latency (default, prior behavior).
+        self.cmd_latency_steps = int(cmd_latency_steps)
+        self._cmd_buf = []
 
     @property
     def pose(self) -> Tuple[float, float, float]:
@@ -181,6 +187,9 @@ class MazeSim:
         return bool(np.any(d < self.robot_radius_m + self.wall_half_thickness_m))
 
     def step(self, v, w, dt):
+        if self.cmd_latency_steps > 0:                 # apply the command from N ticks ago
+            self._cmd_buf.append((v, w))
+            v, w = self._cmd_buf.pop(0) if len(self._cmd_buf) > self.cmd_latency_steps else (0.0, 0.0)
         if self.inertia:
             v_cmd = max(-self.v_max, min(self.v_max, v))
             w_cmd = max(-self.w_max, min(self.w_max, w))
