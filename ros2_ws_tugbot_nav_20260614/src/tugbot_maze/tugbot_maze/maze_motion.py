@@ -48,7 +48,7 @@ class MazeMotion:
                  settle_s: float = 0.4, max_hop_attempts: int = 3,
                  center_timeout_s: float = 4.0, turn_timeout_s: float = 5.0,
                  wedge_detect_s: float = 3.0, wedge_move_eps: float = 0.08,
-                 recover_v: float = 0.15, recover_s: float = 1.5):
+                 recover_v: float = 0.15, recover_s: float = 1.8, recover_w: float = 0.4):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.kd_turn = kd_turn          # derivative damping on rotate-in-place (vs latency overshoot)
@@ -62,7 +62,7 @@ class MazeMotion:
         self.max_hop_attempts = max_hop_attempts; self.center_timeout_s = center_timeout_s
         self.turn_timeout_s = turn_timeout_s
         self.wedge_detect_s = wedge_detect_s; self.wedge_move_eps = wedge_move_eps
-        self.recover_v = recover_v; self.recover_s = recover_s
+        self.recover_v = recover_v; self.recover_s = recover_s; self.recover_w = recover_w
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -248,11 +248,13 @@ class MazeMotion:
         return (v, w, False)
 
     def _recover(self, pose, t):
-        # Un-wedge: reverse straight back (the way the robot came is open) to free a physical
-        # pin, then re-center / re-sense / re-plan. The hop_attempts increment that triggered
-        # this bounds repeats (-> mark+reroute if it keeps wedging at the same edge).
+        # Un-wedge: reverse WHILE rotating to free a physical pin -- a diff-drive can almost
+        # always still rotate when translation is pinned, and turning reorients the footprint
+        # out of a corner/side-wall pin (straight reverse alone can't fix a lateral pin). Then
+        # re-center / re-sense / re-plan. The hop_attempts increment that triggered this bounds
+        # repeats (-> mark + re-route if it keeps wedging at the same edge).
         if t < self.recover_until:
-            return (-self.recover_v, 0.0, False)
+            return (-self.recover_v, self.recover_w, False)
         self.sensed.discard(self.cell)        # re-sense from the freed position
         self.center_start = None
         self.phase = 'center'
