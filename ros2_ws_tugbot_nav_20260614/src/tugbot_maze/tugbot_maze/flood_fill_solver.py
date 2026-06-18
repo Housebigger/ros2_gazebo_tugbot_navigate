@@ -253,10 +253,10 @@ class FloodFillSolver(Node):
         pose = self._lookup_pose()
         if pose is None:
             return
-        cur = pose_to_cell(pose[0], pose[1])
+        odom_cell = pose_to_cell(pose[0], pose[1])
         dist = math.hypot(pose[0] - self.exit_x, pose[1] - self.exit_y)
-        self.get_logger().info('DIAG pose=(%.2f, %.2f) cell=%s dist_to_exit=%.2f phase=%s'
-                               % (pose[0], pose[1], cur, dist, self.phase))
+        self.get_logger().info('DIAG pose=(%.2f, %.2f) dcell=%s odomcell=%s dist_to_exit=%.2f phase=%s'
+                               % (pose[0], pose[1], self.cell, odom_cell, dist, self.phase))
 
 
 def main(args=None):
