@@ -60,13 +60,16 @@ class FloodFillSolver(Node):
         self.settle_s = float(self.declare_parameter('settle_s', 0.4).value)
 
         self.yaw_tol_rad = float(self.declare_parameter('yaw_tol_rad', 0.10).value)
-        # A hop counts as arrived once dead-reckoned distance reaches CELL_SIZE - slack;
-        # generous so a slightly-short straight hop still advances (re-centering fixes
-        # the residual). On a hop timeout we only mark a WALL if the front is actually
+        # A hop counts as arrived once dead-reckoned distance reaches CELL_SIZE - slack.
+        # Keep slack SMALL: arriving well short of a full 2 m cell makes the discrete
+        # tracker run ahead of the physical robot (a 0.5 m slack desynced dcell by ~0.5 m
+        # per hop until the brain's plan no longer matched reality). Arriving near a full
+        # cell lands the robot inside the next cell's centering capture range, keeping
+        # dcell synced. On a hop timeout we only mark a WALL if the front is actually
         # blocked within front_block_m; otherwise it was a locomotion stall -> re-center
         # and retry up to max_hop_retries (never silently fabricate a wall on an OPEN edge,
         # the failure that trapped the robot at (1,4)).
-        self.hop_arrive_slack_m = float(self.declare_parameter('hop_arrive_slack_m', 0.5).value)
+        self.hop_arrive_slack_m = float(self.declare_parameter('hop_arrive_slack_m', 0.15).value)
         self.front_block_m = float(self.declare_parameter('front_block_m', 0.7).value)
         self.max_hop_retries = int(self.declare_parameter('max_hop_retries', 2).value)
 
@@ -229,12 +232,16 @@ class FloodFillSolver(Node):
             nxt = self.brain.next_cell(self.cell)
             if nxt is None:
                 self._publish_cmd(0.0, 0.0); return
-            self.brain.mark_traversal(self.cell, nxt)
+            # Only count a Trémaux traversal / reset the stall-retry budget when this is a
+            # genuinely NEW hop (target changed) -- not on a stall-induced re-center to the
+            # SAME target, which would inflate the traversal count and reset retries forever.
+            if nxt != self.hop_target:
+                self.brain.mark_traversal(self.cell, nxt)
+                self.hop_retries = 0
             self.hop_target = nxt
             self.hop_dir = (nxt[0] - self.cell[0], nxt[1] - self.cell[1])
             self.hop_start = (pose[0], pose[1])
             self.hop_deadline = t + self.hop_timeout_s
-            self.hop_retries = 0
             self.phase = 'hop'
             return
         # phase == 'hop': drive one cell in hop_dir, HOLDING the cardinal heading the whole
