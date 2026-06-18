@@ -4,17 +4,19 @@ re-centering) design. Two properties:
   A. Robust to REPORTED (odom) drift: relative-forward hops + discrete tracking reach
      the exit even when the odom pose diverges heavily — the design never navigates by
      absolute odom, so reported drift can't pull it off course.
-  B. Wall-referenced re-centering corrects PHYSICAL off-centering: when the TRUE pose is
-     pushed laterally each hop (drive/yaw imperfection), re-centering pulls it back to
-     the corridor centre each cell so sensing stays correct and it solves; WITHOUT
-     re-centering the lateral error accumulates and it fails.
+  B. Wall-referenced re-centering keeps the body within corridor clearance: when the
+     TRUE pose is pushed laterally each hop (drive/yaw imperfection), re-centering pulls
+     it back to the corridor centre each cell and it solves; WITHOUT re-centering the
+     lateral error accumulates past the ~0.53 m the 0.35 m footprint has to spare in the
+     1.76 m corridor (the body would hit a wall). Projection-median sensing now tolerates
+     large off-centering, so re-centering's remaining job is physical safety, not sensing.
 """
 import math
 from tugbot_maze.maze_sim import MazeSim, load_segments
 from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, cell_center)
 from tugbot_maze.cell_walls import sense_cell_walls
-from tugbot_maze.wall_localize import cell_center_offset
+from tugbot_maze.wall_localize import cell_center_offset, HALF_CORRIDOR_M
 
 
 def _recenter(sim):
@@ -32,11 +34,15 @@ def _sense(sim, brain, cell):
         brain.mark(cell, d, is_wall)
 
 
-def _drive_loop(sim, brain, *, perturb=0.0, drive_reported_2m=False, recenter=True):
+def _drive_loop(sim, brain, *, perturb=0.0, drive_reported_2m=False, recenter=True,
+                offsets=None):
     cell = ENTRANCE_CELL
     for _hop in range(400):
         if recenter:
             _recenter(sim)
+        if offsets is not None:                          # record body offset from cell centre
+            cx, cy = cell_center(cell)
+            offsets.append(math.hypot(sim.x - cx, sim.y - cy))
         if cell == EXIT_CELL:
             return True
         _sense(sim, brain, cell)
@@ -75,7 +81,15 @@ def test_recentering_corrects_physical_off_centering():
         "wall-referenced re-centering should keep it solving under 0.2 m/hop lateral push"
 
 
-def test_without_recentering_physical_drift_breaks_it():
-    sim = MazeSim(load_segments(), cell_center(ENTRANCE_CELL), 0.0)
-    assert not _drive_loop(sim, FloodFillBrain(), perturb=0.20, recenter=False), \
-        "without re-centering, accumulated lateral drift should break the solve"
+def test_recentering_keeps_body_within_corridor_clearance():
+    # Lateral clearance from the corridor centre before the footprint hits a wall.
+    clearance = HALF_CORRIDOR_M - 0.35   # wall face 0.88 m out, robot radius 0.35 m => 0.53 m
+    with_rc, without_rc = [], []
+    _drive_loop(MazeSim(load_segments(), cell_center(ENTRANCE_CELL), 0.0),
+                FloodFillBrain(), perturb=0.20, recenter=True, offsets=with_rc)
+    _drive_loop(MazeSim(load_segments(), cell_center(ENTRANCE_CELL), 0.0),
+                FloodFillBrain(), perturb=0.20, recenter=False, offsets=without_rc)
+    assert max(with_rc) <= clearance, \
+        f"re-centering should keep the body within corridor clearance, got {max(with_rc):.2f} m"
+    assert max(without_rc) > clearance, \
+        f"without re-centering, drift should accumulate past clearance, got {max(without_rc):.2f} m"

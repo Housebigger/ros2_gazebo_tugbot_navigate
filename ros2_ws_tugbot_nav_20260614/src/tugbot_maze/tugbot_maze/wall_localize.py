@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from typing import Optional, Tuple
 
-from tugbot_maze.cell_walls import cell_wall_min_ranges
+from tugbot_maze.cell_walls import cell_wall_perp_dist
 
 HALF_CORRIDOR_M = 0.88   # cell half-width (1.0) minus wall half-thickness (0.12)
 WALL_DIST_M = 1.3        # a min range below this in a cardinal window => wall present
@@ -21,7 +21,7 @@ def cell_center_offset(ranges, angle_min, angle_inc, yaw, *,
                        ) -> Tuple[Optional[float], Optional[float]]:
     """Robot position minus true cell center, MAP axes (+x=E, +y=N). A component is
     None if that axis is an open corridor (no wall to reference)."""
-    r = cell_wall_min_ranges(ranges, angle_min, angle_inc, yaw)
+    r = cell_wall_perp_dist(ranges, angle_min, angle_inc, yaw)
 
     def axis(d_pos, d_neg):
         pos, neg = d_pos < wall_dist_m, d_neg < wall_dist_m

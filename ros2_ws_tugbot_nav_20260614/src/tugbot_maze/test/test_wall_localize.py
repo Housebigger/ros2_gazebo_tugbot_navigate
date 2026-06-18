@@ -4,15 +4,24 @@ from tugbot_maze.wall_localize import cell_center_offset, heading_snap, HALF_COR
 H = HALF_CORRIDOR_M  # 0.88
 
 
-def _scan(dN, dE, dS, dW, n=360, yaw=0.0):
-    """A ROBOT-frame scan (angle_min=-pi, inc=2pi/n) for a robot facing `yaw`: each
-    MAP cardinal's wall is placed at the beam pointing that way, i.e. robot-relative
-    angle norm(map_angle - yaw). So cell_center_offset(scan, yaw) recovers map walls."""
+def _scan(dN, dE, dS, dW, n=360, yaw=0.0, half_window_deg=30):
+    """A ROBOT-frame scan (angle_min=-pi, inc=2pi/n) for a robot facing `yaw`. Each MAP
+    cardinal's wall is modeled as a flat perpendicular wall at distance d: every beam
+    within half_window_deg of that cardinal reads the slant range d/cos(off), so the
+    perpendicular-projection estimator recovers exactly d. d>=12 (max_range) means no
+    wall (open) -- those beams stay at max_range. The window (>=22 deg) fully fills the
+    sensor's +/-22 deg window, matching a real cell-edge wall (which subtends ~+/-45 deg)."""
     amin, ainc = -math.pi, 2 * math.pi / n
     ranges = [12.0] * n
+    hw = math.radians(half_window_deg)
     for map_ang, d in [(0.0, dE), (math.pi / 2, dN), (math.pi, dW), (-math.pi / 2, dS)]:
-        scan_ang = math.atan2(math.sin(map_ang - yaw), math.cos(map_ang - yaw))
-        ranges[int(round((scan_ang - amin) / ainc)) % n] = d
+        if d >= 12.0:
+            continue
+        ta = math.atan2(math.sin(map_ang - yaw), math.cos(map_ang - yaw))   # scan-frame cardinal
+        for i in range(n):
+            off = math.atan2(math.sin((amin + i * ainc) - ta), math.cos((amin + i * ainc) - ta))
+            if abs(off) <= hw:
+                ranges[i] = min(ranges[i], d / math.cos(off))               # slant range to flat wall
     return ranges, amin, ainc
 
 

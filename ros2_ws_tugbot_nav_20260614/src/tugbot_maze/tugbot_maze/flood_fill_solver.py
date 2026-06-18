@@ -21,7 +21,7 @@ import tf2_ros
 
 from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, DIRS, CELL_SIZE_M, in_grid, cell_center, pose_to_cell)
-from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_min_ranges
+from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
 from tugbot_maze.hop_controller import hop_command
 from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw
 from tugbot_maze.wall_follow_control import exit_reached, entering_done
@@ -131,10 +131,10 @@ class FloodFillSolver(Node):
         for d, is_wall in walls.items():
             self.brain.mark(cur, d, is_wall)
         if self.sense_debug:
-            r = cell_wall_min_ranges(s.ranges, s.angle_min, s.angle_increment, yaw)
+            r = cell_wall_perp_dist(s.ranges, s.angle_min, s.angle_increment, yaw)
             self.get_logger().info(
                 'SENSE cell=%s pose=(%.2f,%.2f) yaw=%.2f walls=N%dE%dS%dW%d '
-                'minr=N%.2f E%.2f S%.2f W%.2f'
+                'perp=N%.2f E%.2f S%.2f W%.2f'
                 % (cur, pose[0], pose[1], yaw,
                    walls['N'], walls['E'], walls['S'], walls['W'],
                    r['N'], r['E'], r['S'], r['W']))
