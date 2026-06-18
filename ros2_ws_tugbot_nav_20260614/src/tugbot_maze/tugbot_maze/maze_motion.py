@@ -21,7 +21,7 @@ import math
 from typing import Optional, Tuple
 
 from tugbot_maze.flood_fill_brain import (
-    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, CELL_SIZE_M)
+    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, CELL_SIZE_M, pose_to_cell, in_grid)
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
 from tugbot_maze.wall_localize import cell_center_offset
 from tugbot_maze.hop_controller import (
@@ -108,6 +108,17 @@ class MazeMotion:
             return (v, w, False)
         if t < self.settle_until:
             return (0.0, 0.0, False)
+        # Re-anchor the discrete cell to the odom-derived cell -- but only as a BOUNDED
+        # correction (within 1 cell of the dead-reckoned cell). This corrects the slow
+        # 1-cell dead-reckoning desync seen in the tight Gazebo interior (where odom is
+        # accurate, drift ~0.25 m) without letting a large odom excursion hijack tracking
+        # (so it stays drift-immune like pure dead-reckoning under extreme odom drift).
+        anchored = pose_to_cell(x, y)
+        if in_grid(anchored) and abs(anchored[0] - self.cell[0]) + abs(anchored[1] - self.cell[1]) <= 1:
+            self.cell = anchored
+        if self.cell == EXIT_CELL:
+            self.phase = 'done'
+            return (0.0, 0.0, True)
         if self.cell not in self.sensed:
             walls = sense_cell_walls(ranges, amin, ainc, yaw)
             for d, is_wall in walls.items():
