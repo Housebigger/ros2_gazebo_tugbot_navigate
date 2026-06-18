@@ -1,0 +1,43 @@
+"""End-to-end validation: drive MazeMotion through the inertia+collision maze_sim to the exit.
+
+This is the strong, fast (offline) validator the motion layer needs -- it exercises the real
+diff-drive accel limits, the LIDAR raycaster, COLLISIONS, and injectable odom drift, so gains
+can be tuned without Gazebo. Asserts: reaches the exit cell; never collides (anti-wedge); and
+the discrete cell tracker stays synced to the physical cell.
+"""
+import math
+import pytest
+from tugbot_maze.maze_motion import MazeMotion
+from tugbot_maze.maze_sim import MazeSim, load_segments
+from tugbot_maze.flood_fill_brain import (
+    ENTRANCE_CELL, EXIT_CELL, cell_center, pose_to_cell)
+
+
+def _run(drift, dt=0.1, max_steps=30000):
+    sim = MazeSim(load_segments(), cell_center(ENTRANCE_CELL), 0.0,
+                  inertia=True, odom_drift_per_m=drift)
+    m = MazeMotion()
+    t = 0.0
+    collided = False
+    max_desync = 0
+    for _ in range(max_steps):
+        scan = sim.scan(n_beams=360, fov_rad=2 * math.pi)
+        v, w, done = m.step(sim.reported_pose, scan, t)   # navigate on (drifting) reported pose
+        if done:
+            return True, collided, max_desync
+        sim.step(v, w, dt)
+        if sim.collides(sim.x, sim.y):                    # body entered a wall margin (true pose)
+            collided = True
+        if m.phase == 'center':                           # tracker-vs-physical sync at rest
+            tc = pose_to_cell(sim.x, sim.y)
+            max_desync = max(max_desync, abs(tc[0] - m.cell[0]) + abs(tc[1] - m.cell[1]))
+        t += dt
+    return (m.cell == EXIT_CELL), collided, max_desync
+
+
+@pytest.mark.parametrize("drift", [0.0, 0.05, 0.10])
+def test_reaches_exit_without_collision_or_desync(drift):
+    reached, collided, max_desync = _run(drift)
+    assert reached, f"did not reach the exit cell (drift={drift})"
+    assert not collided, f"robot body collided with a wall (drift={drift})"
+    assert max_desync <= 1, f"dcell desynced from the physical cell by {max_desync} (drift={drift})"
