@@ -1,5 +1,35 @@
 import math
-from tugbot_maze.hop_controller import hop_command, centering_command, hop_drive_command
+from tugbot_maze.hop_controller import (
+    hop_command, centering_command, hop_drive_command, cross_track_offset)
+
+
+def test_cross_track_sign_by_direction():
+    # N travel: robot east of centre (ox>0) is to its RIGHT -> negative cross-track
+    assert cross_track_offset(0.3, None, (0, 1)) == -0.3
+    # S travel: east is to its LEFT -> positive
+    assert cross_track_offset(0.3, None, (0, -1)) == 0.3
+    # E travel: north (oy>0) is to its LEFT -> positive
+    assert cross_track_offset(None, 0.3, (1, 0)) == 0.3
+    # W travel: north is to its RIGHT -> negative
+    assert cross_track_offset(None, 0.3, (-1, 0)) == -0.3
+
+
+def test_cross_track_open_axis_is_zero():
+    # N travel but the x axis is open (no side wall) -> no lateral reference
+    assert cross_track_offset(None, 0.5, (0, 1)) == 0.0
+    assert cross_track_offset(0.5, None, (1, 0)) == 0.0
+
+
+def test_hop_drive_steers_right_when_left_of_centre():
+    # facing north, on the centerline (dyaw=0) but 0.3 m LEFT of centre (cross>0):
+    # steer RIGHT (negative w) to come back, still driving forward
+    v, w = hop_drive_command((1.5, 4.0, math.pi / 2), math.pi / 2, 0.3)
+    assert w < 0.0 and v > 0.0
+
+
+def test_hop_drive_cross_track_within_envelope():
+    v, w = hop_drive_command((1.5, 4.0, math.pi / 2), math.pi / 2, -2.0)   # large cross-track
+    assert -0.5 <= v <= 0.5 and -0.5 <= w <= 0.5
 
 
 def test_centering_done_when_within_tol_or_open():

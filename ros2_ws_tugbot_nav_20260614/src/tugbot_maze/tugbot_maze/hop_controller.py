@@ -51,13 +51,33 @@ def centering_command(pose, ox: Optional[float], oy: Optional[float], *,
     return (v, 0.0, False)
 
 
-def hop_drive_command(pose, target_yaw: float, *, v_max: float = 0.3, w_max: float = 0.5,
-                      kp_ang: float = 1.5, slow_angle: float = 0.6) -> Tuple[float, float]:
-    """Forward drive for one cell hop that holds `target_yaw` (a map cardinal). Steers
-    continuously to correct heading drift while moving; forward speed is throttled toward
-    0 when badly mis-aligned so the robot straightens before it makes lateral distance."""
+def cross_track_offset(ox: Optional[float], oy: Optional[float], hop_dir) -> float:
+    """Signed lateral offset of the robot from the corridor centerline, measured to the
+    LEFT of the hop direction (+ = robot is left of centre), from the map-axis offsets
+    (ox=+E, oy=+N) returned by cell_center_offset. For N/S travel the lateral axis is x;
+    for E/W it is y. Returns 0.0 if that perpendicular axis is open (None) -- no side wall
+    to reference, so hold heading only."""
+    dx, dy = hop_dir
+    if dy != 0:                                  # N/S travel -> lateral is the x axis
+        if ox is None:
+            return 0.0
+        return -ox if dy > 0 else ox             # N: east(+ox)=right=>-; S: east=left=>+
+    if oy is None:                               # E/W travel -> lateral is the y axis
+        return 0.0
+    return oy if dx > 0 else -oy                 # E: north(+oy)=left=>+; W: north=right=>-
+
+
+def hop_drive_command(pose, target_yaw: float, cross_track: float = 0.0, *,
+                      v_max: float = 0.3, w_max: float = 0.5, kp_ang: float = 1.5,
+                      kp_cross: float = 1.2, slow_angle: float = 0.6) -> Tuple[float, float]:
+    """Straight forward drive for one cell hop, holding `target_yaw` (a map cardinal) AND
+    the corridor centerline. Steering corrects both the heading error and the cross-track
+    (steer right when left of centre). Forward speed is throttled toward 0 only when badly
+    mis-aligned; the caller turns the robot in place to the cardinal first, so during the
+    drive the heading error is small and the robot moves at near-full speed (no slow wobble
+    that stalls forward progress)."""
     dyaw = _norm(target_yaw - pose[2])
-    w = max(-w_max, min(w_max, kp_ang * dyaw))
+    w = max(-w_max, min(w_max, kp_ang * dyaw - kp_cross * cross_track))
     throttle = max(0.0, 1.0 - abs(dyaw) / slow_angle)
     v = max(0.0, min(v_max, v_max * throttle))
     return (v, w)

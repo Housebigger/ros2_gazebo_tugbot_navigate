@@ -22,7 +22,7 @@ import tf2_ros
 from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, DIRS, CELL_SIZE_M, in_grid, cell_center, pose_to_cell)
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
-from tugbot_maze.hop_controller import centering_command, hop_drive_command
+from tugbot_maze.hop_controller import centering_command, hop_drive_command, cross_track_offset
 from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw
 from tugbot_maze.wall_follow_control import exit_reached, entering_done
 from tugbot_maze.wall_localize import cell_center_offset, heading_snap
@@ -66,12 +66,11 @@ class FloodFillSolver(Node):
         # per hop until the brain's plan no longer matched reality). Arriving near a full
         # cell lands the robot inside the next cell's centering capture range, keeping
         # dcell synced. On a hop timeout we only mark a WALL if the front is actually
-        # blocked within front_block_m; otherwise it was a locomotion stall -> re-center
-        # and retry up to max_hop_retries (never silently fabricate a wall on an OPEN edge,
-        # the failure that trapped the robot at (1,4)).
+        # blocked within front_block_m (a real wall ahead); otherwise the hop simply drives
+        # to arrival (never silently fabricate a wall on a sensed-OPEN edge, the failure that
+        # trapped the robot at (1,4)).
         self.hop_arrive_slack_m = float(self.declare_parameter('hop_arrive_slack_m', 0.15).value)
         self.front_block_m = float(self.declare_parameter('front_block_m', 0.7).value)
-        self.max_hop_retries = int(self.declare_parameter('max_hop_retries', 2).value)
 
         self.brain = FloodFillBrain(exit_cell=EXIT_CELL)
         self.scan_msg: Optional[LaserScan] = None
@@ -94,7 +93,6 @@ class FloodFillSolver(Node):
         self.hop_target = None           # target cell for current hop
         self.hop_dir = None              # direction tuple for current hop
         self.hop_start = None            # pose xy at start of current hop
-        self.hop_retries = 0             # locomotion-stall retries for the current hop
         self.create_timer(0.1, self._control_tick)
         self.create_timer(5.0, self._diag_tick)
         self.start_time = self.get_clock().now()
@@ -232,55 +230,49 @@ class FloodFillSolver(Node):
             nxt = self.brain.next_cell(self.cell)
             if nxt is None:
                 self._publish_cmd(0.0, 0.0); return
-            # Only count a Trémaux traversal / reset the stall-retry budget when this is a
-            # genuinely NEW hop (target changed) -- not on a stall-induced re-center to the
-            # SAME target, which would inflate the traversal count and reset retries forever.
-            if nxt != self.hop_target:
-                self.brain.mark_traversal(self.cell, nxt)
-                self.hop_retries = 0
+            self.brain.mark_traversal(self.cell, nxt)
             self.hop_target = nxt
             self.hop_dir = (nxt[0] - self.cell[0], nxt[1] - self.cell[1])
             self.hop_start = (pose[0], pose[1])
             self.hop_deadline = t + self.hop_timeout_s
             self.phase = 'hop'
             return
-        # phase == 'hop': drive one cell in hop_dir, HOLDING the cardinal heading the whole
-        # way (continuous steering) so the robot can't accumulate lateral drift.  Arrival is
-        # decided by dead-reckoned distance from hop_start (drift-immune).  A timeout means a
-        # locomotion stall, NOT necessarily a wall: only mark a wall if the front is actually
-        # blocked, else re-center and retry -- never fabricate a wall on a sensed-OPEN edge.
+        # phase == 'hop': turn in place to the cardinal, THEN drive straight one cell while
+        # holding the cardinal heading AND the corridor centerline (lateral wall-centering).
+        # Turning fully before translating avoids the arc/slow-wobble drive that crept the
+        # robot sideways; centering during the drive (not as a separate mid-hop re-center,
+        # which referenced ambiguous walls between cells) keeps it on the centerline. Arrival
+        # is dead-reckoned (drift-immune). A wall is marked only if the front is actually
+        # blocked within front_block_m -- never fabricated on a sensed-OPEN edge.
         if self.phase == 'hop':
             target_yaw = math.atan2(self.hop_dir[1], self.hop_dir[0])
+            dyaw = math.atan2(math.sin(target_yaw - pose[2]), math.cos(target_yaw - pose[2]))
             moved = math.hypot(pose[0] - self.hop_start[0], pose[1] - self.hop_start[1])
-            if moved >= CELL_SIZE_M - self.hop_arrive_slack_m:          # arrived in next cell
+            if abs(dyaw) > self.yaw_tol_rad and moved < 0.1:            # 1) turn in place first
+                self._publish_cmd(0.0, max(-0.5, min(0.5, 1.5 * dyaw))); return
+            if moved >= CELL_SIZE_M - self.hop_arrive_slack_m:          # 2) arrived in next cell
                 self.cell = self.hop_target                             # DISCRETE advance
                 self.phase = 'center'
                 self.settle_until = t + self.settle_s
                 self.hop_deadline = t + self.hop_timeout_s
                 return
-            if t >= self.hop_deadline:                                  # stalled -> diagnose
-                front = self.front_block_m + 1.0
-                if self.scan_msg is not None:
-                    s = self.scan_msg
-                    front = cell_wall_perp_dist(s.ranges, s.angle_min, s.angle_increment,
-                                                pose[2])[_dir_name(self.hop_dir)]
-                if front < self.front_block_m or self.hop_retries >= self.max_hop_retries:
-                    self.brain.mark(self.cell, _dir_name(self.hop_dir), is_wall=True)
-                    self.goal_events_pub.publish(String(data='HOP_BLOCKED'))
-                    self.get_logger().info(
-                        'HOP_BLOCKED cell=%s dir=%s front=%.2f retries=%d -> mark wall, back up'
-                        % (self.cell, _dir_name(self.hop_dir), front, self.hop_retries))
-                    self.phase = 'backup'; self.backup_until = t + self.backup_s
-                else:
-                    self.hop_retries += 1                               # stall, front clear -> re-center & retry
-                    self.get_logger().info(
-                        'HOP_STALL cell=%s dir=%s front=%.2f moved=%.2f -> re-center & retry %d'
-                        % (self.cell, _dir_name(self.hop_dir), front, moved, self.hop_retries))
-                    self.phase = 'center'
-                    self.settle_until = t + self.settle_s
-                    self.hop_deadline = t + self.hop_timeout_s
+            s = self.scan_msg
+            front = self.front_block_m + 1.0
+            if s is not None:
+                front = cell_wall_perp_dist(s.ranges, s.angle_min, s.angle_increment,
+                                            pose[2])[_dir_name(self.hop_dir)]
+            if (front < self.front_block_m and moved > 0.3) or t >= self.hop_deadline:   # 3) blocked
+                self.brain.mark(self.cell, _dir_name(self.hop_dir), is_wall=True)
+                self.goal_events_pub.publish(String(data='HOP_BLOCKED'))
+                self.get_logger().info(
+                    'HOP_BLOCKED cell=%s dir=%s front=%.2f moved=%.2f -> mark wall, back up'
+                    % (self.cell, _dir_name(self.hop_dir), front, moved))
+                self.phase = 'backup'; self.backup_until = t + self.backup_s
                 return
-            v, w = hop_drive_command(pose, target_yaw, v_max=self.cruise_v)   # straight, heading-held
+            ox, oy = (cell_center_offset(s.ranges, s.angle_min, s.angle_increment, pose[2])
+                      if s is not None else (None, None))               # 4) straight drive,
+            cross = cross_track_offset(ox, oy, self.hop_dir)            #    lateral wall-centered
+            v, w = hop_drive_command(pose, target_yaw, cross, v_max=self.cruise_v)
             self._publish_cmd(v, w)
             return
 
