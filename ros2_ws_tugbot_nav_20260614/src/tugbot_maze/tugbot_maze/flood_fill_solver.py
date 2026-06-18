@@ -198,19 +198,19 @@ class FloodFillSolver(Node):
                 return
             s = self.scan_msg
             ox, oy = cell_center_offset(s.ranges, s.angle_min, s.angle_increment, pose[2])
-            snap_yaw, dyaw = heading_snap(pose[2])
-            if abs(dyaw) > self.yaw_tol_rad and t < self.hop_deadline:   # rotate to cardinal first
-                self._publish_cmd(0.0, max(-0.5, min(0.5, 1.5 * dyaw)))
-                self.settle_until = t + self.settle_s
-                return
             need = (ox is not None and abs(ox) > self.center_tol_m) or \
                    (oy is not None and abs(oy) > self.center_tol_m)
-            if need and t < self.hop_deadline:                          # relative move to centre
-                tx = pose[0] - (ox or 0.0)
-                ty = pose[1] - (oy or 0.0)
+            if need and t < self.hop_deadline:                          # 1) relative move to centre
+                tx = pose[0] - (ox or 0.0)                              #    (turn-then-drive rotates us;
+                ty = pose[1] - (oy or 0.0)                              #     the cardinal snap below fixes that)
                 v, w, _ = hop_command(pose, (tx, ty), arrive_m=0.06)
                 self._publish_cmd(v, w)
                 self.settle_until = t + self.settle_s
+                return
+            snap_yaw, dyaw = heading_snap(pose[2])
+            if abs(dyaw) > self.yaw_tol_rad and t < self.hop_deadline:   # 2) snap to cardinal LAST,
+                self._publish_cmd(0.0, max(-0.5, min(0.5, 1.5 * dyaw)))  #    rotating in place (stays centred),
+                self.settle_until = t + self.settle_s                   #    so we sense cardinal-aligned
                 return
             self._publish_cmd(0.0, 0.0)
             if t < self.settle_until:
