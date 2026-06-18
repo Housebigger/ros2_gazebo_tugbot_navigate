@@ -20,11 +20,16 @@ from std_msgs.msg import String
 import tf2_ros
 
 from tugbot_maze.flood_fill_brain import (
-    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, DIRS, in_grid, cell_center, pose_to_cell)
+    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, DIRS, CELL_SIZE_M, in_grid, cell_center, pose_to_cell)
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_min_ranges
 from tugbot_maze.hop_controller import hop_command
 from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw
 from tugbot_maze.wall_follow_control import exit_reached, entering_done
+from tugbot_maze.wall_localize import cell_center_offset, heading_snap
+
+
+def _dir_name(d):
+    return {(1, 0): 'E', (-1, 0): 'W', (0, 1): 'N', (0, -1): 'S'}[d]
 
 
 class FloodFillSolver(Node):
@@ -54,6 +59,8 @@ class FloodFillSolver(Node):
         self.center_tol_m = float(self.declare_parameter('center_tol_m', 0.12).value)
         self.settle_s = float(self.declare_parameter('settle_s', 0.4).value)
 
+        self.yaw_tol_rad = float(self.declare_parameter('yaw_tol_rad', 0.10).value)
+
         self.brain = FloodFillBrain(exit_cell=EXIT_CELL)
         self.scan_msg: Optional[LaserScan] = None
         self.create_subscription(LaserScan, self.scan_topic, self._scan_cb, 10)
@@ -71,6 +78,10 @@ class FloodFillSolver(Node):
         self.sensed = set()              # cells sensed once already (sticky map; static maze)
         self.settle_until = 0.0
         self._startup_scan_dumped = False   # one-time full-scan dump for footprint characterization
+        self.cell = ENTRANCE_CELL        # discrete cell tracker (drift-immune)
+        self.hop_target = None           # target cell for current hop
+        self.hop_dir = None              # direction tuple for current hop
+        self.hop_start = None            # pose xy at start of current hop
         self.create_timer(0.1, self._control_tick)
         self.create_timer(5.0, self._diag_tick)
         self.start_time = self.get_clock().now()
@@ -138,7 +149,7 @@ class FloodFillSolver(Node):
     def _control_tick(self):
         now = self.get_clock().now(); t = now.nanoseconds / 1e9
         pose = self._lookup_pose()
-        if pose is not None and exit_reached(pose, (self.exit_x, self.exit_y), self.exit_radius):
+        if self.phase not in ('startup',) and self.cell == EXIT_CELL:
             if self.phase != 'done':
                 self.phase = 'done'
                 self.get_logger().info('EXIT_REACHED (flood_fill_solver)')
@@ -164,55 +175,79 @@ class FloodFillSolver(Node):
             return
         if self.phase == 'entering':
             if entering_done(self.start_xy, (pose[0], pose[1]), self.entry_direct_distance_m):
-                self.phase = 'hop'; self.target_xy = None
+                self.cell = ENTRANCE_CELL
+                self.phase = 'center'
+                self.settle_until = t + self.settle_s
+                self.hop_deadline = t + self.hop_timeout_s
             else:
                 self._publish_cmd(self.cruise_v, 0.0)
             return
         if self.phase == 'backup':
             if t >= self.backup_until:
-                self.phase = 'hop'; self.target_xy = None
+                self.phase = 'center'
+                self.settle_until = t + self.settle_s
+                self.hop_deadline = t + self.hop_timeout_s
             else:
                 self._publish_cmd(self.backup_v, 0.0)
             return
-        # phase == 'center': precisely center on the cell and let the base settle, THEN
-        # sense it (clean, repeatable geometry). Sensing from off-center / mid-motion poses
-        # gave contradictory wall reads that corrupted the map; centered+settled sensing,
-        # done once per cell (sticky -- the maze is static), fixes that.
+        # phase == 'center': wall-referenced centering — use LIDAR offsets to find the true
+        # cell centre, snap yaw to cardinal, then sense and plan next hop.  Drift-immune:
+        # uses relative LIDAR displacement, not absolute odom.
         if self.phase == 'center':
-            cur = pose_to_cell(pose[0], pose[1])
-            cx, cy = cell_center(cur)
-            if math.hypot(pose[0] - cx, pose[1] - cy) > self.center_tol_m and t < self.hop_deadline:
-                v, w, _ = hop_command(pose, (cx, cy), arrive_m=0.06)
-                self._publish_cmd(v, w)
-                self.settle_until = t + self.settle_s   # settle is timed from the last motion
+            if self.scan_msg is None:
                 return
-            self._publish_cmd(0.0, 0.0)                 # stopped; let the base settle
+            s = self.scan_msg
+            ox, oy = cell_center_offset(s.ranges, s.angle_min, s.angle_increment, pose[2])
+            snap_yaw, dyaw = heading_snap(pose[2])
+            if abs(dyaw) > self.yaw_tol_rad and t < self.hop_deadline:   # rotate to cardinal first
+                self._publish_cmd(0.0, max(-0.5, min(0.5, 1.5 * dyaw)))
+                self.settle_until = t + self.settle_s
+                return
+            need = (ox is not None and abs(ox) > self.center_tol_m) or \
+                   (oy is not None and abs(oy) > self.center_tol_m)
+            if need and t < self.hop_deadline:                          # relative move to centre
+                tx = pose[0] - (ox or 0.0)
+                ty = pose[1] - (oy or 0.0)
+                v, w, _ = hop_command(pose, (tx, ty), arrive_m=0.06)
+                self._publish_cmd(v, w)
+                self.settle_until = t + self.settle_s
+                return
+            self._publish_cmd(0.0, 0.0)
             if t < self.settle_until:
                 return
-            if cur not in self.sensed:                  # sticky map: sense each cell only once
-                self._sense(cur, pose)
-                self.sensed.add(cur)
-            nxt = self.brain.next_cell(cur)
-            if nxt is None:                             # connected maze -> only at exit (caught above)
+            if self.cell not in self.sensed:                            # sense the cell ONCE (sticky)
+                self._sense(self.cell, pose)
+                self.sensed.add(self.cell)
+            nxt = self.brain.next_cell(self.cell)
+            if nxt is None:
                 self._publish_cmd(0.0, 0.0); return
-            self.brain.mark_traversal(cur, nxt)         # Trémaux: count this edge traversal
-            self.target_xy = cell_center(nxt)
+            self.brain.mark_traversal(self.cell, nxt)
+            self.hop_target = nxt
+            self.hop_dir = (nxt[0] - self.cell[0], nxt[1] - self.cell[1])
+            self.hop_start = (pose[0], pose[1])
             self.hop_deadline = t + self.hop_timeout_s
             self.phase = 'hop'
             return
-        # phase == 'hop': drive to the chosen next-cell center; on arrival, center + sense.
-        if self.target_xy is None:                      # fresh entry (from entering/backup)
-            self.phase = 'center'; self.hop_deadline = t + self.hop_timeout_s
-            self.settle_until = t + self.settle_s; return
-        v, w, arrived = hop_command(pose, self.target_xy)
-        if arrived:
-            self.target_xy = None
-            self.phase = 'center'; self.hop_deadline = t + self.hop_timeout_s
-            self.settle_until = t + self.settle_s; return
-        if t >= self.hop_deadline:                      # wedged -> back up and retry
-            self.phase = 'backup'; self.backup_until = t + self.backup_s
-            self.goal_events_pub.publish(String(data='HOP_BACKUP')); return
-        self._publish_cmd(v, w)
+        # phase == 'hop': drive one cell in hop_dir using dead-reckoning distance from
+        # hop_start.  Drift-immune: arrival decided by distance moved, not absolute pose.
+        if self.phase == 'hop':
+            target_yaw = math.atan2(self.hop_dir[1], self.hop_dir[0])
+            dyaw = math.atan2(math.sin(target_yaw - pose[2]), math.cos(target_yaw - pose[2]))
+            if abs(dyaw) > self.yaw_tol_rad:                            # face the hop cardinal
+                self._publish_cmd(0.0, max(-0.5, min(0.5, 1.5 * dyaw))); return
+            moved = math.hypot(pose[0] - self.hop_start[0], pose[1] - self.hop_start[1])
+            if moved >= CELL_SIZE_M - 0.10:                             # arrived in next cell
+                self.cell = self.hop_target                             # DISCRETE advance
+                self.phase = 'center'
+                self.settle_until = t + self.settle_s
+                self.hop_deadline = t + self.hop_timeout_s
+                return
+            if t >= self.hop_deadline:                                  # blocked -> mark wall, back up
+                self.brain.mark(self.cell, _dir_name(self.hop_dir), is_wall=True)
+                self.phase = 'backup'; self.backup_until = t + self.backup_s
+                self.goal_events_pub.publish(String(data='HOP_BACKUP')); return
+            self._publish_cmd(self.cruise_v, 0.0)
+            return
 
     def _diag_tick(self):
         pose = self._lookup_pose()
