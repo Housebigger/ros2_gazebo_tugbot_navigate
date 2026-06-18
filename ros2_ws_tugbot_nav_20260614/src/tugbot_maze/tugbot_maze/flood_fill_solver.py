@@ -1,13 +1,9 @@
 """Thin ROS 2 node: cell-grid flood-fill (micromouse) maze solver.
 
-Subscribes /scan (LaserScan) and uses map->base_link TF for pose. Each control tick:
-localize to a maze cell, sense its 4 edges from the live LIDAR (cell_walls), ask the
-FloodFillBrain for the next cell, and drive there with a heading-held cell hop. Owns the entry
-drive, a per-hop stall watchdog, and the exit self-check. No LIDAR entrance seal is
-needed here: the brain only ever targets interior cells (cx 1..10), so the robot is
-confined to the interior and cannot reach the entrance opening or the exterior (a
-stronger guarantee than the wall-follower's seal). ROS plumbing mirrors
-wall_follow_solver.py.
+Subscribes /scan (LaserScan) and uses map->base_link TF for pose. Delegates all
+motion control (centering, turning, driving cell-to-cell) to MazeMotion, which
+internally uses FloodFillBrain for routing. This node owns only ROS plumbing
+(params, TF, pub/sub, timers) and the startup / entering phases.
 """
 import math
 from typing import Optional
@@ -20,16 +16,10 @@ from std_msgs.msg import String
 import tf2_ros
 
 from tugbot_maze.flood_fill_brain import (
-    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, DIRS, CELL_SIZE_M, in_grid, cell_center, pose_to_cell)
-from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
-from tugbot_maze.hop_controller import centering_command, hop_drive_command, cross_track_offset
+    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, pose_to_cell)
+from tugbot_maze.maze_motion import MazeMotion
 from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw
-from tugbot_maze.wall_follow_control import exit_reached, entering_done
-from tugbot_maze.wall_localize import cell_center_offset, heading_snap
-
-
-def _dir_name(d):
-    return {(1, 0): 'E', (-1, 0): 'W', (0, 1): 'N', (0, -1): 'S'}[d]
+from tugbot_maze.wall_follow_control import entering_done
 
 
 class FloodFillSolver(Node):
@@ -43,7 +33,7 @@ class FloodFillSolver(Node):
         # once at startup, then track on wheel odometry only -- avoids slam_toolbox
         # pose degradation in the narrow repetitive corridors).
         self.pose_source = self.declare_parameter('pose_source', 'slam').value
-        # sense_debug: log per-edge sensed walls + min LIDAR ranges per cell (diagnostics).
+        # sense_debug: dump full LIDAR scan at startup for footprint characterization.
         self.sense_debug = bool(self.declare_parameter('sense_debug', False).value)
         self.goal_events_topic = self.declare_parameter('goal_events_topic', '/maze/goal_events').value
         self.exit_x = float(self.declare_parameter('exit_x', 21.072562).value)
@@ -52,36 +42,21 @@ class FloodFillSolver(Node):
         self.entry_direct_distance_m = float(self.declare_parameter('entry_direct_distance_m', 2.0).value)
         self.startup_delay_sec = float(self.declare_parameter('startup_delay_sec', 3.0).value)
         self.hop_timeout_s = float(self.declare_parameter('hop_timeout_s', 25.0).value)
-        self.backup_s = float(self.declare_parameter('backup_s', 1.0).value)
-        self.backup_v = float(self.declare_parameter('backup_v', -0.15).value)
         self.cruise_v = float(self.declare_parameter('cruise_v', 0.3).value)
         # Sense a cell only when centered within this radius and settled (clean geometry).
         self.center_tol_m = float(self.declare_parameter('center_tol_m', 0.12).value)
-        self.settle_s = float(self.declare_parameter('settle_s', 0.4).value)
-
         self.yaw_tol_rad = float(self.declare_parameter('yaw_tol_rad', 0.10).value)
         # A hop counts as arrived once dead-reckoned distance reaches CELL_SIZE - slack.
-        # Keep slack SMALL: arriving well short of a full 2 m cell makes the discrete
-        # tracker run ahead of the physical robot (a 0.5 m slack desynced dcell by ~0.5 m
-        # per hop until the brain's plan no longer matched reality). Arriving near a full
-        # cell lands the robot inside the next cell's centering capture range, keeping
-        # dcell synced. On a hop timeout we only mark a WALL if the front is actually
-        # blocked within front_block_m (a real wall ahead); otherwise the hop simply drives
-        # to arrival (never silently fabricate a wall on a sensed-OPEN edge, the failure that
-        # trapped the robot at (1,4)). Small arrival slack: arriving well short of a full 2 m
-        # cell makes the dead-reckoned tracker run ahead of the robot and desync over many
-        # hops, so keep it tight (the straight, heading-held drive reaches ~2 m cleanly).
         self.hop_arrive_slack_m = float(self.declare_parameter('hop_arrive_slack_m', 0.05).value)
         self.front_block_m = float(self.declare_parameter('front_block_m', 0.7).value)
-        # An open-front hop timeout is a transient stall, NOT a wall: back up and retry
-        # rather than fabricate a wall. Only after this many consecutive open-front timeouts
-        # at the SAME cell do we give up and mark the edge (last resort, avoids a live-lock).
-        self.max_open_timeouts = int(self.declare_parameter('max_open_timeouts', 3).value)
-        # Beyond this, a lateral offset estimate is implausible (> corridor half) -> bogus
-        # (mid-hop / desynced); ignore it for in-hop centering rather than steer on garbage.
-        self.max_cross_track_m = float(self.declare_parameter('max_cross_track_m', 0.6).value)
 
         self.brain = FloodFillBrain(exit_cell=EXIT_CELL)
+        self.motion = MazeMotion(self.brain, cruise_v=self.cruise_v,
+                                 center_tol_m=self.center_tol_m,
+                                 yaw_tol_rad=self.yaw_tol_rad,
+                                 hop_arrive_slack_m=self.hop_arrive_slack_m,
+                                 front_block_m=self.front_block_m,
+                                 hop_timeout_s=self.hop_timeout_s)
         self.scan_msg: Optional[LaserScan] = None
         self.create_subscription(LaserScan, self.scan_topic, self._scan_cb, 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_nav', 10)
@@ -89,21 +64,10 @@ class FloodFillSolver(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        self.phase = 'startup'        # startup | entering | hop | center | backup | done
+        self.phase = 'startup'        # startup | entering | driving | done
         self.start_xy = None
         self.map_to_odom_locked = None   # frozen map->odom for pose_source='odom_locked'
-        self.target_xy = None
-        self.hop_deadline = 0.0
-        self.backup_until = 0.0
-        self.sensed = set()              # cells sensed once already (sticky map; static maze)
-        self.settle_until = 0.0
         self._startup_scan_dumped = False   # one-time full-scan dump for footprint characterization
-        self.cell = ENTRANCE_CELL        # discrete cell tracker (drift-immune)
-        self.hop_target = None           # target cell for current hop
-        self.hop_dir = None              # direction tuple for current hop
-        self.hop_start = None            # pose xy at start of current hop
-        self.stall_key = None            # (cell, dir) of the current open-front stall streak
-        self.stall_count = 0             # consecutive open-front timeouts at stall_key
         self.create_timer(0.1, self._control_tick)
         self.create_timer(5.0, self._diag_tick)
         self.start_time = self.get_clock().now()
@@ -144,40 +108,9 @@ class FloodFillSolver(Node):
     def _publish_cmd(self, v, w):
         m = Twist(); m.linear.x = float(v); m.angular.z = float(w); self.cmd_vel_pub.publish(m)
 
-    def _sense(self, cur, pose):
-        if self.scan_msg is None:
-            return
-        s = self.scan_msg
-        yaw = pose[2]
-        walls = sense_cell_walls(s.ranges, s.angle_min, s.angle_increment, yaw)
-        for d, is_wall in walls.items():
-            self.brain.mark(cur, d, is_wall)
-        if self.sense_debug:
-            r = cell_wall_perp_dist(s.ranges, s.angle_min, s.angle_increment, yaw)
-            self.get_logger().info(
-                'SENSE cell=%s pose=(%.2f,%.2f) yaw=%.2f walls=N%dE%dS%dW%d '
-                'perp=N%.2f E%.2f S%.2f W%.2f'
-                % (cur, pose[0], pose[1], yaw,
-                   walls['N'], walls['E'], walls['S'], walls['W'],
-                   r['N'], r['E'], r['S'], r['W']))
-            # Raw downsampled scan for offline real-vs-SDF comparison (drift vs lidar-gap).
-            step = max(1, len(s.ranges) // 90)
-            ds = ['%.2f' % min(float(v), 12.0) if (v is not None and math.isfinite(v) and v > 0) else 'inf'
-                  for v in s.ranges[::step]]
-            self.get_logger().info(
-                'SCANDUMP cell=%s pose=(%.3f,%.3f) yaw=%.4f amin=%.4f ainc=%.6f step=%d ranges=%s'
-                % (cur, pose[0], pose[1], yaw, s.angle_min, s.angle_increment, step, ' '.join(ds)))
-
     def _control_tick(self):
         now = self.get_clock().now(); t = now.nanoseconds / 1e9
         pose = self._lookup_pose()
-        if self.phase not in ('startup',) and self.cell == EXIT_CELL:
-            if self.phase != 'done':
-                self.phase = 'done'
-                self.get_logger().info('EXIT_REACHED (flood_fill_solver)')
-                self.goal_events_pub.publish(String(data='EXIT_REACHED'))
-                self._publish_cmd(0.0, 0.0)
-            return
         if self.phase == 'done':
             return
         elapsed = (now - self.start_time).nanoseconds / 1e9
@@ -197,112 +130,21 @@ class FloodFillSolver(Node):
             return
         if self.phase == 'entering':
             if entering_done(self.start_xy, (pose[0], pose[1]), self.entry_direct_distance_m):
-                self.cell = ENTRANCE_CELL
-                self.phase = 'center'
-                self.settle_until = t + self.settle_s
-                self.hop_deadline = t + self.hop_timeout_s
+                self.motion.cell = ENTRANCE_CELL
+                self.phase = 'driving'
             else:
                 self._publish_cmd(self.cruise_v, 0.0)
             return
-        if self.phase == 'backup':
-            if t >= self.backup_until:
-                self.phase = 'center'
-                self.settle_until = t + self.settle_s
-                self.hop_deadline = t + self.hop_timeout_s
-            else:
-                self._publish_cmd(self.backup_v, 0.0)
-            return
-        # phase == 'center': wall-referenced centering — use LIDAR offsets to find the true
-        # cell centre, snap yaw to cardinal, then sense and plan next hop.  Drift-immune:
-        # uses relative LIDAR displacement, not absolute odom.
-        if self.phase == 'center':
+        if self.phase == 'driving':
             if self.scan_msg is None:
                 return
             s = self.scan_msg
-            ox, oy = cell_center_offset(s.ranges, s.angle_min, s.angle_increment, pose[2])
-            v, w, centered = centering_command(pose, ox, oy,                # 1) cardinal-aligned
-                                               tol=self.center_tol_m,       #    1-axis centering:
-                                               yaw_tol=self.yaw_tol_rad)    #    converges, stays cardinal
-            if not centered and t < self.hop_deadline:
-                self._publish_cmd(v, w)
-                self.settle_until = t + self.settle_s
-                return
-            snap_yaw, dyaw = heading_snap(pose[2])
-            if abs(dyaw) > self.yaw_tol_rad and t < self.hop_deadline:   # 2) snap to cardinal,
-                self._publish_cmd(0.0, max(-0.5, min(0.5, 1.5 * dyaw)))  #    rotating in place (stays centred),
-                self.settle_until = t + self.settle_s                   #    so we sense cardinal-aligned
-                return
-            self._publish_cmd(0.0, 0.0)
-            if t < self.settle_until:
-                return
-            if self.cell not in self.sensed:                            # sense the cell ONCE (sticky)
-                self._sense(self.cell, pose)
-                self.sensed.add(self.cell)
-            nxt = self.brain.next_cell(self.cell)
-            if nxt is None:
-                self._publish_cmd(0.0, 0.0); return
-            self.brain.mark_traversal(self.cell, nxt)
-            self.hop_target = nxt
-            self.hop_dir = (nxt[0] - self.cell[0], nxt[1] - self.cell[1])
-            self.hop_start = (pose[0], pose[1])
-            self.hop_deadline = t + self.hop_timeout_s
-            self.phase = 'hop'
-            return
-        # phase == 'hop': turn in place to the cardinal, THEN drive straight one cell while
-        # holding the cardinal heading AND the corridor centerline (lateral wall-centering).
-        # Turning fully before translating avoids the arc/slow-wobble drive that crept the
-        # robot sideways; centering during the drive (not as a separate mid-hop re-center,
-        # which referenced ambiguous walls between cells) keeps it on the centerline. Arrival
-        # is dead-reckoned (drift-immune). A wall is marked only if the front is actually
-        # blocked within front_block_m -- never fabricated on a sensed-OPEN edge.
-        if self.phase == 'hop':
-            target_yaw = math.atan2(self.hop_dir[1], self.hop_dir[0])
-            dyaw = math.atan2(math.sin(target_yaw - pose[2]), math.cos(target_yaw - pose[2]))
-            moved = math.hypot(pose[0] - self.hop_start[0], pose[1] - self.hop_start[1])
-            if abs(dyaw) > self.yaw_tol_rad and moved < 0.1:            # 1) turn in place first
-                self._publish_cmd(0.0, max(-0.5, min(0.5, 1.5 * dyaw))); return
-            if moved >= CELL_SIZE_M - self.hop_arrive_slack_m:          # 2) arrived in next cell
-                self.cell = self.hop_target                             # DISCRETE advance
-                self.stall_key = None; self.stall_count = 0             # hop succeeded -> clear stall streak
-                self.phase = 'center'
-                self.settle_until = t + self.settle_s
-                self.hop_deadline = t + self.hop_timeout_s
-                return
-            s = self.scan_msg
-            dirn = _dir_name(self.hop_dir)
-            front = self.front_block_m + 1.0
-            if s is not None:
-                front = cell_wall_perp_dist(s.ranges, s.angle_min, s.angle_increment,
-                                            pose[2])[dirn]
-            if front < self.front_block_m and moved > 0.3:              # 3a) real wall ahead -> mark
-                self.brain.mark(self.cell, dirn, is_wall=True)
-                self.goal_events_pub.publish(String(data='HOP_BLOCKED'))
-                self.get_logger().info('HOP_BLOCKED cell=%s dir=%s front=%.2f moved=%.2f -> mark wall'
-                                       % (self.cell, dirn, front, moved))
-                self.stall_key = None; self.stall_count = 0
-                self.phase = 'backup'; self.backup_until = t + self.backup_s
-                return
-            if t >= self.hop_deadline:                                  # 3b) open-front timeout = stall
-                key = (self.cell, dirn)
-                self.stall_count = self.stall_count + 1 if key == self.stall_key else 1
-                self.stall_key = key
-                if self.stall_count >= self.max_open_timeouts:          # give up: mark (last resort)
-                    self.brain.mark(self.cell, dirn, is_wall=True)
-                    self.get_logger().info('HOP_STALL_GIVEUP cell=%s dir=%s front=%.2f n=%d -> mark wall'
-                                           % (self.cell, dirn, front, self.stall_count))
-                    self.stall_key = None; self.stall_count = 0
-                else:                                                   # transient: back up, retry, NO wall
-                    self.get_logger().info('HOP_STALL cell=%s dir=%s front=%.2f moved=%.2f n=%d -> back up, retry'
-                                           % (self.cell, dirn, front, moved, self.stall_count))
-                self.phase = 'backup'; self.backup_until = t + self.backup_s
-                return
-            ox, oy = (cell_center_offset(s.ranges, s.angle_min, s.angle_increment, pose[2])
-                      if s is not None else (None, None))               # 4) straight drive,
-            cross = cross_track_offset(ox, oy, self.hop_dir)            #    lateral wall-centered
-            if abs(cross) > self.max_cross_track_m:                     #    ignore bogus (mid-hop/desync) offset
-                cross = 0.0
-            v, w = hop_drive_command(pose, target_yaw, cross, v_max=self.cruise_v)
+            v, w, done = self.motion.step(pose, (s.ranges, s.angle_min, s.angle_increment), t)
             self._publish_cmd(v, w)
+            if done and self.phase != 'done':
+                self.phase = 'done'
+                self.get_logger().info('EXIT_REACHED (flood_fill_solver)')
+                self.goal_events_pub.publish(String(data='EXIT_REACHED'))
             return
 
     def _diag_tick(self):
@@ -311,8 +153,9 @@ class FloodFillSolver(Node):
             return
         odom_cell = pose_to_cell(pose[0], pose[1])
         dist = math.hypot(pose[0] - self.exit_x, pose[1] - self.exit_y)
-        self.get_logger().info('DIAG pose=(%.2f, %.2f) dcell=%s odomcell=%s dist_to_exit=%.2f phase=%s'
-                               % (pose[0], pose[1], self.cell, odom_cell, dist, self.phase))
+        self.get_logger().info('DIAG pose=(%.2f, %.2f) dcell=%s odomcell=%s dist_to_exit=%.2f phase=%s/%s'
+                               % (pose[0], pose[1], self.motion.cell, odom_cell, dist,
+                                  self.phase, self.motion.phase))
 
 
 def main(args=None):
