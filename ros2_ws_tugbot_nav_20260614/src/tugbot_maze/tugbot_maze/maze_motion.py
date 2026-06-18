@@ -44,7 +44,8 @@ class MazeMotion:
                  lookahead_m: float = 0.7, max_cross_track_m: float = 0.6,
                  wedge_slow_m: float = 0.50, wedge_stop_m: float = 0.40,
                  wedge_v_floor: float = 0.10, hop_timeout_s: float = 25.0,
-                 settle_s: float = 0.4, max_open_timeouts: int = 3):
+                 settle_s: float = 0.4, max_open_timeouts: int = 3,
+                 center_timeout_s: float = 3.0):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.center_tol_m = center_tol_m; self.yaw_tol_rad = yaw_tol_rad
@@ -53,7 +54,7 @@ class MazeMotion:
         self.max_cross_track_m = max_cross_track_m; self.wedge_slow_m = wedge_slow_m
         self.wedge_stop_m = wedge_stop_m; self.wedge_v_floor = wedge_v_floor
         self.hop_timeout_s = hop_timeout_s; self.settle_s = settle_s
-        self.max_open_timeouts = max_open_timeouts
+        self.max_open_timeouts = max_open_timeouts; self.center_timeout_s = center_timeout_s
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -61,6 +62,8 @@ class MazeMotion:
         self.target_cardinal = 0.0
         self.hop_deadline = 0.0; self.settle_until = 0.0; self.turn_in_tol = 0
         self.stall_key = None; self.stall_count = 0
+        self.center_start = None        # when the current center episode began (for the timeout)
+        self.dbg = {}                   # last-tick diagnostics (offset, walls, near) for logging
 
     def step(self, pose, scan, t) -> Tuple[float, float, bool]:
         if self.phase == 'done' or self.cell == EXIT_CELL:
@@ -79,18 +82,29 @@ class MazeMotion:
     def _center(self, pose, scan, t):
         x, y, yaw = pose
         ranges, amin, ainc = scan
+        if self.center_start is None:
+            self.center_start = t
         ox, oy = cell_center_offset(ranges, amin, ainc, yaw)
         v, w, centered = centering_command((x, y, yaw), ox, oy,
                                            tol=self.center_tol_m, yaw_tol=self.yaw_tol_rad)
-        if not centered:
+        # Keep re-centering until converged OR the attempt times out. The timeout matters:
+        # diff-drive overshoot can make 1-axis centering oscillate and never report
+        # "centered"; rather than deadlock, sense anyway -- projection-median sensing is
+        # robust to ~0.45 m off-centre, so tight centering is not required to sense/plan.
+        if not centered and (t - self.center_start) < self.center_timeout_s:
             self.settle_until = t + self.settle_s
             return (v, w, False)
         if t < self.settle_until:
             return (0.0, 0.0, False)
         if self.cell not in self.sensed:
-            for d, is_wall in sense_cell_walls(ranges, amin, ainc, yaw).items():
+            walls = sense_cell_walls(ranges, amin, ainc, yaw)
+            for d, is_wall in walls.items():
                 self.brain.mark(self.cell, d, is_wall)
             self.sensed.add(self.cell)
+            self.dbg = {'cell': self.cell, 'pose': (round(x, 2), round(y, 2), round(yaw, 2)),
+                        'off': (None if ox is None else round(ox, 2),
+                                None if oy is None else round(oy, 2)),
+                        'centered': centered, 'walls': walls}
         nxt = self.brain.next_cell(self.cell)
         if nxt is None:
             self.phase = 'stuck'
@@ -102,6 +116,7 @@ class MazeMotion:
         self.target_cardinal = math.atan2(self.hop_dir[1], self.hop_dir[0])
         self.hop_start = (x, y)
         self.turn_in_tol = 0
+        self.center_start = None
         self.phase = 'turn'
         return (0.0, 0.0, False)
 
@@ -127,6 +142,7 @@ class MazeMotion:
             self.cell = self.hop_target
             self.stall_key = None; self.stall_count = 0
             self.settle_until = t + self.settle_s
+            self.center_start = None
             self.phase = 'center'
             return (0.0, 0.0, False)
         perp = cell_wall_perp_dist(ranges, amin, ainc, yaw)
@@ -135,6 +151,7 @@ class MazeMotion:
             self.brain.mark(self.cell, dirn, is_wall=True)
             self.stall_key = None; self.stall_count = 0
             self.settle_until = t + self.settle_s
+            self.center_start = None
             self.phase = 'center'
             return (0.0, 0.0, False)
         if t >= self.hop_deadline:                                  # open-front timeout = stall
@@ -145,6 +162,7 @@ class MazeMotion:
                 self.brain.mark(self.cell, dirn, is_wall=True)
                 self.stall_key = None; self.stall_count = 0
                 self.settle_until = t + self.settle_s
+                self.center_start = None
                 self.phase = 'center'
                 return (0.0, 0.0, False)
             self.hop_deadline = t + self.hop_timeout_s              # retry: keep hop_start, drive on

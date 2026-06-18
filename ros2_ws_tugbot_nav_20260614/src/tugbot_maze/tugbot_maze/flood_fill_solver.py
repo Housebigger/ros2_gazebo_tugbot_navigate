@@ -156,6 +156,10 @@ class FloodFillSolver(Node):
         self.get_logger().info('DIAG pose=(%.2f, %.2f) dcell=%s odomcell=%s dist_to_exit=%.2f phase=%s/%s'
                                % (pose[0], pose[1], self.motion.cell, odom_cell, dist,
                                   self.phase, self.motion.phase))
+        if self.sense_debug and self.motion.dbg:
+            d = self.motion.dbg
+            self.get_logger().info('SENSE cell=%s pose=%s off=%s centered=%s walls=%s'
+                                   % (d['cell'], d['pose'], d['off'], d['centered'], d['walls']))
 
 
 def main(args=None):
