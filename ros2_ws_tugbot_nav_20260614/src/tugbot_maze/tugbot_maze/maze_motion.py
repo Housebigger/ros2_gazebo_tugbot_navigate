@@ -45,7 +45,7 @@ class MazeMotion:
                  lookahead_m: float = 0.7, max_cross_track_m: float = 0.6,
                  wedge_slow_m: float = 0.50, wedge_stop_m: float = 0.40,
                  wedge_v_floor: float = 0.10, hop_timeout_s: float = 25.0,
-                 settle_s: float = 0.4, max_open_timeouts: int = 3,
+                 settle_s: float = 0.4, max_hop_attempts: int = 3,
                  center_timeout_s: float = 4.0, turn_timeout_s: float = 5.0):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
@@ -57,7 +57,7 @@ class MazeMotion:
         self.max_cross_track_m = max_cross_track_m; self.wedge_slow_m = wedge_slow_m
         self.wedge_stop_m = wedge_stop_m; self.wedge_v_floor = wedge_v_floor
         self.hop_timeout_s = hop_timeout_s; self.settle_s = settle_s
-        self.max_open_timeouts = max_open_timeouts; self.center_timeout_s = center_timeout_s
+        self.max_hop_attempts = max_hop_attempts; self.center_timeout_s = center_timeout_s
         self.turn_timeout_s = turn_timeout_s
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
@@ -65,7 +65,7 @@ class MazeMotion:
         self.hop_dir = None; self.hop_target = None; self.hop_start = None
         self.target_cardinal = 0.0
         self.hop_deadline = 0.0; self.settle_until = 0.0; self.turn_in_tol = 0
-        self.stall_key = None; self.stall_count = 0
+        self.hop_attempts = {}          # (cell,dir) -> failed-hop count (transient, NOT walls)
         self.turn_start = None          # when the current turn episode began (for the timeout)
         self.center_start = None        # when the current center episode began (for the timeout)
         self.prev_yaw = None; self.prev_t = None; self.yaw_rate = 0.0   # for PD damping
@@ -178,32 +178,33 @@ class MazeMotion:
         moved = math.hypot(x - self.hop_start[0], y - self.hop_start[1])
         if moved >= CELL_SIZE_M - self.hop_arrive_slack_m:           # arrived
             self.cell = self.hop_target
-            self.stall_key = None; self.stall_count = 0
+            self.hop_attempts.clear()                                # fresh cell -> reset attempts
             self.settle_until = t + self.settle_s
             self.center_start = None
             self.phase = 'center'
             return (0.0, 0.0, False)
         perp = cell_wall_perp_dist(ranges, amin, ainc, yaw)
         dirn = _dir_name(self.hop_dir)
-        if perp[dirn] < self.front_block_m and moved > 0.3:         # real wall ahead -> mark
-            self.brain.mark(self.cell, dirn, is_wall=True)
-            self.stall_key = None; self.stall_count = 0
+        front_blocked = perp[dirn] < self.front_block_m and moved > 0.3
+        if front_blocked or t >= self.hop_deadline:
+            # A hop toward a sensed-OPEN edge failed (a front wall appeared, or it stalled).
+            # Do NOT trust this as a wall: walls come from SENSING (robust projection-median),
+            # NOT from locomotion failures -- those were silently marking false walls and
+            # corrupting the map -> next_cell None -> stuck (the ~13-14 cell plateau). Treat it
+            # as transient: count the attempt, force a fresh cardinal-aligned RE-SENSE of this
+            # cell (so the re-read, not the failure, decides if the edge is a wall), and re-plan.
+            # Mark a wall only as a last resort after max_hop_attempts genuine retries.
+            key = (self.cell, dirn)
+            self.hop_attempts[key] = self.hop_attempts.get(key, 0) + 1
+            if self.hop_attempts[key] >= self.max_hop_attempts:
+                self.brain.mark(self.cell, dirn, is_wall=True)
+                self.hop_attempts.pop(key, None)
+            else:
+                self.sensed.discard(self.cell)                       # re-sense from a clean position
             self.settle_until = t + self.settle_s
             self.center_start = None
             self.phase = 'center'
             return (0.0, 0.0, False)
-        if t >= self.hop_deadline:                                  # open-front timeout = stall
-            key = (self.cell, dirn)
-            self.stall_count = self.stall_count + 1 if key == self.stall_key else 1
-            self.stall_key = key
-            if self.stall_count >= self.max_open_timeouts:          # give up: mark (last resort)
-                self.brain.mark(self.cell, dirn, is_wall=True)
-                self.stall_key = None; self.stall_count = 0
-                self.settle_until = t + self.settle_s
-                self.center_start = None
-                self.phase = 'center'
-                return (0.0, 0.0, False)
-            self.hop_deadline = t + self.hop_timeout_s              # retry: keep hop_start, drive on
         ox, oy = cell_center_offset(ranges, amin, ainc, yaw)
         cross = cross_track_offset(ox, oy, self.hop_dir)
         if abs(cross) > self.max_cross_track_m:                    # bogus/desync -> hold cardinal
