@@ -45,7 +45,7 @@ class MazeMotion:
                  wedge_slow_m: float = 0.50, wedge_stop_m: float = 0.40,
                  wedge_v_floor: float = 0.10, hop_timeout_s: float = 25.0,
                  settle_s: float = 0.4, max_open_timeouts: int = 3,
-                 center_timeout_s: float = 3.0):
+                 center_timeout_s: float = 3.0, turn_timeout_s: float = 5.0):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.center_tol_m = center_tol_m; self.yaw_tol_rad = yaw_tol_rad
@@ -55,6 +55,7 @@ class MazeMotion:
         self.wedge_stop_m = wedge_stop_m; self.wedge_v_floor = wedge_v_floor
         self.hop_timeout_s = hop_timeout_s; self.settle_s = settle_s
         self.max_open_timeouts = max_open_timeouts; self.center_timeout_s = center_timeout_s
+        self.turn_timeout_s = turn_timeout_s
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -62,6 +63,7 @@ class MazeMotion:
         self.target_cardinal = 0.0
         self.hop_deadline = 0.0; self.settle_until = 0.0; self.turn_in_tol = 0
         self.stall_key = None; self.stall_count = 0
+        self.turn_start = None          # when the current turn episode began (for the timeout)
         self.center_start = None        # when the current center episode began (for the timeout)
         self.dbg = {}                   # last-tick diagnostics (offset, walls, near) for logging
 
@@ -116,6 +118,7 @@ class MazeMotion:
         self.target_cardinal = math.atan2(self.hop_dir[1], self.hop_dir[0])
         self.hop_start = (x, y)
         self.turn_in_tol = 0
+        self.turn_start = t
         self.center_start = None
         self.phase = 'turn'
         return (0.0, 0.0, False)
@@ -123,14 +126,18 @@ class MazeMotion:
     def _turn(self, pose, t):
         yaw = pose[2]
         err = _norm(self.target_cardinal - yaw)
-        if abs(err) <= self.yaw_tol_rad:
-            self.turn_in_tol += 1
-            if self.turn_in_tol >= self.turn_settle_ticks:
-                self.hop_start = (pose[0], pose[1])       # measure the drive from here
-                self.hop_deadline = t + self.hop_timeout_s
-                self.phase = 'drive'
+        settled = abs(err) <= self.yaw_tol_rad
+        self.turn_in_tol = self.turn_in_tol + 1 if settled else 0
+        # Proceed to drive when the turn has settled, OR when it times out: diff-drive
+        # overshoot can make the in-place turn oscillate around the cardinal and never reach
+        # the settle count; the corridor drive holds heading, so starting slightly off is fine.
+        timed_out = self.turn_start is not None and (t - self.turn_start) >= self.turn_timeout_s
+        if (settled and self.turn_in_tol >= self.turn_settle_ticks) or timed_out:
+            self.hop_start = (pose[0], pose[1])           # measure the drive from here
+            self.hop_deadline = t + self.hop_timeout_s
+            self.turn_start = None
+            self.phase = 'drive'
             return (0.0, 0.0, False)
-        self.turn_in_tol = 0
         w = max(-self.w_max, min(self.w_max, self.kp_turn * err))
         return (0.0, w, False)
 
