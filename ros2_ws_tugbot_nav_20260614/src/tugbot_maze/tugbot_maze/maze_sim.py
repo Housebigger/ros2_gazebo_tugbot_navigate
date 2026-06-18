@@ -196,6 +196,9 @@ class MazeSim:
         dx, dy = self.x - self._last_x, self.y - self._last_y
         dist = math.hypot(dx, dy)
         if dist > 1e-9 and self.odom_drift_per_m:
-            self._drift_x += self.odom_drift_per_m * dx     # bias grows along travel
-            self._drift_y += self.odom_drift_per_m * dy
+            # LATERAL (cross-track) slip, perpendicular to travel: matches the confirmed
+            # real drift (odom drifted ~0.7 m in X while traveling north). This is the
+            # component wall-referenced re-centering corrects; magnitude grows with distance.
+            self._drift_x += self.odom_drift_per_m * (-dy)
+            self._drift_y += self.odom_drift_per_m * dx
         self._last_x, self._last_y = self.x, self.y

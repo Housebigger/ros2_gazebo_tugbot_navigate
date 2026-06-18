@@ -118,9 +118,10 @@ def test_odom_drift_accumulates_with_distance():
         sim.step(0.5, 0.0, 0.1)                                 # drive forward ~1 m
     tx, ty, _ = sim.pose
     ox, oy, _ = sim.reported_pose
-    assert abs(tx - 1.0) < 0.05                 # true pose moved ~1 m
-    assert abs(ox - tx) > 0.05                  # reported pose drifted from true
-    assert abs((ox - tx) - 0.1 * tx) < 0.02     # ~0.1 m drift per m (along x here)
+    assert abs(tx - 1.0) < 0.05                 # true pose moved ~1 m along +x
+    assert abs(ox - tx) < 1e-6                  # no drift ALONG travel (x)
+    assert abs(oy - ty) > 0.05                  # drift is LATERAL (perpendicular, in y)
+    assert abs((oy - ty) - 0.1 * tx) < 0.02     # ~0.1 m lateral drift per m driven
 
 
 def test_reported_pose_equals_true_with_zero_drift():
