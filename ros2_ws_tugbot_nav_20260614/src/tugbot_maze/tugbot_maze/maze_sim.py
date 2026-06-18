@@ -90,11 +90,16 @@ def ground_truth_edge_open(sim: "MazeSim", a, b, samples: int = 10) -> bool:
 class MazeSim:
     def __init__(self, segments, start_xy, start_yaw, *, robot_radius_m=0.35,
                  wall_half_thickness_m=0.12, max_range_m=12.0, inertia=False,
-                 v_max=0.5, w_max=0.5, lin_accel=0.5, ang_accel=0.8):
+                 v_max=0.5, w_max=0.5, lin_accel=0.5, ang_accel=0.8,
+                 odom_drift_per_m=0.0):
         self.segs = np.asarray(segments, dtype=float).reshape(-1, 4)
         self.x = float(start_xy[0])
         self.y = float(start_xy[1])
         self.yaw = float(start_yaw)
+        self.odom_drift_per_m = odom_drift_per_m
+        self._drift_x = 0.0                            # accumulated odom drift (map frame)
+        self._drift_y = 0.0
+        self._last_x, self._last_y = self.x, self.y
         self.robot_radius_m = robot_radius_m
         self.wall_half_thickness_m = wall_half_thickness_m
         self.max_range_m = max_range_m
@@ -116,6 +121,11 @@ class MazeSim:
     @property
     def pose(self) -> Tuple[float, float, float]:
         return (self.x, self.y, self.yaw)
+
+    @property
+    def reported_pose(self) -> Tuple[float, float, float]:
+        """Odom pose = true pose + accumulated drift (what the solver would believe)."""
+        return (self.x + self._drift_x, self.y + self._drift_y, self.yaw)
 
     def scan(self, n_beams=120, fov_rad=2 * math.pi, max_range=None):
         """Return (ranges_list, angle_min, angle_increment) from the current pose.
@@ -183,3 +193,9 @@ class MazeSim:
             self.x, self.y = nx, ny
         # Rotation always applies (turning in place is safe; lets TURN_AWAY recover).
         self.yaw = math.atan2(math.sin(self.yaw + w * dt), math.cos(self.yaw + w * dt))
+        dx, dy = self.x - self._last_x, self.y - self._last_y
+        dist = math.hypot(dx, dy)
+        if dist > 1e-9 and self.odom_drift_per_m:
+            self._drift_x += self.odom_drift_per_m * dx     # bias grows along travel
+            self._drift_y += self.odom_drift_per_m * dy
+        self._last_x, self._last_y = self.x, self.y

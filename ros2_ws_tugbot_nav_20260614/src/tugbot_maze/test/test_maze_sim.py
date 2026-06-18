@@ -109,3 +109,23 @@ def test_inertia_step_rate_limits_and_clamps():
         sim.step(1.0, 1.0, 0.1)
     assert sim.v_cur == pytest.approx(0.5, abs=1e-6)
     assert sim.w_cur == pytest.approx(0.5, abs=1e-6)
+
+
+def test_odom_drift_accumulates_with_distance():
+    from tugbot_maze.maze_sim import MazeSim
+    sim = MazeSim([], (0.0, 0.0), 0.0, odom_drift_per_m=0.1)   # 0.1 m drift per m driven
+    for _ in range(20):
+        sim.step(0.5, 0.0, 0.1)                                 # drive forward ~1 m
+    tx, ty, _ = sim.pose
+    ox, oy, _ = sim.reported_pose
+    assert abs(tx - 1.0) < 0.05                 # true pose moved ~1 m
+    assert abs(ox - tx) > 0.05                  # reported pose drifted from true
+    assert abs((ox - tx) - 0.1 * tx) < 0.02     # ~0.1 m drift per m (along x here)
+
+
+def test_reported_pose_equals_true_with_zero_drift():
+    from tugbot_maze.maze_sim import MazeSim
+    sim = MazeSim([], (0.0, 0.0), 0.0)          # default: no drift
+    for _ in range(10):
+        sim.step(0.5, 0.0, 0.1)
+    assert sim.reported_pose == sim.pose
