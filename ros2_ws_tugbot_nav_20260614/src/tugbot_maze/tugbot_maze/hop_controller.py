@@ -69,15 +69,18 @@ def cross_track_offset(ox: Optional[float], oy: Optional[float], hop_dir) -> flo
 
 def hop_drive_command(pose, target_yaw: float, cross_track: float = 0.0, *,
                       v_max: float = 0.3, w_max: float = 0.5, kp_ang: float = 1.5,
-                      kp_cross: float = 1.2, slow_angle: float = 0.6) -> Tuple[float, float]:
+                      kp_cross: float = 1.2, cross_w_max: float = 0.25,
+                      slow_angle: float = 0.6) -> Tuple[float, float]:
     """Straight forward drive for one cell hop, holding `target_yaw` (a map cardinal) AND
     the corridor centerline. Steering corrects both the heading error and the cross-track
-    (steer right when left of centre). Forward speed is throttled toward 0 only when badly
-    mis-aligned; the caller turns the robot in place to the cardinal first, so during the
-    drive the heading error is small and the robot moves at near-full speed (no slow wobble
-    that stalls forward progress)."""
+    (steer right when left of centre). The cross-track contribution is capped at
+    cross_w_max so a large/bogus lateral estimate can only NUDGE the heading -- it can
+    never swing the robot far off the cardinal, which would throttle forward speed to zero
+    and stall the hop. Forward speed is throttled only by the (small) heading error, so the
+    caller's turn-in-place leaves the robot moving at near-full speed."""
     dyaw = _norm(target_yaw - pose[2])
-    w = max(-w_max, min(w_max, kp_ang * dyaw - kp_cross * cross_track))
+    w_cross = max(-cross_w_max, min(cross_w_max, kp_cross * cross_track))
+    w = max(-w_max, min(w_max, kp_ang * dyaw - w_cross))
     throttle = max(0.0, 1.0 - abs(dyaw) / slow_angle)
     v = max(0.0, min(v_max, v_max * throttle))
     return (v, w)

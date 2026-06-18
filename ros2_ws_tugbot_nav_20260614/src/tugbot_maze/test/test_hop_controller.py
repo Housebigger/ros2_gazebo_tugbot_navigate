@@ -32,6 +32,13 @@ def test_hop_drive_cross_track_within_envelope():
     assert -0.5 <= v <= 0.5 and -0.5 <= w <= 0.5
 
 
+def test_hop_drive_large_cross_does_not_kill_forward_speed():
+    # a huge (likely bogus) cross-track must NOT stall the drive: heading is aligned, so
+    # the capped cross-track only nudges w and forward speed stays near full.
+    v, w = hop_drive_command((1.5, 4.0, math.pi / 2), math.pi / 2, 5.0)
+    assert v > 0.2 and abs(w) <= 0.25 + 1e-9
+
+
 def test_centering_done_when_within_tol_or_open():
     # both axes within tol -> done, stop
     assert centering_command((2.0, 2.0, 0.0), 0.05, -0.04, tol=0.12) == (0.0, 0.0, True)

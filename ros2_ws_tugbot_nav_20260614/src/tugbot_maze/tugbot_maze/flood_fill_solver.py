@@ -68,9 +68,18 @@ class FloodFillSolver(Node):
         # dcell synced. On a hop timeout we only mark a WALL if the front is actually
         # blocked within front_block_m (a real wall ahead); otherwise the hop simply drives
         # to arrival (never silently fabricate a wall on a sensed-OPEN edge, the failure that
-        # trapped the robot at (1,4)).
-        self.hop_arrive_slack_m = float(self.declare_parameter('hop_arrive_slack_m', 0.15).value)
+        # trapped the robot at (1,4)). Small arrival slack: arriving well short of a full 2 m
+        # cell makes the dead-reckoned tracker run ahead of the robot and desync over many
+        # hops, so keep it tight (the straight, heading-held drive reaches ~2 m cleanly).
+        self.hop_arrive_slack_m = float(self.declare_parameter('hop_arrive_slack_m', 0.05).value)
         self.front_block_m = float(self.declare_parameter('front_block_m', 0.7).value)
+        # An open-front hop timeout is a transient stall, NOT a wall: back up and retry
+        # rather than fabricate a wall. Only after this many consecutive open-front timeouts
+        # at the SAME cell do we give up and mark the edge (last resort, avoids a live-lock).
+        self.max_open_timeouts = int(self.declare_parameter('max_open_timeouts', 3).value)
+        # Beyond this, a lateral offset estimate is implausible (> corridor half) -> bogus
+        # (mid-hop / desynced); ignore it for in-hop centering rather than steer on garbage.
+        self.max_cross_track_m = float(self.declare_parameter('max_cross_track_m', 0.6).value)
 
         self.brain = FloodFillBrain(exit_cell=EXIT_CELL)
         self.scan_msg: Optional[LaserScan] = None
@@ -93,6 +102,8 @@ class FloodFillSolver(Node):
         self.hop_target = None           # target cell for current hop
         self.hop_dir = None              # direction tuple for current hop
         self.hop_start = None            # pose xy at start of current hop
+        self.stall_key = None            # (cell, dir) of the current open-front stall streak
+        self.stall_count = 0             # consecutive open-front timeouts at stall_key
         self.create_timer(0.1, self._control_tick)
         self.create_timer(5.0, self._diag_tick)
         self.start_time = self.get_clock().now()
@@ -252,26 +263,44 @@ class FloodFillSolver(Node):
                 self._publish_cmd(0.0, max(-0.5, min(0.5, 1.5 * dyaw))); return
             if moved >= CELL_SIZE_M - self.hop_arrive_slack_m:          # 2) arrived in next cell
                 self.cell = self.hop_target                             # DISCRETE advance
+                self.stall_key = None; self.stall_count = 0             # hop succeeded -> clear stall streak
                 self.phase = 'center'
                 self.settle_until = t + self.settle_s
                 self.hop_deadline = t + self.hop_timeout_s
                 return
             s = self.scan_msg
+            dirn = _dir_name(self.hop_dir)
             front = self.front_block_m + 1.0
             if s is not None:
                 front = cell_wall_perp_dist(s.ranges, s.angle_min, s.angle_increment,
-                                            pose[2])[_dir_name(self.hop_dir)]
-            if (front < self.front_block_m and moved > 0.3) or t >= self.hop_deadline:   # 3) blocked
-                self.brain.mark(self.cell, _dir_name(self.hop_dir), is_wall=True)
+                                            pose[2])[dirn]
+            if front < self.front_block_m and moved > 0.3:              # 3a) real wall ahead -> mark
+                self.brain.mark(self.cell, dirn, is_wall=True)
                 self.goal_events_pub.publish(String(data='HOP_BLOCKED'))
-                self.get_logger().info(
-                    'HOP_BLOCKED cell=%s dir=%s front=%.2f moved=%.2f -> mark wall, back up'
-                    % (self.cell, _dir_name(self.hop_dir), front, moved))
+                self.get_logger().info('HOP_BLOCKED cell=%s dir=%s front=%.2f moved=%.2f -> mark wall'
+                                       % (self.cell, dirn, front, moved))
+                self.stall_key = None; self.stall_count = 0
+                self.phase = 'backup'; self.backup_until = t + self.backup_s
+                return
+            if t >= self.hop_deadline:                                  # 3b) open-front timeout = stall
+                key = (self.cell, dirn)
+                self.stall_count = self.stall_count + 1 if key == self.stall_key else 1
+                self.stall_key = key
+                if self.stall_count >= self.max_open_timeouts:          # give up: mark (last resort)
+                    self.brain.mark(self.cell, dirn, is_wall=True)
+                    self.get_logger().info('HOP_STALL_GIVEUP cell=%s dir=%s front=%.2f n=%d -> mark wall'
+                                           % (self.cell, dirn, front, self.stall_count))
+                    self.stall_key = None; self.stall_count = 0
+                else:                                                   # transient: back up, retry, NO wall
+                    self.get_logger().info('HOP_STALL cell=%s dir=%s front=%.2f moved=%.2f n=%d -> back up, retry'
+                                           % (self.cell, dirn, front, moved, self.stall_count))
                 self.phase = 'backup'; self.backup_until = t + self.backup_s
                 return
             ox, oy = (cell_center_offset(s.ranges, s.angle_min, s.angle_increment, pose[2])
                       if s is not None else (None, None))               # 4) straight drive,
             cross = cross_track_offset(ox, oy, self.hop_dir)            #    lateral wall-centered
+            if abs(cross) > self.max_cross_track_m:                     #    ignore bogus (mid-hop/desync) offset
+                cross = 0.0
             v, w = hop_drive_command(pose, target_yaw, cross, v_max=self.cruise_v)
             self._publish_cmd(v, w)
             return
