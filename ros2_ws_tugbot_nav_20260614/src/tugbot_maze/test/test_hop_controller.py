@@ -1,6 +1,7 @@
 import math
 from tugbot_maze.hop_controller import (
     hop_command, centering_command, hop_drive_command, cross_track_offset)
+from tugbot_maze.hop_controller import corridor_drive_command
 
 
 def test_cross_track_sign_by_direction():
@@ -123,3 +124,38 @@ def test_commands_within_envelope():
     v, w, _ = hop_command((0.0, 0.0, 0.0), (0.0, 2.0))   # large heading error
     assert -0.5 <= v <= 0.5
     assert -0.5 <= w <= 0.5
+
+
+def test_corridor_drive_steers_toward_centerline():
+    # facing the N cardinal, 0.3 m LEFT of centre -> steer RIGHT (negative w), still driving
+    v, w = corridor_drive_command(math.pi / 2, math.pi / 2, 0.3)
+    assert w < 0.0 and v > 0.0
+
+
+def test_corridor_drive_goes_straight_on_centerline():
+    v, w = corridor_drive_command(math.pi / 2, math.pi / 2, 0.0)
+    assert v > 0.0 and abs(w) < 1e-9
+
+
+def test_corridor_drive_turns_in_place_when_badly_misaligned():
+    # heading 90 deg off the cardinal -> v throttled to ~0 (turn first), w turns toward cardinal
+    v, w = corridor_drive_command(0.0, math.pi / 2, 0.0)
+    assert v < 0.05 and w > 0.0
+
+
+def test_corridor_drive_slows_near_wall_but_never_zero():
+    # aligned & centred but a side wall at the stop distance -> v floored, not zero (no freeze)
+    v, w = corridor_drive_command(math.pi / 2, math.pi / 2, 0.0, near_wall_m=0.40)
+    assert 0.0 < v <= 0.12        # ~wedge_v_floor, never 0
+    v2, _ = corridor_drive_command(math.pi / 2, math.pi / 2, 0.0, near_wall_m=0.30)  # past stop
+    assert 0.0 < v2 <= 0.12
+
+
+def test_corridor_drive_full_speed_when_far_from_walls():
+    v, _ = corridor_drive_command(math.pi / 2, math.pi / 2, 0.0, near_wall_m=1.5)
+    assert v > 0.25               # ~cruise
+
+
+def test_corridor_drive_within_envelope():
+    v, w = corridor_drive_command(0.0, math.pi / 2, 2.0, near_wall_m=0.35)  # extreme inputs
+    assert -0.5 <= v <= 0.5 and -0.5 <= w <= 0.5

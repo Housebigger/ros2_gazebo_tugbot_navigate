@@ -99,3 +99,29 @@ def hop_command(pose, target_xy, *, v_max: float = 0.5, w_max: float = 0.5,
     throttle = max(0.0, 1.0 - abs(err) / slow_angle)   # 0 when |err|>=slow_angle
     v = max(0.0, min(v_max, v_max * throttle))
     return (v, w, False)
+
+
+def corridor_drive_command(yaw: float, cardinal_yaw: float, cross_track: float,
+                           near_wall_m: Optional[float] = None, *, v_max: float = 0.3,
+                           w_max: float = 0.5, kp_ang: float = 1.5, lookahead_m: float = 0.7,
+                           slow_angle: float = 0.6, wedge_slow_m: float = 0.50,
+                           wedge_stop_m: float = 0.40, wedge_v_floor: float = 0.10
+                           ) -> Tuple[float, float]:
+    """Drive forward along `cardinal_yaw` while converging onto the corridor centerline.
+
+    cross_track = signed lateral offset (+ = robot LEFT of centre). The robot aims at the
+    centerline point `lookahead_m` ahead, so it CURVES back toward centre as it nears a side
+    wall (inherently anti-wedge). Forward speed is throttled to ~0 only by a large HEADING
+    error (turn first). If `near_wall_m` (min perpendicular distance to the two side walls)
+    is given, speed is additionally slowed toward `wedge_v_floor` as the nearer wall
+    approaches `wedge_stop_m` -- a NEVER-zero floor (the heading term can still zero v), so
+    the robot keeps creeping while steering away rather than freezing or wedging."""
+    setpoint = cardinal_yaw + math.atan2(-cross_track, lookahead_m)
+    err = _norm(setpoint - yaw)
+    w = max(-w_max, min(w_max, kp_ang * err))
+    throttle = max(0.0, 1.0 - abs(err) / slow_angle)              # heading: -> 0 when misaligned
+    if near_wall_m is not None:                                  # wedge: slow near a wall, never 0
+        wedge = max(0.0, min(1.0, (near_wall_m - wedge_stop_m) / (wedge_slow_m - wedge_stop_m)))
+        throttle *= max(wedge_v_floor / v_max, wedge)
+    v = max(0.0, min(v_max, v_max * throttle))
+    return (v, w)
