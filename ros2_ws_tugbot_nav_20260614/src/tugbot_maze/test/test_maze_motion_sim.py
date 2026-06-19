@@ -11,6 +11,8 @@ from tugbot_maze.maze_motion import MazeMotion
 from tugbot_maze.maze_sim import MazeSim, load_segments
 from tugbot_maze.flood_fill_brain import (
     ENTRANCE_CELL, EXIT_CELL, cell_center, pose_to_cell)
+from tugbot_maze.cell_walls import cell_wall_perp_dist
+from tugbot_maze.hop_controller import side_distances, corridor_follow_command
 
 
 def _run(drift, latency=0, dt=0.1, max_steps=30000):
@@ -47,3 +49,20 @@ def test_reaches_exit_without_collision_or_desync(drift, latency):
     assert reached, f"did not reach the exit cell (drift={drift}, latency={latency})"
     assert not collided, f"robot body collided with a wall (drift={drift}, latency={latency})"
     assert max_desync <= 1, f"dcell desynced by {max_desync} (drift={drift}, latency={latency})"
+
+
+def test_symmetric_following_converges_to_centerline():
+    """Straight N-S corridor (side walls at x=+/-1.0, faces ~0.88 m from centre); start 0.4 m
+    off-centre and drive N with symmetric wall-following -> converges onto the centerline
+    (|x| shrinks well below the start) without colliding. The offline, deterministic form of the
+    centerline-envelope guarantee the Gazebo physical-wedge needs."""
+    walls = [(-1.0, -5.0, -1.0, 5.0), (1.0, -5.0, 1.0, 5.0)]   # two parallel side walls
+    sim = MazeSim(walls, (0.4, 0.0), math.pi / 2, inertia=True)
+    for _ in range(120):                                       # 12 s at dt=0.1
+        ranges, amin, ainc = sim.scan(n_beams=360, fov_rad=2 * math.pi)
+        perp = cell_wall_perp_dist(ranges, amin, ainc, sim.yaw)
+        d_left, d_right = side_distances(perp, (0, 1))
+        v, w = corridor_follow_command(sim.yaw, math.pi / 2, d_left, d_right)
+        sim.step(v, w, 0.1)
+    assert abs(sim.x) < 0.2, f"did not converge to centerline: x={sim.x:.3f}"
+    assert not sim.collides(sim.x, sim.y)
