@@ -206,8 +206,9 @@ def test_corridor_follow_steers_toward_farther_wall():
 
 
 def test_corridor_follow_single_wall_holds_offset():
-    # only LEFT wall seen and hugging it (0.4) -> left of centre -> steer RIGHT (-w)
-    v, w = corridor_follow_command(math.pi / 2, math.pi / 2, 0.4, 2.0)
+    # only LEFT wall seen, robot off-center toward it (0.6) -> left of centre -> steer RIGHT (-w),
+    # still driving (a modest offset stays under corridor_drive_command's turn-first throttle)
+    v, w = corridor_follow_command(math.pi / 2, math.pi / 2, 0.6, 2.0)
     assert w < 0.0 and v > 0.0
 
 
