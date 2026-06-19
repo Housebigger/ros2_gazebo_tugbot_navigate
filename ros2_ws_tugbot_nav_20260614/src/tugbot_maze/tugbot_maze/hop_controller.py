@@ -159,3 +159,25 @@ def corridor_drive_command(yaw: float, cardinal_yaw: float, cross_track: float,
         throttle *= max(wedge_v_floor / v_max, wedge)
     v = max(0.0, min(v_max, v_max * throttle))
     return (v, w)
+
+
+def corridor_follow_command(yaw: float, cardinal_yaw: float, d_left: float, d_right: float,
+                            near_wall_m: Optional[float] = None, *, fallback_cross: float = 0.0,
+                            wall_seen_m: float = 1.3, half_corridor_m: float = 0.88,
+                            max_cross_track_m: float = 0.6, v_max: float = 0.3,
+                            w_max: float = 0.5, kp_ang: float = 1.5, lookahead_m: float = 0.7,
+                            slow_angle: float = 0.6, wedge_slow_m: float = 0.50,
+                            wedge_stop_m: float = 0.40, wedge_v_floor: float = 0.10
+                            ) -> Tuple[float, float]:
+    """Symmetric wall-following straight drive. Derives the lateral centerline offset from the
+    two side-wall distances (centerline_cross), clamps it, then steers/throttles with the proven
+    pure-pursuit + never-zero wedge-floor law (corridor_drive_command). Keeps the 0.35 m robot on
+    the PHYSICAL centerline using both walls (drift-immune) instead of the cell-grid offset that
+    vanished at openings -- closing the off-center-entry -> wedge path."""
+    cross = centerline_cross(d_left, d_right, fallback_cross=fallback_cross,
+                             wall_seen_m=wall_seen_m, half_corridor_m=half_corridor_m)
+    cross = max(-max_cross_track_m, min(max_cross_track_m, cross))
+    return corridor_drive_command(yaw, cardinal_yaw, cross, near_wall_m, v_max=v_max,
+                                  w_max=w_max, kp_ang=kp_ang, lookahead_m=lookahead_m,
+                                  slow_angle=slow_angle, wedge_slow_m=wedge_slow_m,
+                                  wedge_stop_m=wedge_stop_m, wedge_v_floor=wedge_v_floor)

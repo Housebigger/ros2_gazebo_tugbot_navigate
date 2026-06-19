@@ -5,6 +5,42 @@ from tugbot_maze.hop_controller import (
 from tugbot_maze.hop_controller import corridor_drive_command
 from tugbot_maze.hop_controller import side_distances
 from tugbot_maze.hop_controller import centerline_cross
+from tugbot_maze.hop_controller import corridor_follow_command
+
+
+def test_corridor_follow_centres_between_walls():
+    v, w = corridor_follow_command(math.pi / 2, math.pi / 2, 0.88, 0.88)
+    assert v > 0.0 and abs(w) < 1e-9
+
+
+def test_corridor_follow_steers_toward_farther_wall():
+    # facing N, closer to the RIGHT (east) wall (d_right small) -> right of centre -> steer LEFT (+w)
+    v, w = corridor_follow_command(math.pi / 2, math.pi / 2, 1.2, 0.5)
+    assert w > 0.0 and v > 0.0
+
+
+def test_corridor_follow_single_wall_holds_offset():
+    # only LEFT wall seen, robot off-center toward it (0.6) -> left of centre -> steer RIGHT (-w),
+    # still driving (a modest offset stays under corridor_drive_command's turn-first throttle)
+    v, w = corridor_follow_command(math.pi / 2, math.pi / 2, 0.6, 2.0)
+    assert w < 0.0 and v > 0.0
+
+
+def test_corridor_follow_no_walls_uses_fallback():
+    _, w = corridor_follow_command(math.pi / 2, math.pi / 2, 2.0, 2.0, fallback_cross=0.3)
+    assert w < 0.0
+    _, w0 = corridor_follow_command(math.pi / 2, math.pi / 2, 2.0, 2.0, fallback_cross=0.0)
+    assert abs(w0) < 1e-9
+
+
+def test_corridor_follow_slows_near_wall_never_zero():
+    v, _ = corridor_follow_command(math.pi / 2, math.pi / 2, 0.88, 0.88, near_wall_m=0.40)
+    assert 0.0 < v <= 0.12
+
+
+def test_corridor_follow_within_envelope():
+    v, w = corridor_follow_command(0.0, math.pi / 2, 0.3, 0.3, near_wall_m=0.35)
+    assert -0.5 <= v <= 0.5 and -0.5 <= w <= 0.5
 
 
 def test_centerline_cross_both_walls_balances():
