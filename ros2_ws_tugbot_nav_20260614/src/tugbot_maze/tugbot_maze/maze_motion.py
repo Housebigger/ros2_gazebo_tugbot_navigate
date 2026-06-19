@@ -21,7 +21,7 @@ import math
 from typing import Optional, Tuple
 
 from tugbot_maze.flood_fill_brain import (
-    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, CELL_SIZE_M, pose_to_cell, in_grid)
+    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, CELL_SIZE_M, pose_to_cell, in_grid, DIRS)
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
 from tugbot_maze.wall_localize import cell_center_offset
 from tugbot_maze.hop_controller import (
@@ -93,8 +93,8 @@ class MazeMotion:
         self.align_start = None         # independent timeout baseline for the cardinal-align sub-phase
         self.latched_cardinal = None    # cardinal latched once at align entry (no 45-deg basin jitter)
         self.corrob = {}                # cell -> (walls, agreeing-good-read count) for commit
-        self.locomotion_walls = set()   # (cell,dir) WALLs stamped by hop-failure (re-openable by backstop)
-        self.evicted = set()            # cells given one backstop re-sense before declaring stuck
+        self.locomotion_walls = set()   # (cell,dir) WALLs stamped by hop-failure (re-openable by _unstick)
+        self.reopened = set()           # (cell,dir) WALL edges re-opened by _unstick (monotonic bound)
         self.hop_dir = None; self.hop_target = None; self.hop_start = None
         self.target_cardinal = 0.0
         self.hop_deadline = 0.0; self.settle_until = 0.0; self.turn_in_tol = 0
@@ -196,8 +196,7 @@ class MazeMotion:
                 count = prev[1] + 1 if (prev is not None and prev[0] == walls) else 1
                 self.corrob[self.cell] = (walls, count)
                 if count >= self.k_corroborate:
-                    self.committed.add(self.cell)       # keep the cell in `evicted` (monotonic bound on
-                    # _unstick re-opens); a committed cell carries no locomotion wall, so it is never re-blamed.
+                    self.committed.add(self.cell)
             self.dbg = {'cell': self.cell, 'pose': (round(x, 2), round(y, 2), round(yaw, 2)),
                         'off': (None if ox is None else round(ox, 2),
                                 None if oy is None else round(oy, 2)),
@@ -243,25 +242,43 @@ class MazeMotion:
         self.phase = 'turn'
         return (0.0, 0.0, False)
 
+    def _reachable_component(self, start):
+        """Cells reachable from `start` over non-WALL edges (OPEN or UNKNOWN are traversable; only
+        WALL blocks). Used by _unstick to find the walls that cut the robot off from the exit."""
+        seen = {start}; stack = [start]
+        while stack:
+            c = stack.pop()
+            for d, (dx, dy) in DIRS.items():
+                nb = (c[0] + dx, c[1] + dy)
+                if in_grid(nb) and not self.brain.is_wall(c, d) and nb not in seen:
+                    seen.add(nb); stack.append(nb)
+        return seen
+
     def _unstick(self, t):
-        """next_cell==None OR the exit is unreachable from here -> a locomotion-failure WALL likely
-        cut the map (sensed/committed reads are trusted; locomotion-failure walls are not). Re-open
-        the not-yet-evicted locomotion walls and un-commit their cells for one corrective re-sense;
-        declare terminal 'stuck' only when every blameable cut has had its one chance (the evicted
-        guard bounds the loop)."""
-        blame = {c for (c, _d) in self.locomotion_walls if c not in self.evicted}
-        if blame:
-            for (c, d) in list(self.locomotion_walls):
-                if c in blame:
-                    self.brain.mark(c, d, is_wall=False)     # re-open; a good re-sense overwrites
+        """Boxed (next_cell None) or exit-unreachable -> a false WALL cuts the robot's reachable
+        component off from the exit. Re-open the CUT edges (walls from the component to a cell
+        outside it) in ASCENDING trust -- locomotion (hop-failure) -> non-committed sensed (poor
+        reads) -> committed (2x-corroborated, trusted last) -- forcing a fresh good-gated re-sense.
+        Bounded by self.reopened (each edge re-opened at most once): when no un-reopened cut edge
+        remains, the map is genuinely disconnected -> terminal 'stuck'."""
+        R = self._reachable_component(self.cell)
+        cut = [(c, d) for c in R for d, (dx, dy) in DIRS.items()
+               if self.brain.is_wall(c, d) and (c, d) not in self.reopened
+               and in_grid((c[0] + dx, c[1] + dy)) and (c[0] + dx, c[1] + dy) not in R]
+        for pick in (lambda e: e in self.locomotion_walls,
+                     lambda e: e not in self.locomotion_walls and e[0] not in self.committed,
+                     lambda e: e[0] in self.committed):
+            cand = [e for e in cut if pick(e)]
+            if cand:
+                for (c, d) in cand:
+                    self.brain.mark(c, d, is_wall=False)     # re-open optimistically; good re-sense re-confirms
+                    self.reopened.add((c, d))
                     self.locomotion_walls.discard((c, d))
-            for c in blame:
-                self.committed.discard(c); self.sensed.discard(c); self.corrob.pop(c, None)
-                self.evicted.add(c)
-            self.center_start = None
-            self.align_start = None; self.latched_cardinal = None
-            self.settle_until = t + self.settle_s
-            return (0.0, 0.0, False)                          # stay in center -> re-sense next tick
+                    self.committed.discard(c); self.sensed.discard(c); self.corrob.pop(c, None)
+                self.center_start = None
+                self.align_start = None; self.latched_cardinal = None
+                self.settle_until = t + self.settle_s
+                return (0.0, 0.0, False)                      # re-route / re-sense next tick
         self.phase = 'stuck'
         return (0.0, 0.0, False)
 

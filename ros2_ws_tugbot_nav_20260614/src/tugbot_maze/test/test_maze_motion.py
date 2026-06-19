@@ -140,9 +140,9 @@ def test_no_false_wall_across_yaw_tol_and_small_offset():
                 assert not r[d], f"false WALL on {d} from offset=({dx},{dy}) yaw={dyaw}"
 
 
-def test_committed_dead_end_is_evicted_not_stuck():
-    # A committed cell whose every edge is WALLed (disconnected) must be EVICTED + re-opened for one
-    # corrective re-sense -- not declared terminally 'stuck' (a permanent false WALL would brick it).
+def test_committed_dead_end_reopened_not_stuck():
+    # A committed cell whose every edge is WALLed (disconnected) must have its cut edges RE-OPENED for
+    # a corrective re-sense -- not declared terminally 'stuck' (a permanent false WALL would brick it).
     m = MazeMotion(); cell = (5, 5); m.cell = cell
     for d in ('N', 'S', 'E', 'W'):
         m.brain.mark(cell, d, is_wall=True)
@@ -151,7 +151,7 @@ def test_committed_dead_end_is_evicted_not_stuck():
     sim = MazeSim(load_segments(), cell_center(cell), 0.0)
     m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), 0.0)
     assert m.phase != 'stuck'
-    assert cell not in m.committed and cell in m.evicted
+    assert cell not in m.committed and (cell, 'E') in m.reopened
     assert all(m.brain._state(cell, d) != 'wall' for d in ('N', 'S', 'E', 'W'))   # re-opened
 
 
@@ -189,5 +189,40 @@ def test_disconnecting_false_wall_triggers_unstick():
     sim = MazeSim(load_segments(), cell_center(cell), 0.0)
     m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), 0.0)
     assert m.phase != 'stuck'                                # unstick fired (no silent wander/false-stuck)
-    assert cell in m.evicted
-    assert m.brain._state((5, 5), 'E') != 'wall'             # a blamed locomotion wall was re-opened
+    assert (cell, 'E') in m.reopened
+    assert m.brain._state((5, 5), 'E') != 'wall'             # a cut wall was re-opened
+
+
+def _pocket_walls():
+    # isolate the pocket {(5,5),(5,6)}: open only the (5,5)<->(5,6) edge, wall everything else.
+    return [((5, 5), 'E'), ((5, 5), 'W'), ((5, 5), 'S'),
+            ((5, 6), 'N'), ((5, 6), 'E'), ((5, 6), 'W')]
+
+
+def test_unstick_escalates_noncommitted_then_committed():
+    # No locomotion walls. Tier 1 (locomotion) is empty, so _unstick must escalate.
+    # uncommitted cut cells -> tier 2 (non-committed) re-open; committed cut cells -> tier 3.
+    m = MazeMotion(); m.cell = (5, 5)
+    for (c, d) in _pocket_walls():
+        m.brain.mark(c, d, is_wall=True)
+    m._unstick(0.0)                                   # call directly (no _center re-sense overwrite)
+    assert m.phase != 'stuck' and len(m.reopened) > 0  # tier-2 (non-committed) recovery
+
+    m2 = MazeMotion(); m2.cell = (5, 5)
+    for (c, d) in _pocket_walls():
+        m2.brain.mark(c, d, is_wall=True)
+    m2.committed.update({(5, 5), (5, 6)})             # all cut cells committed -> only tier 3 applies
+    m2._unstick(0.0)
+    assert m2.phase != 'stuck' and len(m2.reopened) > 0  # tier-3 (committed) last-resort recovery
+
+
+def test_unstick_terminates_when_all_cut_edges_reopened():
+    # Once every cut edge has already had its one re-open, _unstick declares terminal 'stuck'
+    # (the self.reopened bound guarantees termination).
+    m = MazeMotion(); m.cell = (5, 5)
+    base = _pocket_walls()
+    for (c, d) in base:
+        m.brain.mark(c, d, is_wall=True)
+    m.reopened.update(base)                           # every cut edge already re-opened once
+    m._unstick(0.0)
+    assert m.phase == 'stuck'
