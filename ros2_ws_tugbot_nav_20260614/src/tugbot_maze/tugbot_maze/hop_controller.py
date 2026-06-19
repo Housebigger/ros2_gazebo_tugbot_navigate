@@ -83,6 +83,24 @@ def side_distances(perp, hop_dir) -> Tuple[float, float]:
     return perp['S'], perp['N']      # W: left=S, right=N
 
 
+def centerline_cross(d_left: float, d_right: float, *, fallback_cross: float = 0.0,
+                     wall_seen_m: float = 1.3, half_corridor_m: float = 0.88) -> float:
+    """Signed lateral offset of the robot to the LEFT of the corridor centerline (+ = left),
+    from the left/right side-wall distances. A side counts as a seen wall when < wall_seen_m.
+      both seen   -> balance the two (the drift-immune true centerline -- THE key change),
+      one seen    -> hold half_corridor_m from that wall,
+      neither     -> the caller's fallback (cell-grid/odom estimate), else 0 (hold heading)."""
+    left_seen = d_left < wall_seen_m
+    right_seen = d_right < wall_seen_m
+    if left_seen and right_seen:
+        return (d_right - d_left) / 2.0
+    if right_seen:
+        return d_right - half_corridor_m
+    if left_seen:
+        return half_corridor_m - d_left
+    return fallback_cross
+
+
 def hop_drive_command(pose, target_yaw: float, cross_track: float = 0.0, *,
                       v_max: float = 0.3, w_max: float = 0.5, kp_ang: float = 1.5,
                       kp_cross: float = 1.2, cross_w_max: float = 0.25,

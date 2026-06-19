@@ -4,6 +4,23 @@ from tugbot_maze.hop_controller import (
     hop_command, centering_command, hop_drive_command, cross_track_offset)
 from tugbot_maze.hop_controller import corridor_drive_command
 from tugbot_maze.hop_controller import side_distances
+from tugbot_maze.hop_controller import centerline_cross
+
+
+def test_centerline_cross_both_walls_balances():
+    assert centerline_cross(0.88, 0.88) == 0.0
+    assert centerline_cross(0.5, 1.2) > 0.0                   # near left wall -> left of centre (+)
+    assert centerline_cross(0.6, 1.0) == pytest.approx(0.2)   # (d_right - d_left)/2
+
+
+def test_centerline_cross_single_wall_holds_half_corridor():
+    assert centerline_cross(2.0, 1.2, half_corridor_m=0.88) == pytest.approx(1.2 - 0.88)
+    assert centerline_cross(0.5, 2.0, half_corridor_m=0.88) == pytest.approx(0.88 - 0.5)
+
+
+def test_centerline_cross_neither_wall_uses_fallback():
+    assert centerline_cross(2.0, 2.0, fallback_cross=0.25) == 0.25
+    assert centerline_cross(2.0, 2.0) == 0.0
 
 
 def test_side_distances_maps_left_right_by_direction():
