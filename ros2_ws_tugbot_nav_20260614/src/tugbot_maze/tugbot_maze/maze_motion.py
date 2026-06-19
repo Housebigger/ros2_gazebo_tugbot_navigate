@@ -48,7 +48,7 @@ class MazeMotion:
                  settle_s: float = 0.4, max_hop_attempts: int = 3,
                  center_timeout_s: float = 4.0, turn_timeout_s: float = 5.0,
                  wedge_detect_s: float = 3.0, wedge_move_eps: float = 0.08,
-                 recover_v: float = 0.15, recover_s: float = 1.8, recover_w: float = 0.4):
+                 recover_v: float = 0.15, recover_s: float = 1.8, recover_w: float = 0.0):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.kd_turn = kd_turn          # derivative damping on rotate-in-place (vs latency overshoot)
@@ -248,11 +248,10 @@ class MazeMotion:
         return (v, w, False)
 
     def _recover(self, pose, t):
-        # Un-wedge: reverse WHILE rotating to free a physical pin -- a diff-drive can almost
-        # always still rotate when translation is pinned, and turning reorients the footprint
-        # out of a corner/side-wall pin (straight reverse alone can't fix a lateral pin). Then
-        # re-center / re-sense / re-plan. The hop_attempts increment that triggered this bounds
-        # repeats (-> mark + re-route if it keeps wedging at the same edge).
+        # Un-wedge: reverse straight back (recover_w=0 default -- the near-solve config; reverse
+        # was enough for the breakthrough run's wedges, and adding rotation disoriented the robot
+        # off-cardinal -> more wedges/churn). recover_w>0 adds a turn for corner/side-wall pins
+        # but trades churn. Then re-center / re-sense / re-plan; hop_attempts bounds repeats.
         if t < self.recover_until:
             return (-self.recover_v, self.recover_w, False)
         self.sensed.discard(self.cell)        # re-sense from the freed position
