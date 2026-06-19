@@ -1,7 +1,18 @@
 import math
+import pytest
 from tugbot_maze.hop_controller import (
     hop_command, centering_command, hop_drive_command, cross_track_offset)
 from tugbot_maze.hop_controller import corridor_drive_command
+from tugbot_maze.hop_controller import side_distances
+
+
+def test_side_distances_maps_left_right_by_direction():
+    # robot-frame left = +90 deg from heading
+    perp = {'E': 1.0, 'W': 2.0, 'N': 3.0, 'S': 4.0}
+    assert side_distances(perp, (0, 1)) == (2.0, 1.0)    # N: left=W, right=E
+    assert side_distances(perp, (0, -1)) == (1.0, 2.0)   # S: left=E, right=W
+    assert side_distances(perp, (1, 0)) == (3.0, 4.0)    # E: left=N, right=S
+    assert side_distances(perp, (-1, 0)) == (4.0, 3.0)   # W: left=S, right=N
 
 
 def test_cross_track_sign_by_direction():

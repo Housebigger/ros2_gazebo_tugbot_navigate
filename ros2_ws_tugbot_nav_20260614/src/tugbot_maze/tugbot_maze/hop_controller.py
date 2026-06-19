@@ -69,6 +69,20 @@ def cross_track_offset(ox: Optional[float], oy: Optional[float], hop_dir) -> flo
     return oy if dx > 0 else -oy                 # E: north(+oy)=left=>+; W: north=right=>-
 
 
+def side_distances(perp, hop_dir) -> Tuple[float, float]:
+    """Map the per-cardinal perpendicular-distance dict (keys 'E','W','N','S', from
+    cell_wall_perp_dist) to the robot's (left, right) side-wall distances for travel along
+    hop_dir. Robot-frame left is +90 deg from heading."""
+    dx, dy = hop_dir
+    if dy > 0:                       # N: left=W, right=E
+        return perp['W'], perp['E']
+    if dy < 0:                       # S: left=E, right=W
+        return perp['E'], perp['W']
+    if dx > 0:                       # E: left=N, right=S
+        return perp['N'], perp['S']
+    return perp['S'], perp['N']      # W: left=S, right=N
+
+
 def hop_drive_command(pose, target_yaw: float, cross_track: float = 0.0, *,
                       v_max: float = 0.3, w_max: float = 0.5, kp_ang: float = 1.5,
                       kp_cross: float = 1.2, cross_w_max: float = 0.25,
