@@ -21,7 +21,7 @@ import math
 from typing import Optional, Tuple
 
 from tugbot_maze.flood_fill_brain import (
-    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, CELL_SIZE_M, pose_to_cell, in_grid, DIRS)
+    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, CELL_SIZE_M, pose_to_cell, in_grid, DIRS, OPP)
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
 from tugbot_maze.wall_localize import cell_center_offset
 from tugbot_maze.hop_controller import (
@@ -254,13 +254,24 @@ class MazeMotion:
                     seen.add(nb); stack.append(nb)
         return seen
 
+    def _stamp_loco_wall(self, cell, d):
+        """Record a hop-failure WALL on edge (cell,d) for BOTH directed reps, so _unstick's tier-1
+        (locomotion) check finds it regardless of which side it keys the cut from."""
+        self.locomotion_walls.add((cell, d))
+        nb = (cell[0] + DIRS[d][0], cell[1] + DIRS[d][1])
+        if in_grid(nb):
+            self.locomotion_walls.add((nb, OPP[d]))
+
     def _unstick(self, t):
         """Boxed (next_cell None) or exit-unreachable -> a false WALL cuts the robot's reachable
         component off from the exit. Re-open the CUT edges (walls from the component to a cell
         outside it) in ASCENDING trust -- locomotion (hop-failure) -> non-committed sensed (poor
-        reads) -> committed (2x-corroborated, trusted last) -- forcing a fresh good-gated re-sense.
-        Bounded by self.reopened (each edge re-opened at most once): when no un-reopened cut edge
-        remains, the map is genuinely disconnected -> terminal 'stuck'."""
+        reads) -> committed (2x-corroborated, trusted last). Within a tier, prefer edges INCIDENT to
+        self.cell (re-sensable on the very next center tick) so recovery stays inside the bounded
+        loop. Re-open is OPTIMISTIC -> OPEN (flood routes through it); the cell is un-committed but
+        KEPT in `sensed`, so the gate re-WALLs it only from a GOOD re-sense (never a poor pose --
+        that poor re-WALL was the bug that could re-seal the false wall). Bounded by self.reopened
+        (both reps): when no un-reopened cut edge remains, the map is disconnected -> 'stuck'."""
         R = self._reachable_component(self.cell)
         cut = [(c, d) for c in R for d, (dx, dy) in DIRS.items()
                if self.brain.is_wall(c, d) and (c, d) not in self.reopened
@@ -270,15 +281,18 @@ class MazeMotion:
                      lambda e: e[0] in self.committed):
             cand = [e for e in cut if pick(e)]
             if cand:
-                for (c, d) in cand:
-                    self.brain.mark(c, d, is_wall=False)     # re-open optimistically; good re-sense re-confirms
-                    self.reopened.add((c, d))
-                    self.locomotion_walls.discard((c, d))
-                    self.committed.discard(c); self.sensed.discard(c); self.corrob.pop(c, None)
+                incident = [e for e in cand if e[0] == self.cell]
+                for (c, d) in (incident or cand):
+                    nb = (c[0] + DIRS[d][0], c[1] + DIRS[d][1])
+                    self.brain.mark(c, d, is_wall=False)     # re-open optimistically; a GOOD re-sense re-confirms
+                    self.reopened.add((c, d)); self.reopened.add((nb, OPP[d]))      # both reps -> clean 1x bound
+                    self.locomotion_walls.discard((c, d)); self.locomotion_walls.discard((nb, OPP[d]))
+                    self.committed.discard(c); self.corrob.pop(c, None)             # keep `sensed`: re-WALL needs good
                 self.center_start = None
                 self.align_start = None; self.latched_cardinal = None
                 self.settle_until = t + self.settle_s
-                return (0.0, 0.0, False)                      # re-route / re-sense next tick
+                self.phase = 'center'                          # explicit: re-route / re-sense next tick
+                return (0.0, 0.0, False)
         self.phase = 'stuck'
         return (0.0, 0.0, False)
 
@@ -330,7 +344,7 @@ class MazeMotion:
             self.settle_until = t + self.settle_s
             if self.hop_attempts[key] >= self.max_hop_attempts:      # give up this edge (last resort)
                 self.brain.mark(self.cell, dirn, is_wall=True)
-                self.locomotion_walls.add((self.cell, dirn))         # re-openable by the backstop
+                self._stamp_loco_wall(self.cell, dirn)               # re-openable by _unstick (both reps)
                 self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
                 self.hop_attempts.pop(key, None)                     # so a poor re-entry won't re-sense
                 self.phase = 'center'                                # (and clobber) the WALL it just set
@@ -352,7 +366,7 @@ class MazeMotion:
             self.hop_attempts[key] = self.hop_attempts.get(key, 0) + 1
             if self.hop_attempts[key] >= self.max_hop_attempts:
                 self.brain.mark(self.cell, dirn, is_wall=True)
-                self.locomotion_walls.add((self.cell, dirn))         # re-openable by the backstop
+                self._stamp_loco_wall(self.cell, dirn)               # re-openable by _unstick (both reps)
                 self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
                 self.hop_attempts.pop(key, None)                     # so a poor re-entry won't re-sense
             # non-max: just retry (re-center); re-sensing happens only from a GOOD re-entry, never

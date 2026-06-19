@@ -226,3 +226,22 @@ def test_unstick_terminates_when_all_cut_edges_reopened():
     m.reopened.update(base)                           # every cut edge already re-opened once
     m._unstick(0.0)
     assert m.phase == 'stuck'
+
+
+def test_reopened_edge_survives_poor_resense():
+    # After _unstick re-opens a (false) wall, the cell is un-committed but KEPT in `sensed`, so a
+    # POOR (straddling) re-entry must NOT re-sense and re-WALL the re-opened edge (re-WALL needs a
+    # GOOD pose). Otherwise a single poor read re-seals the false wall -> premature 'stuck'.
+    cell = (1, 3); cx, cy = cell_center(cell)
+    m = MazeMotion(); m.cell = cell; m.hop_dir = (0, 1)
+    m.sensed.add(cell)                                   # sensed-but-uncommitted, as _unstick leaves it
+    m.brain.mark(cell, 'N', is_wall=False)               # an optimistically re-opened edge
+    m.reopened.add((cell, 'N'))
+    snap = {d: m.brain._state(cell, d) for d in ('N', 'S', 'E', 'W')}
+    sim = MazeSim(load_segments(), (cx, cy + 0.85), math.pi / 2)   # straddling -> poor pose
+    m.phase = 'center'; t = 0.0
+    for _ in range(120):
+        m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), t); t += 0.1
+        if m.phase != 'center':
+            break
+    assert {d: m.brain._state(cell, d) for d in ('N', 'S', 'E', 'W')} == snap   # no poor re-sense/re-WALL
