@@ -13,7 +13,7 @@ Three commands:
 """
 from __future__ import annotations
 import math
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 
 def _norm(a: float) -> float:
@@ -69,7 +69,7 @@ def cross_track_offset(ox: Optional[float], oy: Optional[float], hop_dir) -> flo
     return oy if dx > 0 else -oy                 # E: north(+oy)=left=>+; W: north=right=>-
 
 
-def side_distances(perp, hop_dir) -> Tuple[float, float]:
+def side_distances(perp: Dict[str, float], hop_dir) -> Tuple[float, float]:
     """Map the per-cardinal perpendicular-distance dict (keys 'E','W','N','S', from
     cell_wall_perp_dist) to the robot's (left, right) side-wall distances for travel along
     hop_dir. Robot-frame left is +90 deg from heading."""
@@ -194,4 +194,4 @@ def profiled_turn_command(yaw: float, target_cardinal: float, yaw_rate: float = 
     err = _norm(target_cardinal - yaw)
     w_mag = min(turn_w_max, math.sqrt(2.0 * ang_decel * abs(err)))
     w = math.copysign(w_mag, err) - kd * yaw_rate
-    return max(-turn_w_max, min(turn_w_max, w))
+    return max(-turn_w_max, min(turn_w_max, w))     # clamp guards a kd*yaw_rate overshoot (kd>0)
