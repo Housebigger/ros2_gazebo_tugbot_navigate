@@ -187,6 +187,8 @@ class MazeMotion:
             walls = sense_cell_walls(ranges, amin, ainc, yaw)
             for d, is_wall in walls.items():
                 self.brain.mark(self.cell, d, is_wall)
+                if not is_wall:
+                    self.locomotion_walls.discard((self.cell, d))   # good re-sense clears a stale loco wall
             was_sensed = self.cell in self.sensed
             self.sensed.add(self.cell)
             if good:                                    # PER-CELL corroboration across visits
@@ -194,8 +196,8 @@ class MazeMotion:
                 count = prev[1] + 1 if (prev is not None and prev[0] == walls) else 1
                 self.corrob[self.cell] = (walls, count)
                 if count >= self.k_corroborate:
-                    self.committed.add(self.cell)
-                    self.evicted.discard(self.cell)     # a committed cell is no longer 'evicted'
+                    self.committed.add(self.cell)       # keep the cell in `evicted` (monotonic bound on
+                    # _unstick re-opens); a committed cell carries no locomotion wall, so it is never re-blamed.
             self.dbg = {'cell': self.cell, 'pose': (round(x, 2), round(y, 2), round(yaw, 2)),
                         'off': (None if ox is None else round(ox, 2),
                                 None if oy is None else round(oy, 2)),
