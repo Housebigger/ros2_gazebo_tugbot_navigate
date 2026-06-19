@@ -1,6 +1,7 @@
 """Test-only 2-D maze simulator: a vectorized raycaster + unicycle integrator
-over the REAL 20260528 wall segments, used to prove the wall-follower reaches the
-exit offline and to select the faster hand. Not imported by any ROS node.
+over the REAL 20260528 wall segments. Offline proof ground for the maze solvers:
+the wall-follower's exit-reaching guarantee, and the flood-fill solver's cell-edge
+model (`ground_truth_edge_open`) + inertia-aware locomotion. Not imported by any ROS node.
 
 px -> map-frame transform for the scaled2x 20260528 world (verified three ways:
 derivation, entrance gap, exit gap):
@@ -17,6 +18,8 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import yaml
+
+from tugbot_maze.flood_fill_brain import CELL_SIZE_M
 
 Segment = Tuple[float, float, float, float]   # (x0, y0, x1, y1), map frame
 
@@ -48,13 +51,55 @@ def load_segments(path: Optional[str] = None) -> List[Segment]:
     return segs
 
 
+def outer_boundary_box(path: Optional[str] = None) -> Tuple[float, float, float, float]:
+    """Return (xmin, xmax, ymin, ymax) of the maze's outer boundary in map frame.
+
+    Built from the segments flagged `outer: true` in the YAML. Used by the
+    guarantee to assert the solver never leaves the maze (no exterior cheating).
+    """
+    if path is None:
+        path = default_segments_path()
+    with open(path) as f:
+        doc = yaml.safe_load(f)
+    xs: List[float] = []
+    ys: List[float] = []
+    for s in doc['segments']:
+        if s.get('outer'):
+            x0, y0 = px_to_map(float(s['p0_px'][0]), float(s['p0_px'][1]))
+            x1, y1 = px_to_map(float(s['p1_px'][0]), float(s['p1_px'][1]))
+            xs += [x0, x1]
+            ys += [y0, y1]
+    if not xs:
+        raise RuntimeError(f"no 'outer: true' segments found in {path!r}")
+    return (min(xs), max(xs), min(ys), max(ys))
+
+
+def ground_truth_edge_open(sim: "MazeSim", a, b, samples: int = 10) -> bool:
+    """True if the robot can traverse from cell-center a to cell-center b without
+    colliding (samples the straight connector against the real wall segments).
+    a, b are (cx, cy) cells with centers at (CELL_SIZE_M*cx, CELL_SIZE_M*cy)."""
+    ax, ay = CELL_SIZE_M * a[0], CELL_SIZE_M * a[1]
+    bx, by = CELL_SIZE_M * b[0], CELL_SIZE_M * b[1]
+    for i in range(samples + 1):
+        t = i / samples
+        if sim.collides(ax + (bx - ax) * t, ay + (by - ay) * t):
+            return False
+    return True
+
+
 class MazeSim:
     def __init__(self, segments, start_xy, start_yaw, *, robot_radius_m=0.35,
-                 wall_half_thickness_m=0.12, max_range_m=12.0):
+                 wall_half_thickness_m=0.12, max_range_m=12.0, inertia=False,
+                 v_max=0.5, w_max=0.5, lin_accel=0.5, ang_accel=0.8,
+                 odom_drift_per_m=0.0, cmd_latency_steps=0):
         self.segs = np.asarray(segments, dtype=float).reshape(-1, 4)
         self.x = float(start_xy[0])
         self.y = float(start_xy[1])
         self.yaw = float(start_yaw)
+        self.odom_drift_per_m = odom_drift_per_m
+        self._drift_x = 0.0                            # accumulated odom drift (map frame)
+        self._drift_y = 0.0
+        self._last_x, self._last_y = self.x, self.y
         self.robot_radius_m = robot_radius_m
         self.wall_half_thickness_m = wall_half_thickness_m
         self.max_range_m = max_range_m
@@ -65,10 +110,28 @@ class MazeSim:
         else:
             self._a = np.empty((0, 2))
             self._e = np.empty((0, 2))
+        self.inertia = inertia
+        self.v_max = v_max
+        self.w_max = w_max
+        self.lin_accel = lin_accel
+        self.ang_accel = ang_accel
+        self.v_cur = 0.0
+        self.w_cur = 0.0
+        # Command-pipeline latency: a (v,w) command takes effect cmd_latency_steps ticks
+        # later. Models the Gazebo velocity_smoother + diff-drive plugin delay, which (with
+        # P-control) induces the rotate-in-place overshoot/oscillation the offline inertia
+        # model alone did not reproduce. 0 = no latency (default, prior behavior).
+        self.cmd_latency_steps = int(cmd_latency_steps)
+        self._cmd_buf = []
 
     @property
     def pose(self) -> Tuple[float, float, float]:
         return (self.x, self.y, self.yaw)
+
+    @property
+    def reported_pose(self) -> Tuple[float, float, float]:
+        """Odom pose = true pose + accumulated drift (what the solver would believe)."""
+        return (self.x + self._drift_x, self.y + self._drift_y, self.yaw)
 
     def scan(self, n_beams=120, fov_rad=2 * math.pi, max_range=None):
         """Return (ranges_list, angle_min, angle_increment) from the current pose.
@@ -124,9 +187,27 @@ class MazeSim:
         return bool(np.any(d < self.robot_radius_m + self.wall_half_thickness_m))
 
     def step(self, v, w, dt):
+        if self.cmd_latency_steps > 0:                 # apply the command from N ticks ago
+            self._cmd_buf.append((v, w))
+            v, w = self._cmd_buf.pop(0) if len(self._cmd_buf) > self.cmd_latency_steps else (0.0, 0.0)
+        if self.inertia:
+            v_cmd = max(-self.v_max, min(self.v_max, v))
+            w_cmd = max(-self.w_max, min(self.w_max, w))
+            self.v_cur += max(-self.lin_accel * dt, min(self.lin_accel * dt, v_cmd - self.v_cur))
+            self.w_cur += max(-self.ang_accel * dt, min(self.ang_accel * dt, w_cmd - self.w_cur))
+            v, w = self.v_cur, self.w_cur
         nx = self.x + v * math.cos(self.yaw) * dt
         ny = self.y + v * math.sin(self.yaw) * dt
         if not self.collides(nx, ny):
             self.x, self.y = nx, ny
         # Rotation always applies (turning in place is safe; lets TURN_AWAY recover).
         self.yaw = math.atan2(math.sin(self.yaw + w * dt), math.cos(self.yaw + w * dt))
+        dx, dy = self.x - self._last_x, self.y - self._last_y
+        dist = math.hypot(dx, dy)
+        if dist > 1e-9 and self.odom_drift_per_m:
+            # LATERAL (cross-track) slip, perpendicular to travel: matches the confirmed
+            # real drift (odom drifted ~0.7 m in X while traveling north). This is the
+            # component wall-referenced re-centering corrects; magnitude grows with distance.
+            self._drift_x += self.odom_drift_per_m * (-dy)
+            self._drift_y += self.odom_drift_per_m * dx
+        self._last_x, self._last_y = self.x, self.y

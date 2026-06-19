@@ -43,9 +43,13 @@ cd src/tugbot_maze && python3 -m pytest test/test_wall_follower.py test/test_maz
 
 Launch directly:
 `ros2 launch tugbot_bringup tugbot_maze_explore.launch.py explorer_type:=wall_follower follow_side:=left`.
-`follow_side` defaults to `left` — ~5.4× faster than `right` here, because it traces the
-short outer-boundary arc to the NE exit rather than the long interior route (1721 vs 9320
-sim-steps in the offline proof, which selects the faster hand objectively).
+`follow_side` defaults to `left`. The robot drives ~2 m in, then a **virtual wall
+seals the entrance behind it** (the door closes), so it solves the maze *interior*
+and cannot follow the perimeter exterior. Under the seal, the left hand reaches the
+exit in ~5595 offline sim-steps and the right in ~9320, both staying inside the
+outer wall — so `left` is the faster *legitimate* hand. (An earlier build with no
+seal let `left` cheat: it left the maze and ran along the *outside* of the perimeter
+wall; the offline guarantee now fails any run that leaves the outer-wall box.)
 
 ## Wall-following architecture
 
@@ -55,9 +59,9 @@ by a ROS-free maze simulator *before* any Gazebo run:
 | Unit | Role | ROS-free? | Tests |
 |---|---|---|---|
 | `wall_follower.py` | Reactive core — `sectorize` (LaserScan → front/side/front_side minima) + `WallFollower` state machine (FIND_WALL/FOLLOW/TURN_AWAY/CORNER; PID on lateral wall offset; **all** angular outputs clamped to `w_max`) | yes | 16 |
-| `wall_follow_control.py` | Node-support helpers — `exit_reached`, `entering_done`, `StallWatchdog` (time injected) | yes | 7 |
+| `wall_follow_control.py` | Node-support helpers — `exit_reached`, `entering_done`, `StallWatchdog`, plus `entrance_seal_segment` / `fuse_virtual_segment` (the virtual sealed door) | yes | 7 |
 | `maze_sim.py` | **Test-only** raycaster + unicycle integrator over the real `20260528` wall segments — proves exit-reaching offline and picks the faster hand | yes | 9 + 6 guarantee |
-| `wall_follow_solver.py` | Thin node (`explorer_type:=wall_follower`) — `/scan` → `sectorize` → `WallFollower` → `/cmd_vel_nav` at 10 Hz; entry + stall recovery + exit self-check | no | smoke |
+| `wall_follow_solver.py` | Thin node (`explorer_type:=wall_follower`) — `/scan` → `sectorize` → `WallFollower` → `/cmd_vel_nav` at 10 Hz; entry + stall recovery + exit self-check; seals the entrance into the scan once entered (interior-only solve) | no | smoke |
 
 `slam_toolbox` runs only for the `map→base_link` pose used by the exit check; **Nav2,
 costmaps, and frontier are not in the control loop** (they stay available behind the other

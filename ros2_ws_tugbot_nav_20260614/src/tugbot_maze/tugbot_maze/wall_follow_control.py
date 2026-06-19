@@ -1,6 +1,6 @@
 """ROS-free node-support helpers for the wall-following solver: exit detection,
-entry-distance check, and a stall watchdog. Time is injected (seconds, float) so
-these stay pure and unit-testable.
+entry-distance check, a stall watchdog, and entrance-seal geometry. Time is
+injected (seconds, float) so these stay pure and unit-testable.
 """
 from __future__ import annotations
 import math
@@ -43,3 +43,56 @@ class StallWatchdog:
 
     def reset(self, t, x, y) -> None:
         self._anchor_t, self._anchor_xy = t, (x, y)
+
+
+def entrance_seal_segment(center_xy, width_m, opening_side) -> Tuple[float, float, float, float]:
+    """Return a map-frame segment (x0, y0, x1, y1) that fills a boundary opening.
+
+    Used to "close the door" so the reactive follower treats the entrance as a
+    solid wall once the robot is inside. `opening_side` 'left'/'right' is a
+    vertical boundary wall, so the seal spans y; 'top'/'bottom' is a horizontal
+    wall, so the seal spans x. width_m is the opening width.
+    """
+    cx, cy = float(center_xy[0]), float(center_xy[1])
+    half = float(width_m) / 2.0
+    if opening_side in ('left', 'right'):
+        return (cx, cy - half, cx, cy + half)
+    if opening_side in ('top', 'bottom'):
+        return (cx - half, cy, cx + half, cy)
+    raise ValueError("opening_side must be 'left', 'right', 'top', or 'bottom'")
+
+
+def fuse_virtual_segment(ranges, angle_min, angle_inc, pose, segment, *,
+                         wall_half_thickness_m=0.12, max_range=12.0) -> list[float]:
+    """Fuse a single virtual wall `segment` into a LaserScan `ranges` list.
+
+    Each beam range becomes min(real_range, distance-to-segment). This mirrors
+    maze_sim's ray-segment intersection and half-thickness convention so the
+    live "sealed door" matches the offline guarantee. `pose` = (x, y, yaw) and
+    `segment` = (x0, y0, x1, y1) share the same (map) frame. Beams that miss the
+    segment keep their real range. Non-finite / non-positive real ranges are
+    treated as `max_range` before fusing. Returns a new list.
+    """
+    px, py, yaw = float(pose[0]), float(pose[1]), float(pose[2])
+    x0, y0, x1, y1 = (float(c) for c in segment)
+    ex, ey = x1 - x0, y1 - y0
+    wx, wy = x0 - px, y0 - py
+    out = []
+    for i, r in enumerate(ranges):
+        if r is None or not math.isfinite(r) or r <= 0.0:
+            r = max_range
+        else:
+            r = min(float(r), max_range)
+        ang = yaw + angle_min + i * angle_inc
+        dx, dy = math.cos(ang), math.sin(ang)
+        denom = dx * ey - dy * ex
+        if abs(denom) > 1e-12:
+            t = (wx * ey - wy * ex) / denom          # ray param == distance (d is unit)
+            u = (wx * dy - wy * dx) / denom          # segment param in [0, 1]
+            if t >= 0.0 and 0.0 <= u <= 1.0:
+                # t < half-thickness only if the robot is essentially inside the
+                # virtual wall (shouldn't happen — the seal arms after entry); clamp to 0.
+                seal_r = max(0.0, min(t - wall_half_thickness_m, max_range))
+                r = min(r, seal_r)
+        out.append(r)
+    return out

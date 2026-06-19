@@ -80,3 +80,53 @@ def test_step_blocked_by_wall_keeps_position_but_allows_rotation():
     x, y, yaw = sim.pose
     assert x == pytest.approx(0.0, abs=1e-9)     # translation rejected
     assert yaw != 0.0                            # rotation still applied
+
+
+def test_ground_truth_edge_open_matches_perfect_maze_tree():
+    # The 20260528 maze is a perfect maze: 100 cells, 99 undirected open edges.
+    from tugbot_maze.maze_sim import MazeSim, load_segments, ground_truth_edge_open
+    from tugbot_maze.flood_fill_brain import in_grid, DIRS, cell_center
+    sim = MazeSim(load_segments(), (2.0, 0.0), 0.0)
+    undirected = set()
+    for cx in range(1, 11):
+        for cy in range(0, 10):
+            for d, (dx, dy) in DIRS.items():
+                nb = (cx + dx, cy + dy)
+                if in_grid(nb) and ground_truth_edge_open(sim, (cx, cy), nb):
+                    undirected.add(frozenset({(cx, cy), nb}))
+    assert len(undirected) == 99
+
+
+def test_inertia_step_rate_limits_and_clamps():
+    from tugbot_maze.maze_sim import MazeSim, load_segments
+    sim = MazeSim(load_segments(), (10.0, 10.0), 0.0, inertia=True)
+    # command beyond the envelope; one 0.1 s step can change v by <= 0.5*0.1 = 0.05
+    sim.step(1.0, 1.0, 0.1)
+    assert sim.v_cur == pytest.approx(0.05, abs=1e-9)     # accel-limited toward clamp(1.0)->0.5
+    assert sim.w_cur == pytest.approx(0.08, abs=1e-9)     # ang accel 0.8 * 0.1
+    # eventually saturates at the clamp, not the commanded 1.0
+    for _ in range(200):
+        sim.step(1.0, 1.0, 0.1)
+    assert sim.v_cur == pytest.approx(0.5, abs=1e-6)
+    assert sim.w_cur == pytest.approx(0.5, abs=1e-6)
+
+
+def test_odom_drift_accumulates_with_distance():
+    from tugbot_maze.maze_sim import MazeSim
+    sim = MazeSim([], (0.0, 0.0), 0.0, odom_drift_per_m=0.1)   # 0.1 m drift per m driven
+    for _ in range(20):
+        sim.step(0.5, 0.0, 0.1)                                 # drive forward ~1 m
+    tx, ty, _ = sim.pose
+    ox, oy, _ = sim.reported_pose
+    assert abs(tx - 1.0) < 0.05                 # true pose moved ~1 m along +x
+    assert abs(ox - tx) < 1e-6                  # no drift ALONG travel (x)
+    assert abs(oy - ty) > 0.05                  # drift is LATERAL (perpendicular, in y)
+    assert abs((oy - ty) - 0.1 * tx) < 0.02     # ~0.1 m lateral drift per m driven
+
+
+def test_reported_pose_equals_true_with_zero_drift():
+    from tugbot_maze.maze_sim import MazeSim
+    sim = MazeSim([], (0.0, 0.0), 0.0)          # default: no drift
+    for _ in range(10):
+        sim.step(0.5, 0.0, 0.1)
+    assert sim.reported_pose == sim.pose

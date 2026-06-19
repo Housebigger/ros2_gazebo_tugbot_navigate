@@ -19,7 +19,9 @@ from std_msgs.msg import String
 import tf2_ros
 
 from tugbot_maze.wall_follower import WallFollower, State, sectorize
-from tugbot_maze.wall_follow_control import exit_reached, entering_done, StallWatchdog
+from tugbot_maze.wall_follow_control import (
+    exit_reached, entering_done, StallWatchdog,
+    entrance_seal_segment, fuse_virtual_segment)
 
 
 class WallFollowSolver(Node):
@@ -56,6 +58,22 @@ class WallFollowSolver(Node):
         self.backup_s = float(self.declare_parameter('backup_s', 1.0).value)
         self.backup_v = float(self.declare_parameter('backup_v', -0.15).value)
         self.cruise_v = cruise_v
+
+        # --- entrance seal: close the door behind the robot so it solves the
+        #     interior instead of following the maze exterior ---
+        self.entrance_seal_enabled = bool(
+            self.declare_parameter('entrance_seal_enabled', True).value)
+        self.wall_half_thickness_m = float(
+            self.declare_parameter('wall_half_thickness_m', 0.12).value)
+        # Entrance opening geometry (map frame), from the 20260528 maze world: a
+        # 2.072 m gap in the west outer wall centered at (0.95, 0). Semantic params
+        # (center/width/side) so a partial launch override can't garble the segment.
+        seal_cx = float(self.declare_parameter('seal_center_x', 0.95).value)
+        seal_cy = float(self.declare_parameter('seal_center_y', 0.0).value)
+        seal_w = float(self.declare_parameter('seal_width_m', 2.072423).value)
+        seal_side = self.declare_parameter('seal_side', 'left').value
+        self.seal_segment = entrance_seal_segment((seal_cx, seal_cy), seal_w, seal_side)
+        self.seal_armed = False
 
         self.follower = WallFollower(
             target_wall_m=target_wall_m, front_block_m=front_block_m,
@@ -103,9 +121,17 @@ class WallFollowSolver(Node):
         msg.angular.z = float(w)
         self.cmd_vel_pub.publish(msg)
 
-    def _sectors(self):
+    def _sectors(self, pose=None):
         s = self.scan_msg
-        return sectorize(s.ranges, s.angle_min, s.angle_increment, self.follow_side,
+        ranges = s.ranges
+        # Once the robot is inside, fuse the sealed entrance into the scan so the
+        # follower "sees" a closed door and follows the interior, not the exterior.
+        if self.seal_armed and pose is not None:
+            ranges = fuse_virtual_segment(
+                ranges, s.angle_min, s.angle_increment, pose, self.seal_segment,
+                wall_half_thickness_m=self.wall_half_thickness_m,
+                max_range=self.max_range_m)
+        return sectorize(ranges, s.angle_min, s.angle_increment, self.follow_side,
                          max_range=self.max_range_m)
 
     # --- control loop ---
@@ -145,10 +171,11 @@ class WallFollowSolver(Node):
             if done or blocked:
                 self.phase = 'follow'
                 self.follower.state = State.FIND_WALL
+                self.seal_armed = self.entrance_seal_enabled
                 if pose is not None:
                     self.watchdog.reset(t, pose[0], pose[1])
-                self.get_logger().info('engaging wall-follower (entered=%s blocked=%s)'
-                                       % (done, blocked))
+                self.get_logger().info('engaging wall-follower (entered=%s blocked=%s) seal=%s'
+                                       % (done, blocked, self.seal_armed))
             else:
                 self._publish_cmd(self.cruise_v, 0.0)   # straight in
             return
@@ -176,7 +203,7 @@ class WallFollowSolver(Node):
             self._publish_cmd(self.backup_v, 0.0)
             return
 
-        cmd = self.follower.update(self._sectors())
+        cmd = self.follower.update(self._sectors(pose))
         self._publish_cmd(cmd.v, cmd.w)
 
     def _diag_tick(self):

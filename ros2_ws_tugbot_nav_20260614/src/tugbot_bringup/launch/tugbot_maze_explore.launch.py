@@ -197,6 +197,15 @@ def generate_launch_description():
         }],
     )
 
+    flood_fill_solver_node = Node(
+        package='tugbot_maze', executable='flood_fill_solver', name='flood_fill_solver',
+        output='screen',
+        parameters=[{'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
+                     'pose_source': LaunchConfiguration('pose_source'),
+                     'sense_debug': ParameterValue(LaunchConfiguration('sense_debug'), value_type=bool)}],
+        condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'flood_fill'"])),
+    )
+
     frontier_explorer = Node(
         package='tugbot_exploration',
         executable='frontier_explorer',
@@ -258,7 +267,9 @@ def generate_launch_description():
         DeclareLaunchArgument('use_composition', default_value='False', description='Use Nav2 composed bringup.'),
         DeclareLaunchArgument('use_respawn', default_value='False', description='Respawn Nav2 nodes if they crash.'),
         DeclareLaunchArgument('log_level', default_value='info', description='Nav2 log level.'),
-        DeclareLaunchArgument('explorer_type', default_value='maze_dfs', description='Explorer implementation: maze_dfs, frontier, tremaux, or wall_follower.'),
+        DeclareLaunchArgument('explorer_type', default_value='maze_dfs', description='Explorer implementation: maze_dfs, frontier, tremaux, wall_follower, or flood_fill.'),
+        DeclareLaunchArgument('pose_source', default_value='slam', description="flood_fill localization source: 'slam' (live map->base_link) or 'odom_locked' (freeze map->odom at startup, then track wheel odometry only -- avoids SLAM degradation in narrow corridors)."),
+        DeclareLaunchArgument('sense_debug', default_value='false', description='flood_fill: log per-cell sensed walls + min LIDAR ranges (diagnostics).'),
         DeclareLaunchArgument('follow_side', default_value='left', description='Wall-follower hand for explorer_type:=wall_follower: left or right. The maze_sim guarantee proof selected left as faster and robust.'),
         DeclareLaunchArgument('exploration_strategy', default_value='perimeter_then_frontier', description='Fallback inherited 0514 frontier/perimeter strategy when explorer_type:=frontier.'),
         DeclareLaunchArgument('max_goals', default_value='350', description='Maximum exploration goals.'),
@@ -320,6 +331,6 @@ def generate_launch_description():
         DeclareLaunchArgument('corridor_max_nav2_fails', default_value='6', description='GCN: max Nav2 failures per corridor before declaring it exhausted.'),
         DeclareLaunchArgument('corridor_max_reactive', default_value='5', description='GCN: max reactive drive attempts per corridor.'),
         maze_slam_nav_launch,
-        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node]),
+        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node, flood_fill_solver_node]),
         TimerAction(period=14.0, actions=[maze_goal_monitor]),
     ])
