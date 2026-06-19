@@ -13,7 +13,7 @@ Three commands:
 """
 from __future__ import annotations
 import math
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 
 def _norm(a: float) -> float:
@@ -67,6 +67,38 @@ def cross_track_offset(ox: Optional[float], oy: Optional[float], hop_dir) -> flo
     if oy is None:                               # E/W travel -> lateral is the y axis
         return 0.0
     return oy if dx > 0 else -oy                 # E: north(+oy)=left=>+; W: north=right=>-
+
+
+def side_distances(perp: Dict[str, float], hop_dir) -> Tuple[float, float]:
+    """Map the per-cardinal perpendicular-distance dict (keys 'E','W','N','S', from
+    cell_wall_perp_dist) to the robot's (left, right) side-wall distances for travel along
+    hop_dir. Robot-frame left is +90 deg from heading."""
+    dx, dy = hop_dir
+    if dy > 0:                       # N: left=W, right=E
+        return perp['W'], perp['E']
+    if dy < 0:                       # S: left=E, right=W
+        return perp['E'], perp['W']
+    if dx > 0:                       # E: left=N, right=S
+        return perp['N'], perp['S']
+    return perp['S'], perp['N']      # W: left=S, right=N
+
+
+def centerline_cross(d_left: float, d_right: float, *, fallback_cross: float = 0.0,
+                     wall_seen_m: float = 1.3, half_corridor_m: float = 0.88) -> float:
+    """Signed lateral offset of the robot to the LEFT of the corridor centerline (+ = left),
+    from the left/right side-wall distances. A side counts as a seen wall when < wall_seen_m.
+      both seen   -> balance the two (the drift-immune true centerline -- THE key change),
+      one seen    -> hold half_corridor_m from that wall,
+      neither     -> the caller's fallback (cell-grid/odom estimate), else 0 (hold heading)."""
+    left_seen = d_left < wall_seen_m
+    right_seen = d_right < wall_seen_m
+    if left_seen and right_seen:
+        return (d_right - d_left) / 2.0
+    if right_seen:
+        return d_right - half_corridor_m
+    if left_seen:
+        return half_corridor_m - d_left
+    return fallback_cross
 
 
 def hop_drive_command(pose, target_yaw: float, cross_track: float = 0.0, *,
@@ -127,3 +159,39 @@ def corridor_drive_command(yaw: float, cardinal_yaw: float, cross_track: float,
         throttle *= max(wedge_v_floor / v_max, wedge)
     v = max(0.0, min(v_max, v_max * throttle))
     return (v, w)
+
+
+def corridor_follow_command(yaw: float, cardinal_yaw: float, d_left: float, d_right: float,
+                            near_wall_m: Optional[float] = None, *, fallback_cross: float = 0.0,
+                            wall_seen_m: float = 1.3, half_corridor_m: float = 0.88,
+                            max_cross_track_m: float = 0.6, v_max: float = 0.3,
+                            w_max: float = 0.5, kp_ang: float = 1.5, lookahead_m: float = 0.7,
+                            slow_angle: float = 0.6, wedge_slow_m: float = 0.50,
+                            wedge_stop_m: float = 0.40, wedge_v_floor: float = 0.10
+                            ) -> Tuple[float, float]:
+    """Symmetric wall-following straight drive. Derives the lateral centerline offset from the
+    two side-wall distances (centerline_cross), clamps it, then steers/throttles with the proven
+    pure-pursuit + never-zero wedge-floor law (corridor_drive_command). Keeps the 0.35 m robot on
+    the PHYSICAL centerline using both walls (drift-immune) instead of the cell-grid offset that
+    vanished at openings -- closing the off-center-entry -> wedge path."""
+    cross = centerline_cross(d_left, d_right, fallback_cross=fallback_cross,
+                             wall_seen_m=wall_seen_m, half_corridor_m=half_corridor_m)
+    cross = max(-max_cross_track_m, min(max_cross_track_m, cross))
+    return corridor_drive_command(yaw, cardinal_yaw, cross, near_wall_m, v_max=v_max,
+                                  w_max=w_max, kp_ang=kp_ang, lookahead_m=lookahead_m,
+                                  slow_angle=slow_angle, wedge_slow_m=wedge_slow_m,
+                                  wedge_stop_m=wedge_stop_m, wedge_v_floor=wedge_v_floor)
+
+
+def profiled_turn_command(yaw: float, target_cardinal: float, yaw_rate: float = 0.0, *,
+                          ang_decel: float = 1.2, turn_w_max: float = 0.35,
+                          kd: float = 0.0) -> float:
+    """Rotate-in-place toward target_cardinal with a DECEL-LIMITED angular profile:
+    |w| = min(turn_w_max, sqrt(2*ang_decel*|err|)) ramps to 0 as the heading error closes, so a
+    delayed (command-latency) command lands while the robot is already decelerating -> no
+    overshoot (the PD law's failure mode). Optional kd*yaw_rate adds light damping. Returns w
+    only (the caller drives v=0)."""
+    err = _norm(target_cardinal - yaw)
+    w_mag = min(turn_w_max, math.sqrt(2.0 * ang_decel * abs(err)))
+    w = math.copysign(w_mag, err) - kd * yaw_rate
+    return max(-turn_w_max, min(turn_w_max, w))     # clamp guards a kd*yaw_rate overshoot (kd>0)

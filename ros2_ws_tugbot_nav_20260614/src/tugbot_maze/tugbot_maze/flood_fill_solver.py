@@ -158,8 +158,9 @@ class FloodFillSolver(Node):
                                   self.phase, self.motion.phase))
         if self.sense_debug and self.motion.dbg:
             d = self.motion.dbg
-            self.get_logger().info('SENSE cell=%s pose=%s off=%s centered=%s walls=%s'
-                                   % (d['cell'], d['pose'], d['off'], d['centered'], d['walls']))
+            self.get_logger().info('SENSE cell=%s pose=%s off=%s good=%s committed=%s corrob=%s walls=%s'
+                                   % (d.get('cell'), d.get('pose'), d.get('off'), d.get('good'),
+                                      d.get('committed'), d.get('corrob'), d.get('walls')))
 
 
 def main(args=None):

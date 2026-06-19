@@ -1,7 +1,72 @@
 import math
+import pytest
 from tugbot_maze.hop_controller import (
     hop_command, centering_command, hop_drive_command, cross_track_offset)
 from tugbot_maze.hop_controller import corridor_drive_command
+from tugbot_maze.hop_controller import side_distances
+from tugbot_maze.hop_controller import centerline_cross
+from tugbot_maze.hop_controller import corridor_follow_command
+from tugbot_maze.hop_controller import profiled_turn_command
+
+
+def test_corridor_follow_centres_between_walls():
+    v, w = corridor_follow_command(math.pi / 2, math.pi / 2, 0.88, 0.88)
+    assert v > 0.0 and abs(w) < 1e-9
+
+
+def test_corridor_follow_steers_toward_farther_wall():
+    # facing N, closer to the RIGHT (east) wall (d_right small) -> right of centre -> steer LEFT (+w)
+    v, w = corridor_follow_command(math.pi / 2, math.pi / 2, 1.2, 0.5)
+    assert w > 0.0 and v > 0.0
+
+
+def test_corridor_follow_single_wall_holds_offset():
+    # only LEFT wall seen, robot off-center toward it (0.6) -> left of centre -> steer RIGHT (-w),
+    # still driving (a modest offset stays under corridor_drive_command's turn-first throttle)
+    v, w = corridor_follow_command(math.pi / 2, math.pi / 2, 0.6, 2.0)
+    assert w < 0.0 and v > 0.0
+
+
+def test_corridor_follow_no_walls_uses_fallback():
+    _, w = corridor_follow_command(math.pi / 2, math.pi / 2, 2.0, 2.0, fallback_cross=0.3)
+    assert w < 0.0
+    _, w0 = corridor_follow_command(math.pi / 2, math.pi / 2, 2.0, 2.0, fallback_cross=0.0)
+    assert abs(w0) < 1e-9
+
+
+def test_corridor_follow_slows_near_wall_never_zero():
+    v, _ = corridor_follow_command(math.pi / 2, math.pi / 2, 0.88, 0.88, near_wall_m=0.40)
+    assert 0.0 < v <= 0.12
+
+
+def test_corridor_follow_within_envelope():
+    v, w = corridor_follow_command(0.0, math.pi / 2, 0.3, 0.3, near_wall_m=0.35)
+    assert -0.5 <= v <= 0.5 and -0.5 <= w <= 0.5
+
+
+def test_centerline_cross_both_walls_balances():
+    assert centerline_cross(0.88, 0.88) == 0.0
+    assert centerline_cross(0.5, 1.2) > 0.0                   # near left wall -> left of centre (+)
+    assert centerline_cross(0.6, 1.0) == pytest.approx(0.2)   # (d_right - d_left)/2
+
+
+def test_centerline_cross_single_wall_holds_half_corridor():
+    assert centerline_cross(2.0, 1.2, half_corridor_m=0.88) == pytest.approx(1.2 - 0.88)
+    assert centerline_cross(0.5, 2.0, half_corridor_m=0.88) == pytest.approx(0.88 - 0.5)
+
+
+def test_centerline_cross_neither_wall_uses_fallback():
+    assert centerline_cross(2.0, 2.0, fallback_cross=0.25) == 0.25
+    assert centerline_cross(2.0, 2.0) == 0.0
+
+
+def test_side_distances_maps_left_right_by_direction():
+    # robot-frame left = +90 deg from heading
+    perp = {'E': 1.0, 'W': 2.0, 'N': 3.0, 'S': 4.0}
+    assert side_distances(perp, (0, 1)) == (2.0, 1.0)    # N: left=W, right=E
+    assert side_distances(perp, (0, -1)) == (1.0, 2.0)   # S: left=E, right=W
+    assert side_distances(perp, (1, 0)) == (3.0, 4.0)    # E: left=N, right=S
+    assert side_distances(perp, (-1, 0)) == (4.0, 3.0)   # W: left=S, right=N
 
 
 def test_cross_track_sign_by_direction():
@@ -159,3 +224,24 @@ def test_corridor_drive_full_speed_when_far_from_walls():
 def test_corridor_drive_within_envelope():
     v, w = corridor_drive_command(0.0, math.pi / 2, 2.0, near_wall_m=0.35)  # extreme inputs
     assert -0.5 <= v <= 0.5 and -0.5 <= w <= 0.5
+
+
+def test_profiled_turn_full_rate_when_far():
+    w = profiled_turn_command(0.0, math.pi / 2, ang_decel=1.2, turn_w_max=0.35)
+    assert abs(w - 0.35) < 1e-9
+
+
+def test_profiled_turn_decelerates_when_close():
+    w_small = profiled_turn_command(math.pi / 2 - 0.05, math.pi / 2, ang_decel=1.2, turn_w_max=0.35)
+    w_tiny = profiled_turn_command(math.pi / 2 - 0.01, math.pi / 2, ang_decel=1.2, turn_w_max=0.35)
+    assert 0.0 < w_tiny < w_small <= 0.35
+
+
+def test_profiled_turn_sign_toward_target():
+    assert profiled_turn_command(0.0, 0.3) > 0.0
+    assert profiled_turn_command(0.0, -0.3) < 0.0
+
+
+def test_profiled_turn_within_cap():
+    w = profiled_turn_command(0.0, math.pi, turn_w_max=0.35)
+    assert -0.35 <= w <= 0.35
