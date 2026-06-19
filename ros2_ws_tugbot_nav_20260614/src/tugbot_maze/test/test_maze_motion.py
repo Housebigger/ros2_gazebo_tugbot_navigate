@@ -1,7 +1,8 @@
 import math
-from tugbot_maze.maze_motion import MazeMotion
+from tugbot_maze.maze_motion import MazeMotion, within_commit_offset, within_cell_core
 from tugbot_maze.maze_sim import MazeSim, load_segments
 from tugbot_maze.flood_fill_brain import ENTRANCE_CELL, EXIT_CELL, cell_center
+from tugbot_maze.cell_walls import sense_cell_walls
 
 
 def _scan_at(sim):
@@ -55,3 +56,117 @@ def test_done_when_cell_is_exit():
     sim = MazeSim(load_segments(), cell_center(EXIT_CELL), 0.0)
     v, w, done = m.step(sim.pose, _scan_at(sim), 0.0)
     assert done is True and (v, w) == (0.0, 0.0)
+
+
+# ---- hardened _center: position-gate predicates + sense-commit behaviors ----
+
+def test_within_commit_offset():
+    assert within_commit_offset(0.3, 0.34, 0.40) is True       # both referenced, within tol
+    assert within_commit_offset(0.5, 0.0, 0.40) is False       # x axis too far
+    assert within_commit_offset(None, 0.9, 0.40) is False      # open x ignored, y too far
+    assert within_commit_offset(None, None, 0.40) is True      # both open -> no constraint
+
+
+def test_within_cell_core():
+    # cell index 4 -> centre at 8.0 (CELL_SIZE_M=2). Core = within (1.0 - margin) of centre.
+    assert within_cell_core(8.0, 4, 0.40) is True
+    assert within_cell_core(8.55, 4, 0.40) is True             # 0.55 <= 0.60 core
+    assert within_cell_core(8.7, 4, 0.40) is False             # 0.70 > 0.60 -> near boundary
+    assert within_cell_core(7.0, 4, 0.40) is False             # the (.,3)/(.,4) boundary at y=7
+
+
+def _force_commit(m, sim, max_ticks=400, dt=0.1):
+    """Step _center at sim's pose; on leaving 'center', simulate a re-entry of the SAME cell so
+    corroboration can accumulate. Returns True once the cell commits."""
+    t = 0.0
+    for _ in range(max_ticks):
+        m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), t)
+        t += dt
+        if m.cell in m.committed:
+            return True
+        if m.phase != 'center':
+            m.phase = 'center'; m.center_start = None
+            m.align_start = None; m.latched_cardinal = None
+    return False
+
+
+def test_good_read_commits_then_discard_is_inert():
+    # From a centred, cardinal pose the entrance cell commits; a later sensed.discard (the churn
+    # trigger) must NOT change its walls -- the committed cell is frozen against re-sensing.
+    sim = MazeSim(load_segments(), cell_center(ENTRANCE_CELL), 0.0)
+    m = MazeMotion()
+    assert _force_commit(m, sim), "cell never committed from a centred pose"
+    cell = m.cell
+    before = {d: m.brain._state(cell, d) for d in ('N', 'S', 'E', 'W')}
+    m.sensed.discard(cell)                          # would trigger a re-sense in the old code
+    m.phase = 'center'; m.center_start = None
+    m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), 100.0)
+    after = {d: m.brain._state(cell, d) for d in ('N', 'S', 'E', 'W')}
+    assert after == before                          # walls frozen despite the discard
+    assert cell in m.committed                       # still committed (fast-path didn't un-commit)
+
+
+def test_poor_read_not_committed_and_poor_reentry_skips():
+    # A boundary-straddling pose (travel axis y) fails the position gate -> the read is NOT
+    # committed, and a second straddling visit does NOT re-sense (so bad poses can't churn).
+    cell = (1, 3); cx, cy = cell_center(cell)
+    sim = MazeSim(load_segments(), (cx, cy + 0.85), math.pi / 2)   # ~0.85 from centre -> straddling
+    m = MazeMotion(); m.cell = cell; m.hop_dir = (0, 1); m.phase = 'center'
+    t = 0.0
+    for _ in range(200):
+        m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), t); t += 0.1
+        if m.phase != 'center':
+            break
+    assert cell in m.sensed and cell not in m.committed     # sensed once, NOT committed (poor)
+    snap = {d: m.brain._state(cell, d) for d in ('N', 'S', 'E', 'W')}
+    m.phase = 'center'; m.center_start = None; m.align_start = None; m.latched_cardinal = None
+    for _ in range(200):
+        m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), t); t += 0.1
+        if m.phase != 'center':
+            break
+    assert {d: m.brain._state(cell, d) for d in ('N', 'S', 'E', 'W')} == snap   # no re-sense churn
+
+
+def test_no_false_wall_across_yaw_tol_and_small_offset():
+    # An edge OPEN at the true centre must never read as a WALL under +/-0.3 m offset & +/-0.1 rad.
+    cell = (1, 3); cx, cy = cell_center(cell)
+    base = MazeSim(load_segments(), (cx, cy), 0.0)
+    r0 = sense_cell_walls(*base.scan(n_beams=360, fov_rad=2 * math.pi), 0.0)
+    for dx, dy, dyaw in [(0.3, 0, 0.1), (-0.3, 0, -0.1), (0, 0.3, 0.1), (0, -0.3, -0.1)]:
+        s = MazeSim(load_segments(), (cx + dx, cy + dy), dyaw)
+        r = sense_cell_walls(*s.scan(n_beams=360, fov_rad=2 * math.pi), dyaw)
+        for d in ('N', 'S', 'E', 'W'):
+            if not r0[d]:
+                assert not r[d], f"false WALL on {d} from offset=({dx},{dy}) yaw={dyaw}"
+
+
+def test_committed_dead_end_is_evicted_not_stuck():
+    # A committed cell whose every edge is WALLed (disconnected) must be EVICTED + re-opened for one
+    # corrective re-sense -- not declared terminally 'stuck' (a permanent false WALL would brick it).
+    m = MazeMotion(); cell = (5, 5); m.cell = cell
+    for d in ('N', 'S', 'E', 'W'):
+        m.brain.mark(cell, d, is_wall=True)
+    m.committed.add(cell)
+    m.locomotion_walls.update({(cell, d) for d in ('N', 'S', 'E', 'W')})
+    sim = MazeSim(load_segments(), cell_center(cell), 0.0)
+    m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), 0.0)
+    assert m.phase != 'stuck'
+    assert cell not in m.committed and cell in m.evicted
+    assert all(m.brain._state(cell, d) != 'wall' for d in ('N', 'S', 'E', 'W'))   # re-opened
+
+
+def test_commit_freezes_sensing_not_map():
+    # Commit freezes SENSING only: a locomotion (hop-failure) wall-mark still un-commits the cell
+    # and records the edge so the deadlock backstop can later re-open it.
+    m = MazeMotion(); cell = (3, 3); m.cell = cell
+    m.committed.add(cell)
+    m.phase = 'drive'; m.hop_dir = (1, 0); m.hop_target = (4, 3)
+    m.hop_start = cell_center(cell)
+    m.progress_pose = cell_center(cell); m.progress_t = 0.0
+    m.hop_deadline = 1e9
+    m.hop_attempts[(cell, 'E')] = m.max_hop_attempts - 1          # this attempt reaches the cap
+    sim = MazeSim(load_segments(), cell_center(cell), 0.0)
+    m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), 10.0)   # no progress -> wedge giveup
+    assert cell not in m.committed                                # un-committed by the locomotion mark
+    assert (cell, 'E') in m.locomotion_walls
+    assert m.brain.is_wall(cell, 'E')
