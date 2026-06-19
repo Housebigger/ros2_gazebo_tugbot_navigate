@@ -6,6 +6,7 @@ from tugbot_maze.hop_controller import corridor_drive_command
 from tugbot_maze.hop_controller import side_distances
 from tugbot_maze.hop_controller import centerline_cross
 from tugbot_maze.hop_controller import corridor_follow_command
+from tugbot_maze.hop_controller import profiled_turn_command
 
 
 def test_corridor_follow_centres_between_walls():
@@ -223,3 +224,24 @@ def test_corridor_drive_full_speed_when_far_from_walls():
 def test_corridor_drive_within_envelope():
     v, w = corridor_drive_command(0.0, math.pi / 2, 2.0, near_wall_m=0.35)  # extreme inputs
     assert -0.5 <= v <= 0.5 and -0.5 <= w <= 0.5
+
+
+def test_profiled_turn_full_rate_when_far():
+    w = profiled_turn_command(0.0, math.pi / 2, ang_decel=1.2, turn_w_max=0.35)
+    assert abs(w - 0.35) < 1e-9
+
+
+def test_profiled_turn_decelerates_when_close():
+    w_small = profiled_turn_command(math.pi / 2 - 0.05, math.pi / 2, ang_decel=1.2, turn_w_max=0.35)
+    w_tiny = profiled_turn_command(math.pi / 2 - 0.01, math.pi / 2, ang_decel=1.2, turn_w_max=0.35)
+    assert 0.0 < w_tiny < w_small <= 0.35
+
+
+def test_profiled_turn_sign_toward_target():
+    assert profiled_turn_command(0.0, 0.3) > 0.0
+    assert profiled_turn_command(0.0, -0.3) < 0.0
+
+
+def test_profiled_turn_within_cap():
+    w = profiled_turn_command(0.0, math.pi, turn_w_max=0.35)
+    assert -0.35 <= w <= 0.35

@@ -181,3 +181,17 @@ def corridor_follow_command(yaw: float, cardinal_yaw: float, d_left: float, d_ri
                                   w_max=w_max, kp_ang=kp_ang, lookahead_m=lookahead_m,
                                   slow_angle=slow_angle, wedge_slow_m=wedge_slow_m,
                                   wedge_stop_m=wedge_stop_m, wedge_v_floor=wedge_v_floor)
+
+
+def profiled_turn_command(yaw: float, target_cardinal: float, yaw_rate: float = 0.0, *,
+                          ang_decel: float = 1.2, turn_w_max: float = 0.35,
+                          kd: float = 0.0) -> float:
+    """Rotate-in-place toward target_cardinal with a DECEL-LIMITED angular profile:
+    |w| = min(turn_w_max, sqrt(2*ang_decel*|err|)) ramps to 0 as the heading error closes, so a
+    delayed (command-latency) command lands while the robot is already decelerating -> no
+    overshoot (the PD law's failure mode). Optional kd*yaw_rate adds light damping. Returns w
+    only (the caller drives v=0)."""
+    err = _norm(target_cardinal - yaw)
+    w_mag = min(turn_w_max, math.sqrt(2.0 * ang_decel * abs(err)))
+    w = math.copysign(w_mag, err) - kd * yaw_rate
+    return max(-turn_w_max, min(turn_w_max, w))
