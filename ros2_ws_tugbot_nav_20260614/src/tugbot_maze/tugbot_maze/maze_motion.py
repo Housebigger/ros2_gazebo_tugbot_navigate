@@ -25,7 +25,8 @@ from tugbot_maze.flood_fill_brain import (
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
 from tugbot_maze.wall_localize import cell_center_offset
 from tugbot_maze.hop_controller import (
-    centering_command, cross_track_offset, corridor_drive_command)
+    centering_command, cross_track_offset,
+    side_distances, corridor_follow_command, profiled_turn_command)
 
 
 def _norm(a: float) -> float:
@@ -48,7 +49,8 @@ class MazeMotion:
                  settle_s: float = 0.4, max_hop_attempts: int = 3,
                  center_timeout_s: float = 4.0, turn_timeout_s: float = 5.0,
                  wedge_detect_s: float = 3.0, wedge_move_eps: float = 0.08,
-                 recover_v: float = 0.15, recover_s: float = 1.8, recover_w: float = 0.0):
+                 recover_v: float = 0.15, recover_s: float = 1.8, recover_w: float = 0.0,
+                 ang_decel: float = 1.2, wall_seen_m: float = 1.3, half_corridor_m: float = 0.88):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.kd_turn = kd_turn          # derivative damping on rotate-in-place (vs latency overshoot)
@@ -63,6 +65,8 @@ class MazeMotion:
         self.turn_timeout_s = turn_timeout_s
         self.wedge_detect_s = wedge_detect_s; self.wedge_move_eps = wedge_move_eps
         self.recover_v = recover_v; self.recover_s = recover_s; self.recover_w = recover_w
+        self.ang_decel = ang_decel; self.wall_seen_m = wall_seen_m
+        self.half_corridor_m = half_corridor_m
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -177,8 +181,10 @@ class MazeMotion:
             self.turn_start = None
             self.phase = 'drive'
             return (0.0, 0.0, False)
-        w = self.kp_turn * err - self.kd_turn * self.yaw_rate        # PD: damp latency overshoot
-        return (0.0, max(-self.turn_w_max, min(self.turn_w_max, w)), False)
+        w = profiled_turn_command(yaw, self.target_cardinal, self.yaw_rate,
+                                  ang_decel=self.ang_decel, turn_w_max=self.turn_w_max,
+                                  kd=self.kd_turn)        # decel profile: no latency overshoot
+        return (0.0, w, False)
 
     def _drive(self, pose, scan, t):
         x, y, yaw = pose
@@ -234,17 +240,21 @@ class MazeMotion:
             self.phase = 'center'
             return (0.0, 0.0, False)
         ox, oy = cell_center_offset(ranges, amin, ainc, yaw)
-        cross = cross_track_offset(ox, oy, self.hop_dir)
-        if abs(cross) > self.max_cross_track_m:                    # bogus/desync -> hold cardinal
-            cross = 0.0
+        fallback = cross_track_offset(ox, oy, self.hop_dir)        # open-junction fallback
+        d_left, d_right = side_distances(perp, self.hop_dir)
         if self.hop_dir[1] != 0:                                   # N/S travel: sides are E/W
             near = min(perp['E'], perp['W'])
         else:                                                      # E/W travel: sides are N/S
             near = min(perp['N'], perp['S'])
-        v, w = corridor_drive_command(yaw, self.target_cardinal, cross, near,
-                                      v_max=self.cruise_v, w_max=self.w_max,
-                                      lookahead_m=self.lookahead_m, wedge_slow_m=self.wedge_slow_m,
-                                      wedge_stop_m=self.wedge_stop_m, wedge_v_floor=self.wedge_v_floor)
+        self.dbg['sides'] = (round(d_left, 2), round(d_right, 2))  # live centerline diagnostics
+        self.dbg['near'] = round(near, 2)
+        v, w = corridor_follow_command(yaw, self.target_cardinal, d_left, d_right, near,
+                                       fallback_cross=fallback, wall_seen_m=self.wall_seen_m,
+                                       half_corridor_m=self.half_corridor_m,
+                                       max_cross_track_m=self.max_cross_track_m,
+                                       v_max=self.cruise_v, w_max=self.w_max,
+                                       lookahead_m=self.lookahead_m, wedge_slow_m=self.wedge_slow_m,
+                                       wedge_stop_m=self.wedge_stop_m, wedge_v_floor=self.wedge_v_floor)
         return (v, w, False)
 
     def _recover(self, pose, t):
