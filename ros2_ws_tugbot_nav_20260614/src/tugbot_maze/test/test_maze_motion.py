@@ -170,3 +170,24 @@ def test_commit_freezes_sensing_not_map():
     assert cell not in m.committed                                # un-committed by the locomotion mark
     assert (cell, 'E') in m.locomotion_walls
     assert m.brain.is_wall(cell, 'E')
+
+
+def test_disconnecting_false_wall_triggers_unstick():
+    # A false WALL can disconnect the exit while leaving an OPEN neighbour -- next_cell is then
+    # non-None (an inf-distance cell), so the robot would wander forever. _route must detect
+    # exit-unreachability and run _unstick (re-open the blamed locomotion walls), not wander.
+    m = MazeMotion(); cell = (5, 5)
+    m.cell = cell
+    walls = [((5, 5), 'E'), ((5, 5), 'W'), ((5, 5), 'S'),
+             ((5, 6), 'N'), ((5, 6), 'E'), ((5, 6), 'W')]    # isolate the pocket {(5,5),(5,6)}
+    for (c, d) in walls:
+        m.brain.mark(c, d, is_wall=True)
+    m.locomotion_walls.update(walls)
+    m.committed.add(cell)                                    # fast-path to _route (skip the real re-sense)
+    assert m.brain.next_cell(cell) is not None               # open N neighbour -> NOT fully boxed
+    assert m.brain.flood().get(cell) is None                 # ...yet the pocket is exit-unreachable
+    sim = MazeSim(load_segments(), cell_center(cell), 0.0)
+    m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), 0.0)
+    assert m.phase != 'stuck'                                # unstick fired (no silent wander/false-stuck)
+    assert cell in m.evicted
+    assert m.brain._state((5, 5), 'E') != 'wall'             # a blamed locomotion wall was re-opened

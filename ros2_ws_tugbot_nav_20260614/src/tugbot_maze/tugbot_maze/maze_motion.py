@@ -92,7 +92,7 @@ class MazeMotion:
         self.committed = set()          # cells sensed from a good (gated) pose -- frozen, never re-sensed
         self.align_start = None         # independent timeout baseline for the cardinal-align sub-phase
         self.latched_cardinal = None    # cardinal latched once at align entry (no 45-deg basin jitter)
-        self.corrob_cell = None; self.corrob_walls = None; self.corrob_count = 0
+        self.corrob = {}                # cell -> (walls, agreeing-good-read count) for commit
         self.locomotion_walls = set()   # (cell,dir) WALLs stamped by hop-failure (re-openable by backstop)
         self.evicted = set()            # cells given one backstop re-sense before declaring stuck
         self.hop_dir = None; self.hop_target = None; self.hop_start = None
@@ -187,19 +187,22 @@ class MazeMotion:
             walls = sense_cell_walls(ranges, amin, ainc, yaw)
             for d, is_wall in walls.items():
                 self.brain.mark(self.cell, d, is_wall)
+            was_sensed = self.cell in self.sensed
             self.sensed.add(self.cell)
+            if good:                                    # PER-CELL corroboration across visits
+                prev = self.corrob.get(self.cell)
+                count = prev[1] + 1 if (prev is not None and prev[0] == walls) else 1
+                self.corrob[self.cell] = (walls, count)
+                if count >= self.k_corroborate:
+                    self.committed.add(self.cell)
+                    self.evicted.discard(self.cell)     # a committed cell is no longer 'evicted'
             self.dbg = {'cell': self.cell, 'pose': (round(x, 2), round(y, 2), round(yaw, 2)),
                         'off': (None if ox is None else round(ox, 2),
                                 None if oy is None else round(oy, 2)),
                         'good': good, 'yaw_err': round(yaw_err, 3),
-                        'pos_ok': pos_ok, 'straddle': not not_straddling, 'walls': walls}
-            if good:
-                if self.corrob_cell == self.cell and self.corrob_walls == walls:
-                    self.corrob_count += 1
-                else:
-                    self.corrob_cell = self.cell; self.corrob_walls = dict(walls); self.corrob_count = 1
-                if self.corrob_count >= self.k_corroborate:
-                    self.committed.add(self.cell)
+                        'pos_ok': pos_ok, 'straddle': not not_straddling, 'walls': walls,
+                        'committed': self.cell in self.committed, 'resensed': was_sensed,
+                        'corrob': self.corrob.get(self.cell, (None, 0))[1]}
         return self._route(x, y, t)
 
     def _reanchor(self, x, y):
@@ -217,10 +220,14 @@ class MazeMotion:
             self.cell = anchored
 
     def _route(self, x, y, t):
-        """Pick next_cell and set up the hop, or run the deadlock backstop if boxed in."""
+        """Pick next_cell and set up the hop. Run the unstick backstop if boxed in (next_cell None)
+        OR if the exit is unreachable from here -- a false WALL can cut the map while leaving an
+        open neighbour, in which case next_cell still returns a non-None inf-distance cell and the
+        robot would wander a disconnected pocket forever."""
         nxt = self.brain.next_cell(self.cell)
-        if nxt is None:
-            return self._stuck_backstop(t)
+        reachable = self.brain.flood().get(self.cell, math.inf) != math.inf
+        if nxt is None or not reachable:
+            return self._unstick(t)
         if nxt != self.hop_target:                       # count a Tremaux traversal once per new hop
             self.brain.mark_traversal(self.cell, nxt)
         self.hop_target = nxt
@@ -234,24 +241,23 @@ class MazeMotion:
         self.phase = 'turn'
         return (0.0, 0.0, False)
 
-    def _stuck_backstop(self, t):
-        """next_cell==None. Before terminal 'stuck', give the cell ONE corrective re-sense: a
-        committed-or-locomotion false WALL is otherwise permanent (walls are monotonic) and can
-        disconnect the exit. Evict from committed+sensed, re-open its locomotion walls, re-sense
-        next tick; declare 'stuck' only if still disconnected (the evicted set prevents re-loop)."""
-        cell = self.cell
-        has_loco = any(c == cell for (c, _d) in self.locomotion_walls)
-        if cell not in self.evicted and (cell in self.committed or has_loco):
-            self.committed.discard(cell)
-            self.sensed.discard(cell)
+    def _unstick(self, t):
+        """next_cell==None OR the exit is unreachable from here -> a locomotion-failure WALL likely
+        cut the map (sensed/committed reads are trusted; locomotion-failure walls are not). Re-open
+        the not-yet-evicted locomotion walls and un-commit their cells for one corrective re-sense;
+        declare terminal 'stuck' only when every blameable cut has had its one chance (the evicted
+        guard bounds the loop)."""
+        blame = {c for (c, _d) in self.locomotion_walls if c not in self.evicted}
+        if blame:
             for (c, d) in list(self.locomotion_walls):
-                if c == cell:
-                    self.brain.mark(c, d, is_wall=False)     # re-open; the forced re-sense overwrites
+                if c in blame:
+                    self.brain.mark(c, d, is_wall=False)     # re-open; a good re-sense overwrites
                     self.locomotion_walls.discard((c, d))
-            self.corrob_cell = None; self.corrob_walls = None; self.corrob_count = 0
+            for c in blame:
+                self.committed.discard(c); self.sensed.discard(c); self.corrob.pop(c, None)
+                self.evicted.add(c)
             self.center_start = None
             self.align_start = None; self.latched_cardinal = None
-            self.evicted.add(cell)
             self.settle_until = t + self.settle_s
             return (0.0, 0.0, False)                          # stay in center -> re-sense next tick
         self.phase = 'stuck'
@@ -306,10 +312,9 @@ class MazeMotion:
             if self.hop_attempts[key] >= self.max_hop_attempts:      # give up this edge (last resort)
                 self.brain.mark(self.cell, dirn, is_wall=True)
                 self.locomotion_walls.add((self.cell, dirn))         # re-openable by the backstop
-                self.committed.discard(self.cell)                    # un-commit: a fresh sense may re-open
-                self.hop_attempts.pop(key, None)
-                self.sensed.discard(self.cell)
-                self.phase = 'center'
+                self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
+                self.hop_attempts.pop(key, None)                     # so a poor re-entry won't re-sense
+                self.phase = 'center'                                # (and clobber) the WALL it just set
             else:
                 self.recover_until = t + self.recover_s              # reverse to un-wedge
                 self.phase = 'recover'
@@ -329,10 +334,10 @@ class MazeMotion:
             if self.hop_attempts[key] >= self.max_hop_attempts:
                 self.brain.mark(self.cell, dirn, is_wall=True)
                 self.locomotion_walls.add((self.cell, dirn))         # re-openable by the backstop
-                self.committed.discard(self.cell)                    # un-commit: a fresh sense may re-open
-                self.hop_attempts.pop(key, None)
-            else:
-                self.sensed.discard(self.cell)                       # re-sense from a clean position
+                self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
+                self.hop_attempts.pop(key, None)                     # so a poor re-entry won't re-sense
+            # non-max: just retry (re-center); re-sensing happens only from a GOOD re-entry, never
+            # from this off-position post-failure pose (that off-pose re-sense was the (3,4) churn).
             self.settle_until = t + self.settle_s
             self.center_start = None
             self.align_start = None; self.latched_cardinal = None
@@ -363,7 +368,9 @@ class MazeMotion:
         # but trades churn. Then re-center / re-sense / re-plan; hop_attempts bounds repeats.
         if t < self.recover_until:
             return (-self.recover_v, self.recover_w, False)
-        self.sensed.discard(self.cell)        # re-sense from the freed position
+        # Do NOT discard `sensed`: re-sensing from this just-reversed (often still off-position)
+        # pose is the (3,4) churn. The cell keeps its read; a GOOD re-entry re-senses it. hop_attempts
+        # already bounds repeated wedge->recover->retry cycles (-> giveup marks the edge a WALL).
         self.center_start = None
         self.align_start = None; self.latched_cardinal = None
         self.phase = 'center'
