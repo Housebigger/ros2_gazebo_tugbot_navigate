@@ -8,6 +8,7 @@ from tugbot_maze.hop_controller import centerline_cross
 from tugbot_maze.hop_controller import corridor_follow_command
 from tugbot_maze.hop_controller import profiled_turn_command
 from tugbot_maze.hop_controller import backout_command
+from tugbot_maze.hop_controller import grid_cross_track
 
 
 def test_corridor_follow_centres_between_walls():
@@ -262,3 +263,17 @@ def test_backout_command_holds_heading():
 def test_backout_command_custom_speed():
     v, _ = backout_command(0.0, 0.0, backout_v=0.22)
     assert v == -0.22
+
+
+def test_grid_cross_track_all_dirs():
+    # cell (5,5) centre (10,10); robot 0.4 m off-centre on the lateral axis
+    assert abs(grid_cross_track(9.6, 10.0, (5, 5), (0, 1)) - 0.4) < 1e-9    # N: west=left  => +
+    assert abs(grid_cross_track(10.4, 10.0, (5, 5), (0, 1)) + 0.4) < 1e-9   # N: east=right => -
+    assert abs(grid_cross_track(10.4, 10.0, (5, 5), (0, -1)) - 0.4) < 1e-9  # S: east=left  => +
+    assert abs(grid_cross_track(10.0, 10.4, (5, 5), (1, 0)) - 0.4) < 1e-9   # E: north=left => +
+    assert abs(grid_cross_track(10.0, 10.4, (5, 5), (-1, 0)) + 0.4) < 1e-9  # W: north=right=> -
+
+
+def test_grid_cross_track_on_centerline_is_zero():
+    assert grid_cross_track(10.0, 10.0, (5, 5), (0, 1)) == 0.0
+    assert grid_cross_track(10.0, 10.0, (5, 5), (1, 0)) == 0.0
