@@ -245,3 +245,68 @@ def test_reopened_edge_survives_poor_resense():
         if m.phase != 'center':
             break
     assert {d: m.brain._state(cell, d) for d in ('N', 'S', 'E', 'W')} == snap   # no poor re-sense/re-WALL
+
+
+def _deadend_brain(d_cell, open_dir):
+    """Brain where d_cell is walled on every in-grid side except open_dir."""
+    from tugbot_maze.flood_fill_brain import FloodFillBrain, DIRS, in_grid
+    b = FloodFillBrain()
+    for d, (dx, dy) in DIRS.items():
+        nb = (d_cell[0] + dx, d_cell[1] + dy)
+        if in_grid(nb) and d != open_dir:
+            b.mark(d_cell, d, True)
+    return b
+
+
+def test_deadend_triggers_backout():
+    b = _deadend_brain((5, 5), 'S')            # open only S -> parent (5,4)
+    m = MazeMotion(b)
+    m.cell = (5, 5)
+    m.hop_dir = (0, 1)                          # entered going N => came_from = 'S'
+    m._route(10.0, 10.0, 0.0)
+    assert m.phase == 'backout'
+    assert m.backout_target == (5, 4)
+    assert abs(m.backout_cardinal - math.pi / 2) < 1e-9   # face N (into the dead-end)
+    assert m.backout_count == 1
+
+
+def test_backout_reverses_then_advances():
+    b = _deadend_brain((5, 5), 'S')
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.hop_dir = (0, 1)
+    m._route(10.0, 10.0, 0.0)                   # -> phase 'backout', start (10,10)
+    v, w, _ = m._backout((10.0, 10.0, math.pi / 2), 0.1)
+    assert v < 0.0 and abs(w) < 0.05            # firm straight reverse
+    m._backout((10.0, 8.0, math.pi / 2), 0.2)   # moved one cell south into (5,4)
+    assert m.cell == (5, 4) and m.phase == 'center'
+
+
+def test_entrance_does_not_backout():
+    from tugbot_maze.flood_fill_brain import FloodFillBrain
+    b = FloodFillBrain()
+    b.mark((1, 0), 'E', True)                   # entrance: only in-grid open exit is N (forward)
+    m = MazeMotion(b)
+    m.cell = (1, 0); m.hop_dir = None           # no came-from at the start
+    m._route(2.0, 0.0, 0.0)
+    assert m.phase == 'turn' and m.hop_target is not None
+
+
+def test_backout_requires_exit_equals_came_from():
+    b = _deadend_brain((5, 5), 'S')             # lone open exit is 'S'
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.hop_dir = (0, -1)        # entered going S => came_from = 'N' != 'S'
+    m._route(10.0, 10.0, 0.0)
+    assert m.phase != 'backout'
+
+
+def test_backout_timeout_escalates():
+    b = _deadend_brain((5, 5), 'S')
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.hop_dir = (0, 1)
+    for _ in range(m.max_backout_attempts):     # each: enter backout, then time out (no arrival)
+        m._route(10.0, 10.0, 0.0)
+        assert m.phase == 'backout'
+        m._backout((10.0, 10.0, math.pi / 2), m.backout_deadline + 0.1)
+        assert m.phase == 'center'
+    m._route(10.0, 10.0, 0.0)                   # attempts exhausted -> normal turn, no re-arm
+    assert m.phase == 'turn'
