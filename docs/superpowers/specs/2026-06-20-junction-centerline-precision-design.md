@@ -41,7 +41,8 @@ proven follower; develop and validate **offline-first** against a reproduced ope
 **Approach A — odom-anchored centerline.** **Files touched:**
 - `tugbot_maze/hop_controller.py` — add one pure function `grid_cross_track(...)`.
 - `tugbot_maze/maze_motion.py` — in `_drive`, source the open-junction `fallback` from
-  `grid_cross_track` (odom/grid) instead of `cross_track_offset` (wall-derived). Adjust the import.
+  `grid_cross_track` (odom/grid) instead of `cross_track_offset` (wall-derived), clamped by a new
+  `grid_fallback_max_m = 0.40` tunable. Adjust the import.
 - `test/test_hop_controller.py` — unit-test `grid_cross_track`.
 - `test/test_maze_motion_sim.py` — add an offline open-junction convergence reproduction; keep the
   full-solve regression green.
@@ -92,10 +93,13 @@ fallback = cross_track_offset(ox, oy, self.hop_dir)        # open-junction fallb
 ```
 becomes:
 ```python
-fallback = grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)  # odom grid centerline (valid in open junctions)
+fallback = max(-self.grid_fallback_max_m,
+               min(self.grid_fallback_max_m,
+                   grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)))  # odom grid centerline (valid in open junctions), clamped to the smooth creep-and-steer regime
 ```
 The `cell_center_offset(...)` / `ox, oy` here were used **only** to feed `cross_track_offset`, so both
-lines collapse into the single `grid_cross_track` call. (`cell_center_offset` is still imported and
+lines collapse into the single `grid_cross_track` call. New `MazeMotion.__init__` tunable:
+`grid_fallback_max_m = 0.40` (m). (`cell_center_offset` is still imported and
 used by `_center`; `cross_track_offset` becomes unused in `maze_motion` — remove it from the
 `hop_controller` import and add `grid_cross_track`.) `x, y` come from `x, y, yaw = pose` at the top of
 `_drive`; `self.cell`, `self.hop_dir`, and `CELL_SIZE_M` are already in scope.
@@ -106,9 +110,24 @@ used by `_center`; `cross_track_offset` becomes unused in `maze_motion` — remo
   side wall is seen**. When ≥1 wall is visible (nearly all of every straight corridor) the proven
   wall-balanced centerline is used and `fallback` is ignored. So this changes behavior **only** in
   the fully-open junction zone — exactly where the robot was blind.
-- **Bounded, clamped nudge.** Odom drift is ~0.25 m (re-anchored each cell) « the 0.53 m slack/side,
-  and `corridor_follow_command` clamps the cross-track to `max_cross_track_m = 0.6`, so a bad odom
-  estimate can only nudge the heading, never swing the robot off-cardinal.
+- **Turn-first, self-recovering, clamped to the smooth regime.** The follower bakes the cross-track
+  into the heading setpoint (`corridor_drive_command`: `setpoint = cardinal + atan2(-cross, lookahead)`),
+  so a large cross steers toward centre and *throttles forward speed via the heading error* (turn
+  first) — **not** via a separate cross-velocity cap (that "only-nudge, never-zero-v" property belongs
+  to `hop_drive_command`'s `cross_w_max`, a different law). The smooth, non-stalling window is
+  `cross < ~0.48 m` (`= lookahead·tan(slow_angle) = 0.7·tan(0.6)`); beyond it `v` briefly drops to the
+  creep floor while the robot turns toward centre, then re-accelerates. To keep the odom fallback
+  inside this regime **and above the wedge-detector creep rate** (so it can never self-trigger a false
+  wedge: `v·wedge_detect_s` must stay > `wedge_move_eps`), the fallback is clamped to
+  `grid_fallback_max_m = 0.40 m` — below the ~0.44 m point where the heading-throttled `v` would fall
+  under that rate. Within the clamp, the bounded odom estimate can only nudge, never swing off-cardinal.
+- **Targets the odom grid centerline.** `grid_cross_track` measures the offset to the *odom* cell-centre
+  line, so its convergence target is the odom centerline — off the true physical centerline by the
+  bounded drift residual (≤ ~0.25 m « the 0.53 m slack; exact at zero drift, strictly better than the
+  old heading-only `0.0` fallback at any drift). It is load-bearing on the solver's existing assumption
+  that the perpendicular dcell stays synced (drift < one cell, which the offline regime enforces and
+  `test_..._sim` guards via `max_desync ≤ 1`); during a hop `self.cell` is not re-anchored, so the
+  centerline is stable for the whole hop.
 - **Source-agnostic drift correction.** The robot now actively steers back to the grid centerline in
   the open zone, correcting drift from *any* cause (turn residual, diff-drive bias, off-center
   entry) — which is why the turn law needs no change.
@@ -118,7 +137,8 @@ used by `_center`; `cross_track_offset` becomes unused in `maze_motion` — remo
 ## Testing & validation (offline-first)
 
 `maze_sim` geometry is confirmed identical to the real Gazebo SDF (0.24 m walls, 0.47 m keep-out), so
-an open-junction wedge is faithfully reproducible offline.
+the open-zone fallback can be exercised under **real collision physics** offline (the discriminating
+centering test below); the literal (6,4)-junction corner-clip is validated in the Gazebo run.
 
 **Unit — `test/test_hop_controller.py` (`grid_cross_track`):**
 - All four `hop_dir`s, robot 0.4 m off the grid centerline of cell (5,5) (centre (10,10)):
@@ -129,15 +149,25 @@ an open-junction wedge is faithfully reproducible offline.
 - On the centerline → `0.0`.
 
 **Offline reproduction — `test/test_maze_motion_sim.py` (new `test_grid_centerline_holds_through_open_junction`):**
-- An **open zone with no side walls in range** (the junction case): `MazeSim([], (0.4, 0.0), π/2)`
-  (robot 0.4 m right of the grid centerline `x = 2·0 = 0`, facing N). Each tick: compute
-  `d_left, d_right` from the scan (both large ⇒ unseen), `fallback = grid_cross_track(sim.x, sim.y,
-  (0,0), (0,1))`, then `corridor_follow_command(sim.yaw, π/2, d_left, d_right, None,
-  fallback_cross=fallback)`; `sim.step`. Over ~120 ticks assert `abs(sim.x) < 0.15` (converged from
-  0.4) and no collision. **Without** the fix (`fallback = 0.0`) the robot holds the 0.4 m offset and
-  this fails; **with** it, the odom-grid fallback pulls it to centerline — pinning the exact
-  mechanism with real physics. (Mirrors the existing `test_symmetric_following_converges_to_centerline`,
-  but in the no-wall zone where only the odom fallback can center.)
+- Side walls placed **beyond sensing range but within collision range** — at `x = ±2.0` (face
+  distance ≈ 1.5–1.9 m after the 0.12 m half-thickness, all `> wall_seen_m = 1.3` ⇒ both *unseen* ⇒
+  the fallback path runs, yet **close enough that a bad fallback actually collides**, so the
+  no-collision assertion has teeth. An empty `[]` world can never collide — its no-collision
+  assertion would be vacuous — so use real walls.) `MazeSim(walls, (0.4, 0.0), π/2, inertia=True)`
+  (real accel-limited diff-drive physics; robot 0.4 m right of the grid centerline `x = 2·0 = 0`,
+  facing N). Each tick: `d_left, d_right` from the scan (both unseen), `fallback = max(-0.40, min(0.40,
+  grid_cross_track(sim.x, sim.y, (0,0), (0,1))))`, then `corridor_follow_command(sim.yaw, π/2, d_left,
+  d_right, None, fallback_cross=fallback)`, `sim.step(v, w, 0.1)`. Over ~120 ticks assert
+  `abs(sim.x) < 0.15` (converged) **and** `not collided`.
+  **Without** the fix (`fallback = 0.0`) the robot holds its 0.4 m offset → the convergence assertion
+  fails; **with** it, the odom-grid fallback re-centers it. (Mirrors the existing
+  `test_symmetric_following_converges_to_centerline`, but in the unseen-wall zone where only the odom
+  fallback can centre.)
+- **Large-offset characterization** (`test_grid_centerline_recovers_from_large_offset`): same walls,
+  start `(0.55, 0.0)` (beyond the 0.40 clamp). Assert `not collided` and eventual convergence
+  (`abs(sim.x) < 0.2` by the end) — verifies the clamp keeps the robot in the creep-and-steer regime
+  (it must re-centre without stalling/wedging or hitting the `x=±2.0` wall). If this case stalls or
+  collides, tighten `grid_fallback_max_m` (offline tuning before any Gazebo run).
 
 **Offline regression — must stay green:** the full-solve `test_reaches_exit_without_collision_or_desync`
 (5 drift×latency cases) still reaches the exit collision-free with `max_desync ≤ 1`, and
@@ -153,6 +183,23 @@ makes deeper exit-ward progress than the prior best (dist 9.78 m); `EXIT_REACHED
 - All new unit tests pass; offline regression stays green.
 - The open-junction convergence test passes (robot re-centers via the odom-grid fallback).
 - In Gazebo: junction wedge-recovers sharply reduced vs. the prior run.
+
+## Revisions from the adversarial review (2026-06-20)
+
+3 lenses with per-finding verification confirmed the core design is sound (sign chain verified as
+correct negative feedback; mechanism discriminating). Folded-in refinements:
+
+1. **Weak offline test** (should). The original `MazeSim([])` empty-wall test can never collide
+   (vacuous no-collision assertion) and doesn't exercise wall physics; the full-solve regression
+   passes *without* the fix (non-discriminating). **Fixed:** real side walls at `x = ±2.0` (unseen but
+   collidable) + `inertia=True`, plus a 0.55 m large-offset case; softened the offline "reproduces the
+   wedge" prose (the literal (6,4) wedge is validated in Gazebo).
+2. **Inaccurate safety rationale** (should). The "clamp → only-nudge, never-zero-v" property is
+   `hop_drive_command`'s, not `corridor_drive_command`'s (used in `_drive`), where `cross ≳ 0.48 m`
+   throttles `v` to a brief pirouette. **Fixed:** corrected the rationale and added a
+   `grid_fallback_max_m = 0.40 m` clamp keeping the odom fallback in the smooth, no-false-wedge regime.
+3. **Odom-centerline residual** (nit). **Clarified:** the convergence target is the *odom* centerline
+   (residual ~ bounded drift, load-bearing on the solver's existing < 1-cell dcell-sync assumption).
 
 ## Constraints
 
