@@ -12,7 +12,7 @@ from tugbot_maze.maze_sim import MazeSim, load_segments
 from tugbot_maze.flood_fill_brain import (
     ENTRANCE_CELL, EXIT_CELL, cell_center, pose_to_cell)
 from tugbot_maze.cell_walls import cell_wall_perp_dist
-from tugbot_maze.hop_controller import side_distances, corridor_follow_command
+from tugbot_maze.hop_controller import side_distances, corridor_follow_command, grid_cross_track
 
 
 def _run(drift, latency=0, dt=0.1, max_steps=30000):
@@ -85,3 +85,44 @@ def test_symmetric_following_converges_to_centerline():
         sim.step(v, w, 0.1)
     assert abs(sim.x) < 0.2, f"did not converge to centerline: x={sim.x:.3f}"
     assert not sim.collides(sim.x, sim.y)
+
+
+def test_grid_centerline_holds_through_open_junction():
+    """Open zone: side walls at x=+-2.0 are beyond sensing range (face ~1.5-1.9 m > wall_seen_m=1.3,
+    so both UNSEEN -> the fallback path runs) yet collidable (a wrong-sign fallback diverges into a
+    wall). Start 0.4 m right of the grid centerline (x = 2*0 = 0) and drive N: the odom-grid fallback
+    must re-centre. With the old fallback=0.0 the robot holds the 0.4 m offset and the convergence
+    assertion fails."""
+    walls = [(-2.0, -5.0, -2.0, 8.0), (2.0, -5.0, 2.0, 8.0)]
+    sim = MazeSim(walls, (0.4, 0.0), math.pi / 2, inertia=True)
+    collided = False
+    for _ in range(120):
+        ranges, amin, ainc = sim.scan(n_beams=360, fov_rad=2 * math.pi)
+        perp = cell_wall_perp_dist(ranges, amin, ainc, sim.yaw)
+        d_left, d_right = side_distances(perp, (0, 1))
+        fallback = max(-0.40, min(0.40, grid_cross_track(sim.x, sim.y, (0, 0), (0, 1))))
+        v, w = corridor_follow_command(sim.yaw, math.pi / 2, d_left, d_right, None, fallback_cross=fallback)
+        sim.step(v, w, 0.1)
+        if sim.collides(sim.x, sim.y):
+            collided = True
+    assert abs(sim.x) < 0.15, f"did not converge via grid fallback: x={sim.x:.3f}"
+    assert not collided
+
+
+def test_grid_centerline_recovers_from_large_offset():
+    """0.55 m offset (beyond the 0.40 clamp): must re-centre without stalling/wedging or hitting the
+    x=+-2.0 walls -- characterises the clamp's creep-and-steer regime."""
+    walls = [(-2.0, -5.0, -2.0, 8.0), (2.0, -5.0, 2.0, 8.0)]
+    sim = MazeSim(walls, (0.55, 0.0), math.pi / 2, inertia=True)
+    collided = False
+    for _ in range(160):
+        ranges, amin, ainc = sim.scan(n_beams=360, fov_rad=2 * math.pi)
+        perp = cell_wall_perp_dist(ranges, amin, ainc, sim.yaw)
+        d_left, d_right = side_distances(perp, (0, 1))
+        fallback = max(-0.40, min(0.40, grid_cross_track(sim.x, sim.y, (0, 0), (0, 1))))
+        v, w = corridor_follow_command(sim.yaw, math.pi / 2, d_left, d_right, None, fallback_cross=fallback)
+        sim.step(v, w, 0.1)
+        if sim.collides(sim.x, sim.y):
+            collided = True
+    assert not collided
+    assert abs(sim.x) < 0.2, f"did not recover from large offset: x={sim.x:.3f}"
