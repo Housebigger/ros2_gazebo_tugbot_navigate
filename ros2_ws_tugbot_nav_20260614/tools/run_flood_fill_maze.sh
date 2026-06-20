@@ -42,6 +42,7 @@ ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     headless:="${HEADLESS}" use_rviz:="${USE_RVIZ}" \
     explorer_type:=flood_fill entry_direct_distance_m:=2.0 \
     pose_source:="${POSE_SOURCE}" sense_debug:="${SENSE_DEBUG}" \
+    junction_log_dir:="$ART" \
     > "$ART/launch.log" 2>&1 &
 LAUNCH_PID=$!
 echo "[FLOODFILL] launch PID=$LAUNCH_PID DOMAIN=$ROS_DOMAIN_ID" | tee "$ART/run_meta.txt"
@@ -57,7 +58,7 @@ done
 
 echo "[FLOODFILL] result=$RESULT" | tee -a "$ART/run_meta.txt"
 echo "$RESULT" > "$ART/result.txt"
-grep -aE "EXIT_REACHED|HOP_BACKUP|DIAG|SENSE|flood_fill_solver" "$ART/launch.log" | tail -80 > "$ART/flood_fill_tail.txt" 2>/dev/null
+grep -aE "EXIT_REACHED|HOP_BACKUP|JUNCTION|DIAG|SENSE|flood_fill_solver" "$ART/launch.log" | tail -80 > "$ART/flood_fill_tail.txt" 2>/dev/null
 
 kill -INT "$LAUNCH_PID" 2>/dev/null
 sleep 5

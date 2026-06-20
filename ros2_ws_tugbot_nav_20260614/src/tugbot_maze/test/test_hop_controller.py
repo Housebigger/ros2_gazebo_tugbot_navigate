@@ -7,6 +7,7 @@ from tugbot_maze.hop_controller import side_distances
 from tugbot_maze.hop_controller import centerline_cross
 from tugbot_maze.hop_controller import corridor_follow_command
 from tugbot_maze.hop_controller import profiled_turn_command
+from tugbot_maze.hop_controller import backout_command
 
 
 def test_corridor_follow_centres_between_walls():
@@ -245,3 +246,19 @@ def test_profiled_turn_sign_toward_target():
 def test_profiled_turn_within_cap():
     w = profiled_turn_command(0.0, math.pi, turn_w_max=0.35)
     assert -0.35 <= w <= 0.35
+
+
+def test_backout_command_reverses_straight_when_aligned():
+    v, w = backout_command(math.pi / 2, math.pi / 2)
+    assert v == -0.30 and abs(w) < 1e-9
+
+
+def test_backout_command_holds_heading():
+    # yaw ahead of hold_cardinal -> steer back (negative w), still reversing
+    v, w = backout_command(0.2, 0.0)
+    assert v < 0.0 and w < 0.0
+
+
+def test_backout_command_custom_speed():
+    v, _ = backout_command(0.0, 0.0, backout_v=0.22)
+    assert v == -0.22

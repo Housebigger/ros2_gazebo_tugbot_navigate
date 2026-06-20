@@ -104,3 +104,10 @@ class FloodFillBrain:
 
     def is_done(self, cell: Cell) -> bool:
         return cell == self.exit_cell
+
+
+def open_exits(brain, cell):
+    """In-grid, not-walled directions out of `cell` (its open exits). Pure, read-only. The in_grid
+    filter is load-bearing: a border cell's out-of-grid side must NOT count as an exit."""
+    return [d for d, (dx, dy) in DIRS.items()
+            if in_grid((cell[0] + dx, cell[1] + dy)) and not brain.is_wall(cell, d)]

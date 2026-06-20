@@ -107,3 +107,18 @@ def test_exit_greedy_prefers_progress_over_unexplored_detour():
     b.mark((5, 5), 'N', is_wall=True)
     b.mark_traversal((5, 5), (6, 5))      # E traversed once; still legal (count 1 < 2)
     assert b.next_cell((5, 5)) == (6, 5)
+
+
+def test_open_exits_counts_ingrid_open_only():
+    from tugbot_maze.flood_fill_brain import FloodFillBrain, open_exits
+    b = FloodFillBrain()
+    b.mark((5, 5), 'N', True)
+    b.mark((5, 5), 'E', True)
+    assert sorted(open_exits(b, (5, 5))) == ['S', 'W']
+
+
+def test_open_exits_excludes_out_of_grid():
+    from tugbot_maze.flood_fill_brain import FloodFillBrain, open_exits
+    b = FloodFillBrain()
+    b.mark((1, 0), 'E', True)            # entrance: S=(1,-1) and W=(0,0) out of grid
+    assert open_exits(b, (1, 0)) == ['N']

@@ -21,12 +21,13 @@ import math
 from typing import Optional, Tuple
 
 from tugbot_maze.flood_fill_brain import (
-    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, CELL_SIZE_M, pose_to_cell, in_grid, DIRS, OPP)
+    FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, CELL_SIZE_M, pose_to_cell, in_grid, DIRS, OPP,
+    open_exits)
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
 from tugbot_maze.wall_localize import cell_center_offset
 from tugbot_maze.hop_controller import (
     centering_command, cross_track_offset,
-    side_distances, corridor_follow_command, profiled_turn_command)
+    side_distances, corridor_follow_command, profiled_turn_command, backout_command)
 
 
 def _norm(a: float) -> float:
@@ -65,7 +66,9 @@ class MazeMotion:
                  recover_v: float = 0.15, recover_s: float = 1.8, recover_w: float = 0.0,
                  ang_decel: float = 1.2, wall_seen_m: float = 1.3, half_corridor_m: float = 0.88,
                  align_timeout_s: float = 6.0, commit_offset_tol_m: float = 0.40,
-                 boundary_margin_m: float = 0.40, k_corroborate: int = 2):
+                 boundary_margin_m: float = 0.40, k_corroborate: int = 2,
+                 backout_v: float = 0.30, backout_timeout_s: float = 12.0,
+                 max_backout_attempts: int = 2):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.kd_turn = kd_turn          # derivative damping on rotate-in-place (vs latency overshoot)
@@ -86,6 +89,8 @@ class MazeMotion:
         self.commit_offset_tol = commit_offset_tol_m
         self.boundary_margin_m = boundary_margin_m
         self.k_corroborate = k_corroborate
+        self.backout_v = backout_v; self.backout_timeout_s = backout_timeout_s
+        self.max_backout_attempts = max_backout_attempts
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -95,6 +100,10 @@ class MazeMotion:
         self.corrob = {}                # cell -> (walls, agreeing-good-read count) for commit
         self.locomotion_walls = set()   # (cell,dir) WALLs stamped by hop-failure (re-openable by _unstick)
         self.reopened = set()           # (cell,dir) WALL edges re-opened by _unstick (monotonic bound)
+        self.backout_target = None; self.backout_cardinal = 0.0
+        self.backout_start = None; self.backout_deadline = 0.0
+        self.backout_attempts = {}      # dead-end cell -> backout timeout count (bounds the loop)
+        self.backout_count = 0          # observable: back-outs initiated (tests / regression)
         self.hop_dir = None; self.hop_target = None; self.hop_start = None
         self.target_cardinal = 0.0
         self.hop_deadline = 0.0; self.settle_until = 0.0; self.turn_in_tol = 0
@@ -123,6 +132,8 @@ class MazeMotion:
             return self._drive(pose, scan, t)
         if self.phase == 'recover':
             return self._recover(pose, t)
+        if self.phase == 'backout':
+            return self._backout(pose, t)
         return (0.0, 0.0, False)
 
     def _center(self, pose, scan, t):
@@ -229,6 +240,29 @@ class MazeMotion:
         reachable = self.brain.flood().get(self.cell, math.inf) != math.inf
         if nxt is None or not reachable:
             return self._unstick(t)
+        # Dead-end -> decisive straight back-out, but ONLY when the lone open exit is the edge we
+        # drove in through (came_from). This excludes the entrance / out-of-grid-entered cells,
+        # whose single in-grid open exit is the FORWARD route. Bounded so a pin can't livelock.
+        came_from = OPP[_dir_name(self.hop_dir)] if self.hop_dir is not None else None
+        open_dirs = open_exits(self.brain, self.cell)
+        if (self.cell != ENTRANCE_CELL and came_from is not None and len(open_dirs) == 1
+                and open_dirs[0] == came_from
+                and self.backout_attempts.get(self.cell, 0) < self.max_backout_attempts):
+            dx, dy = DIRS[came_from]
+            self.backout_target = (self.cell[0] + dx, self.cell[1] + dy)
+            # Trémaux: count the dead-end retreat edge exactly as a normal routed retreat would.
+            # The forward entry already counted this edge once; bringing it to the <2 cap stops
+            # next_cell from re-selecting the dead-end, so the back-out cannot livelock against the
+            # proven routing (which, without this, would re-route into the only "legal" edge -- the
+            # dead-end -- whenever the genuine exit-ward edge is already twice-traversed/capped).
+            self.brain.mark_traversal(self.cell, self.backout_target)
+            self.backout_cardinal = math.atan2(-dy, -dx)   # face INTO the dead-end; reverse to parent
+            self.backout_start = (x, y)
+            self.backout_deadline = t + self.backout_timeout_s
+            self.backout_count += 1
+            self.center_start = None
+            self.phase = 'backout'
+            return (0.0, 0.0, False)
         if nxt != self.hop_target:                       # count a Tremaux traversal once per new hop
             self.brain.mark_traversal(self.cell, nxt)
         self.hop_target = nxt
@@ -408,3 +442,29 @@ class MazeMotion:
         self.align_start = None; self.latched_cardinal = None
         self.phase = 'center'
         return (0.0, 0.0, False)
+
+    def _backout(self, pose, t):
+        """Decisive straight reverse out of a dead-end to the parent cell (one cell). Holds the
+        cardinal and backs at backout_v -- no turn-in-place, no wedge_detect_s wait. On arrival
+        (~one cell) advance self.cell to the parent and resume the FSM. On timeout WITHOUT arrival
+        (a physical pin while reversing) count an attempt and resume center; after
+        max_backout_attempts the _route gate stops re-arming back-out and falls through to the
+        normal turn+drive toward the parent, where the wedge detector + hop-attempt cap escalate
+        (mark wall -> _unstick) exactly as before -- so the timeout path always makes progress and
+        can never deterministically re-enter back-out on the same pinned cell."""
+        x, y, yaw = pose
+        moved = math.hypot(x - self.backout_start[0], y - self.backout_start[1])
+        arrived = moved >= CELL_SIZE_M - self.hop_arrive_slack_m
+        if arrived or t >= self.backout_deadline:
+            if arrived:
+                self.cell = self.backout_target
+            else:
+                self.backout_attempts[self.cell] = self.backout_attempts.get(self.cell, 0) + 1
+            self.settle_until = t + self.settle_s
+            self.center_start = None
+            self.align_start = None; self.latched_cardinal = None
+            self.phase = 'center'
+            return (0.0, 0.0, False)
+        v, w = backout_command(yaw, self.backout_cardinal, backout_v=self.backout_v,
+                               w_max=self.w_max, kp_ang=self.kp_turn)
+        return (v, w, False)

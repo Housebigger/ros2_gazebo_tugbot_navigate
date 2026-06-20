@@ -195,3 +195,16 @@ def profiled_turn_command(yaw: float, target_cardinal: float, yaw_rate: float = 
     w_mag = min(turn_w_max, math.sqrt(2.0 * ang_decel * abs(err)))
     w = math.copysign(w_mag, err) - kd * yaw_rate
     return max(-turn_w_max, min(turn_w_max, w))     # clamp guards a kd*yaw_rate overshoot (kd>0)
+
+
+def backout_command(yaw: float, hold_cardinal: float, *, backout_v: float = 0.30,
+                    w_max: float = 0.5, kp_ang: float = 1.5) -> Tuple[float, float]:
+    """Firm straight reverse out of a dead-end while holding `hold_cardinal`. Returns (v, w) with
+    v = -backout_v (decisive, ~cruise speed -- NOT the 0.15 un-wedge crawl). Proportional steering
+    on the heading error keeps the robot backing straight along the cardinal; the steering sign is
+    correct for reverse travel because w rotates the body toward hold_cardinal regardless of the
+    sign of v. No cross-track term -- the reverse is a single ~2 m cell retracing a path just
+    driven centered, so heading-hold suffices."""
+    err = _norm(hold_cardinal - yaw)
+    w = max(-w_max, min(w_max, kp_ang * err))
+    return (-backout_v, w)

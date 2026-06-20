@@ -6,6 +6,7 @@ internally uses FloodFillBrain for routing. This node owns only ROS plumbing
 (params, TF, pub/sub, timers) and the startup / entering phases.
 """
 import math
+import os
 from typing import Optional
 
 import rclpy
@@ -18,6 +19,7 @@ import tf2_ros
 from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, pose_to_cell)
 from tugbot_maze.maze_motion import MazeMotion
+from tugbot_maze.junction_log import JunctionLog, update_junctions
 from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw
 from tugbot_maze.wall_follow_control import entering_done
 
@@ -49,6 +51,8 @@ class FloodFillSolver(Node):
         # A hop counts as arrived once dead-reckoned distance reaches CELL_SIZE - slack.
         self.hop_arrive_slack_m = float(self.declare_parameter('hop_arrive_slack_m', 0.05).value)
         self.front_block_m = float(self.declare_parameter('front_block_m', 0.7).value)
+        self.junction_log_dir = str(self.declare_parameter('junction_log_dir', '').value)
+        self.junction_log_path = os.path.join(self.junction_log_dir or 'log', 'junctions.json')
 
         self.brain = FloodFillBrain(exit_cell=EXIT_CELL)
         self.motion = MazeMotion(self.brain, cruise_v=self.cruise_v,
@@ -57,6 +61,8 @@ class FloodFillSolver(Node):
                                  hop_arrive_slack_m=self.hop_arrive_slack_m,
                                  front_block_m=self.front_block_m,
                                  hop_timeout_s=self.hop_timeout_s)
+        self.junctions = JunctionLog()
+        self._prev_motion_cell = None
         self.scan_msg: Optional[LaserScan] = None
         self.create_subscription(LaserScan, self.scan_topic, self._scan_cb, 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_nav', 10)
@@ -108,6 +114,12 @@ class FloodFillSolver(Node):
     def _publish_cmd(self, v, w):
         m = Twist(); m.linear.x = float(v); m.angular.z = float(w); self.cmd_vel_pub.publish(m)
 
+    def _flush_junctions(self):
+        try:
+            self.junctions.flush(self.junction_log_path)
+        except Exception as e:                       # never let artifact IO kill the solver
+            self.get_logger().warning('junction log flush failed: %r' % e)
+
     def _control_tick(self):
         now = self.get_clock().now(); t = now.nanoseconds / 1e9
         pose = self._lookup_pose()
@@ -141,13 +153,22 @@ class FloodFillSolver(Node):
             s = self.scan_msg
             v, w, done = self.motion.step(pose, (s.ranges, s.angle_min, s.angle_increment), t)
             self._publish_cmd(v, w)
+            self._prev_motion_cell, j = update_junctions(
+                self.junctions, self.brain, self.motion.cell, self._prev_motion_cell,
+                self.motion.sensed, t)
+            if j is not None:
+                self.get_logger().info('JUNCTION cell=%s exits=%s order=%d visits=%d'
+                                       % (tuple(j['cell']), j['exits'],
+                                          j['discovery_index'], j['visits']))
             if done and self.phase != 'done':
                 self.phase = 'done'
                 self.get_logger().info('EXIT_REACHED (flood_fill_solver)')
                 self.goal_events_pub.publish(String(data='EXIT_REACHED'))
+                self._flush_junctions()
             return
 
     def _diag_tick(self):
+        self._flush_junctions()
         pose = self._lookup_pose()
         if pose is None:
             return
