@@ -250,6 +250,12 @@ class MazeMotion:
                 and self.backout_attempts.get(self.cell, 0) < self.max_backout_attempts):
             dx, dy = DIRS[came_from]
             self.backout_target = (self.cell[0] + dx, self.cell[1] + dy)
+            # Trémaux: count the dead-end retreat edge exactly as a normal routed retreat would.
+            # The forward entry already counted this edge once; bringing it to the <2 cap stops
+            # next_cell from re-selecting the dead-end, so the back-out cannot livelock against the
+            # proven routing (which, without this, would re-route into the only "legal" edge -- the
+            # dead-end -- whenever the genuine exit-ward edge is already twice-traversed/capped).
+            self.brain.mark_traversal(self.cell, self.backout_target)
             self.backout_cardinal = math.atan2(-dy, -dx)   # face INTO the dead-end; reverse to parent
             self.backout_start = (x, y)
             self.backout_deadline = t + self.backout_timeout_s
