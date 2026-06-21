@@ -208,3 +208,22 @@ def backout_command(yaw: float, hold_cardinal: float, *, backout_v: float = 0.30
     err = _norm(hold_cardinal - yaw)
     w = max(-w_max, min(w_max, kp_ang * err))
     return (-backout_v, w)
+
+
+def grid_cross_track(pose_x: float, pose_y: float, cell, hop_dir, *,
+                     cell_size_m: float = 2.0) -> float:
+    """Signed lateral offset of the robot to the LEFT of the hop direction (+ = robot left of
+    centre), measured from the GRID corridor centerline (the cell-centre line) using the odom pose.
+    Unlike cross_track_offset (wall-derived, 0 when no side wall is visible), this is ALWAYS valid,
+    so it gives the corridor follower a centerline reference through an open junction where both side
+    walls vanish. Sign convention matches cross_track_offset. `cell` is the hop's SOURCE cell; it
+    shares the perpendicular coordinate with the target (the hop is along a cardinal), so it defines
+    the corridor centerline for the whole hop. The convergence target is the ODOM centerline (off the
+    true centre by the bounded drift residual); the caller clamps the result, so a small drift error
+    can only nudge, never swing."""
+    dx, dy = hop_dir
+    if dy != 0:                                       # N/S travel -> lateral is the x axis
+        off = pose_x - cell_size_m * cell[0]          # +E
+        return -off if dy > 0 else off                # N: east=right=>-; S: east=left=>+
+    off = pose_y - cell_size_m * cell[1]              # +N
+    return off if dx > 0 else -off                    # E: north=left=>+; W: north=right=>-
