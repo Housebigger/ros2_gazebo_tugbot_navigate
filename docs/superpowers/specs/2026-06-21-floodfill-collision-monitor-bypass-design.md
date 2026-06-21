@@ -60,8 +60,12 @@ bridge, and `velocity_smoother` config.
 
 ### Component 1 — the flood-fill params variant
 
-`nav2_slam_floodfill_params.yaml` is a **verbatim copy** of `nav2_slam_params.yaml` with exactly one
-change, in the `collision_monitor` block:
+`nav2_slam_floodfill_params.yaml` is a **verbatim copy** of `nav2_slam_params.yaml` with **two**
+changes in the `collision_monitor` block — disabling the polygon AND its observation source, because
+`collision_monitor` has **two independent gating paths**: the polygon (`approach` throttle) *and* a
+polygon-independent **source loop** that issues a hard STOP ("invalid source") if an enabled source's
+`getData` fails within `source_timeout` (here raised to 1.0 s, with `transform_tolerance: 0.5`, for
+SLAM TF clears). Disabling only the polygon leaves the source-STOP active. So:
 
 ```yaml
     FootprintApproach:
@@ -72,15 +76,31 @@ change, in the `collision_monitor` block:
       simulation_time_step: 0.1
       min_points: 6
       visualize: False
-      enabled: False          # was True — disables the only zone -> collision_monitor passes through
+      enabled: False          # was True — disables the approach-throttle zone
+    observation_sources: ["scan"]
+    scan:
+      type: "scan"
+      topic: "scan"
+      min_height: 0.15
+      max_height: 2.0
+      enabled: False          # was True — disables the only source -> no polygon-independent source-timeout STOP
 ```
 
-With its only polygon disabled, `collision_monitor` has no active zone, so it republishes its input
-(`cmd_vel_smoothed`) to its output (`/cmd_vel`) **unchanged** — it still bridges the topic (so the
-robot keeps receiving commands; no publisher conflict and no `stop_pub_timeout` stop), it just no
-longer throttles. (Copying the whole file matches the project's existing `nav2_slam_phaseNN_params.yaml`
-convention; the intended diff is the single `enabled:` line — document that the file is otherwise
-identical to the base so reviewers can diff it.)
+With **no active polygon and no active source**, `collision_monitor`'s `process()` loop has nothing
+to act on (`robot_action = {DO_NOTHING, cmd_vel_in}`), so it republishes its input (`cmd_vel_smoothed`)
+to its output (`/cmd_vel`) **unchanged** — it still bridges the topic (robot keeps receiving commands;
+it remains the sole `/cmd_vel` publisher, so no conflict) and neither the approach-throttle nor the
+source-timeout STOP can fire. (Copying the whole file matches the project's existing
+`nav2_slam_phaseNN_params.yaml` convention; the intended diff is **exactly these two `enabled:` lines**
+— the file is otherwise identical to the base, which the config-guard test enforces.)
+
+**`velocity_smoother` is retained and NOT modified** (stays in scope: this is the collision_monitor
+bypass). Note its transparency is **linear-only**: `max_accel/decel` linear `±2.5 m/s²` ≫ anything the
+solver commands, but **angular `±0.8 rad/s²` is *below* the solver's `ang_decel=1.2`**, so turn ramps
+are mildly rate-limited (the angular cap `0.5` equals the solver's `w_max`, and turns use
+`turn_w_max=0.35`, so steady-state turns aren't throttled — only a small ramp latency). This is
+accepted for now and explicitly watched in validation; if it proves to matter at junctions, a
+follow-up raises the variant's angular accel.
 
 ### Component 2 — select the variant for flood-fill
 
@@ -91,10 +111,20 @@ with flood-fill, so ordering it first is safe):
 ```python
     floodfill_nav2_params = os.path.join(navigation_share, 'config', 'nav2_slam_floodfill_params.yaml')
     nav2_params_file = PythonExpression([
-        "'", floodfill_nav2_params, "' if '", explorer_type, "' == 'flood_fill' else '",
-        # ... existing profile-conditional chain, unchanged, defaulting to LaunchConfiguration('params_file') ...
+        "'", floodfill_nav2_params, "' if '", explorer_type, "' == 'flood_fill' else ",
+        #                                                  ^ NOTE: ends with "else " — NO trailing quote.
+        # The EXISTING chain below is appended VERBATIM; its first element is "'", which supplies the
+        # opening quote for the next path. (A trailing quote here would produce `else ''<path>` -> a
+        # launch-time eval SyntaxError that py_compile cannot catch.)
+        "'", os.path.join(navigation_share, 'config', 'nav2_slam_phase26p_candidate_mppi_diagnostics_params.yaml'),
+        "' if '", phase26p_candidate_mppi_diagnostics_profile, "' == 'true' else '",
+        # ... rest of the existing chain unchanged, defaulting to LaunchConfiguration('params_file') ...
     ])
 ```
+Equivalently: keep the existing list byte-for-byte and only PREPEND the four elements
+`"'", floodfill_nav2_params, "' if '", explorer_type` plus the separator `"' == 'flood_fill' else "`
+(trailing space, no quote) in front of the current line-28 `"'"`. The assembled expression is
+`'<ff>' if '<explorer_type>' == 'flood_fill' else '<phase26p_candidate>' if ... else '<params_file>'`.
 
 `explorer_type` is already a `LaunchConfiguration` in scope (line 18). No run-script change is needed:
 `run_flood_fill_maze.sh` passes `explorer_type:=flood_fill`, so the variant is selected automatically;
@@ -102,14 +132,16 @@ every other explorer falls through to the existing chain and keeps `collision_mo
 
 ### Why this is correct and safe
 
-- **Pass-through, not stop:** a disabled-zone `collision_monitor` still subscribes `cmd_vel_smoothed`
-  and publishes `/cmd_vel`, forwarding the velocity unchanged — so the robot keeps moving and there's
-  no second `/cmd_vel` publisher to conflict with.
+- **Pass-through, not stop:** with **both** the polygon and the scan source disabled,
+  `collision_monitor` still subscribes `cmd_vel_smoothed` and publishes `/cmd_vel`, forwarding the
+  velocity unchanged — *neither* gating path (approach-throttle *nor* source-timeout STOP) can fire —
+  so the robot keeps moving and `collision_monitor` remains the sole `/cmd_vel` publisher (no conflict).
 - **Flood-fill-scoped:** the variant is selected only for `explorer_type == 'flood_fill'`; the base
   `nav2_slam_params.yaml` and all other explorers are untouched.
 - **Reversible:** delete the variant + the one launch clause to restore the prior behavior.
-- **`velocity_smoother` retained:** accel limits (2.5 m/s²) far exceed anything the solver commands, so
-  it does not throttle; it just smooths — and keeps the existing topology intact.
+- **`velocity_smoother` retained (linear-transparent):** linear accel limits (`±2.5 m/s²`) ≫ the
+  solver's commands, so it doesn't throttle forward motion; angular is mildly rate-limited (see
+  Component 1) — accepted for now, watched in validation.
 
 ## Testing & validation
 
@@ -117,42 +149,87 @@ This is an infrastructure change (YAML + launch), so there is no unit-level cont
 decisive test is the Gazebo run. Cheap guards first:
 
 **Config guard — `test/test_floodfill_collision_monitor_bypass.py` (new, ROS-free):**
-- Parse both YAMLs with `yaml.safe_load`. Assert:
-  - the **base** `nav2_slam_params.yaml` has `collision_monitor → FootprintApproach → enabled == True`
-    (the gate is active for everyone else), and
-  - the **variant** `nav2_slam_floodfill_params.yaml` has `... enabled == False` (gate disabled), and
-  - the two files are otherwise structurally equal **except** that one key (guards against drift /
-    accidental over-edit — e.g. assert the `velocity_smoother`, `controller_server`, costmap blocks
-    are byte-identical, or that the only differing leaf is `FootprintApproach.enabled`).
-- Run from source: `cd src/tugbot_navigation && python3 -m pytest test/... -v` (paths to the config
-  files are relative to the package source, not the install tree).
+- Anchor paths via `pathlib.Path(__file__).resolve().parents[1] / 'config'` (NOT cwd-relative). Load
+  both YAMLs with `yaml.safe_load`. The correct key path includes the `ros__parameters` level:
+  `collision_monitor → ros__parameters → {FootprintApproach → enabled, scan → enabled}`.
+- Assert the **base** `nav2_slam_params.yaml` has both `FootprintApproach.enabled == True` and
+  `scan.enabled == True` (gate active for everyone else); the **variant** has both `== False`.
+- **Whole-tree drift guard** (catches ANY accidental over-edit, not just listed blocks): `deepcopy`
+  the variant, set its two changed leaves back to `True`, then assert the deepcopy equals the base dict
+  exactly. (Unquoted `True`/`False` parse to Python `bool`.)
 
-**Launch syntax:** `python3 -m py_compile src/tugbot_bringup/launch/tugbot_maze_explore.launch.py` →
-`COMPILE_OK`.
+**Launch-expression eval guard — same test file (catches what `py_compile` cannot):** `py_compile`
+returns OK on the launch because the `PythonExpression` list is valid *source*; the quoting defect
+only fails at launch-time `eval()`. So assemble the expression string the way the launch does
+(substitute `explorer_type='flood_fill'` then `'maze_dfs'`, and the profile flags `'false'`), `eval()`
+it, and assert it returns the **floodfill** variant path for `flood_fill` and the **default**
+`params_file` for `maze_dfs`. This guards the `''`-seam regression directly.
 
-**Build:** `colcon build --packages-select tugbot_navigation tugbot_bringup` (installs the new config
-into the share tree and the launch edit). Confirm the variant lands in
-`install/tugbot_navigation/share/tugbot_navigation/config/`.
+**Launch syntax:** `python3 -m py_compile .../tugbot_maze_explore.launch.py` → `COMPILE_OK` (necessary
+but NOT sufficient — see the eval guard above).
+
+**Build:** `colcon build --packages-select tugbot_navigation tugbot_bringup`; confirm the variant lands
+in `install/tugbot_navigation/share/tugbot_navigation/config/`.
 
 **Gazebo (the decisive run):**
 `tools/run_flood_fill_maze.sh 1800 false true odom_locked true` (clean stray sims first via the `!`
-pkill). Success signals, in order of importance:
-1. **No real collisions** — `collision_monitor` is off, so the solver's own control must keep the body
-   off the walls. Watch the run for actual wall contact (visually + any collision indicators). This is
-   the safety we removed and the primary thing to confirm.
-2. **`collision_monitor` no longer gates** — the `"approach… away from collision"` throttling no
-   longer stalls the solver (the messages may still appear from the node but must not pin it).
-3. **Wedge-recovers drop sharply** vs the prior runs (24 / 27), especially at junctions.
-4. **Deeper progress** than the prior best (dist 9.78 m); `EXIT_REACHED` is the stretch goal — and if
+pkill). **Before drawing any conclusion, confirm the bypass actually took effect** (else a persisting
+wedge is unattributable):
+- (i) the **variant was selected** — the run uses `nav2_slam_floodfill_params.yaml` (log/launch shows
+  it), and `ros2 param get /collision_monitor FootprintApproach.enabled` (and `scan.enabled`) report
+  `False` on the live node;
+- (ii) **`collision_monitor` is pass-through** — no `"approach… away from collision"` / `"invalid
+  source"` STOP lines gate the solver; spot-check `/cmd_vel` equals `/cmd_vel_smoothed` while driving;
+- (iii) **`velocity_smoother` is not the gate** — its `/cmd_vel_smoothed` output is non-zero while the
+  solver is commanding motion (rules out the retained `velocity_timeout: 1.0` zeroing on any >1 s
+  publish gap).
+
+Then the success signals, in order of importance:
+1. **No real collisions** (the safety we removed). **Objective check:** post-process the recorded
+   trajectory through the *same* offline oracle — `MazeSim.collides(x, y)` against `load_segments()`
+   (`maze_sim.py`, robot 0.35 m + wall 0.12 m) — and flag any pose inside the margin. The run logs
+   DIAG poses every 5 s in the solver map frame (same frame as `load_segments`, so it applies
+   directly); for finer coverage, raise the pose-log rate or add a Gazebo contact-sensor topic. "Zero
+   objective collisions" (not just "looked fine") is the pass/fail gate for this signal.
+2. **Wedge-recovers drop sharply** vs the prior runs (24 / 27), especially at junctions.
+3. **Deeper progress** than the prior best (dist 9.78 m); `EXIT_REACHED` is the stretch goal — and if
    reached, this is the first confirmed full autonomous interior solve.
 
-**Interpretation:**
-- Wedges collapse + no collisions ⇒ `collision_monitor` was the dominant root; proceed to bank and
-  then re-evaluate whether the centerline fix (`junction-centerline-precision`) is still needed.
-- Wedges persist ⇒ the root is (also) the solver's low-level control; keep this bypass (it's correct
-  regardless) and return to the controller (e.g. the deferred junction-aware "Approach B").
-- Real collisions appear ⇒ the solver's control does not fully transfer to Gazebo; do **not** ship the
-  bypass as-is; the controller needs the precision work first.
+**Interpretation (gated on confirmed pass-through above):**
+- Pass-through confirmed + wedges collapse + zero objective collisions ⇒ `collision_monitor` was a
+  dominant root; proceed to bank, then re-evaluate whether the centerline fix
+  (`junction-centerline-precision`) is still needed. (The *decisive* evidence is this Gazebo
+  with-vs-without-bypass A/B against the `main` baseline — stronger than the offline-vs-Gazebo
+  contrast, which only *motivated* the hypothesis.)
+- Pass-through confirmed + wedges persist ⇒ the root is (also) the solver's low-level control; keep
+  this bypass (correct regardless) and return to the controller (deferred junction-aware "Approach B").
+- Objective collisions appear ⇒ the solver's control does not fully transfer to Gazebo; do **not**
+  ship the bypass as-is; the controller needs the precision work first.
+- Pass-through NOT confirmed ⇒ fix the wiring (variant selection / param load / smoother zeroing)
+  before interpreting anything.
+
+## Revisions from the adversarial review (2026-06-21)
+
+3 lenses with per-finding verification confirmed the core mechanism (disabled-polygon
+`collision_monitor` republishes input unchanged; pipeline + CMake install + flood-fill scoping all
+correct). Two **must-fix** issues and validation tightening, folded in:
+
+1. **MUST-FIX — incomplete bypass.** `collision_monitor`'s source loop is polygon-independent: with the
+   `scan` source still enabled and `source_timeout: 1.0`, a scan/TF stall fires a hard STOP regardless
+   of the disabled polygon. **Fixed:** the variant now also sets `scan.enabled: False` (no active
+   source ⇒ no source-timeout STOP) — true pass-through.
+2. **MUST-FIX — launch-time `SyntaxError`.** The prepended `PythonExpression` clause's trailing quote +
+   the existing chain's leading quote concatenate to `''<path>`, which `eval()` rejects at launch (and
+   `py_compile` cannot catch). **Fixed:** the new clause ends with `else ` (no trailing quote); added a
+   launch-expression **eval guard** test that `eval()`s the assembled string for both explorer types.
+3. **Should — subjective safety check.** **Fixed:** added an objective collision oracle (reuse
+   `MazeSim.collides` against `load_segments()` on the recorded trajectory) as the pass/fail gate.
+4. **Should — unattributable negative result.** **Fixed:** "confirm the bypass took effect" (variant
+   selected, params applied, `velocity_smoother` not zeroing) is now a precondition before any
+   "controller is the root" conclusion.
+5. **Nit — config-guard key path** omitted `ros__parameters`, and **velocity_smoother angular**
+   transparency (`±0.8` < solver `1.2`). **Fixed:** corrected the key path + whole-tree diff; scoped the
+   smoother "transparent" claim to linear and flagged the angular rate-limit for validation.
 
 ## Constraints
 
