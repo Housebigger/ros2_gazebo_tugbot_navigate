@@ -265,8 +265,6 @@ class MazeMotion:
             self.center_start = None
             self.phase = 'backout'
             return (0.0, 0.0, False)
-        if nxt != self.hop_target:                       # count a Tremaux traversal once per new hop
-            self.brain.mark_traversal(self.cell, nxt)
         self.hop_target = nxt
         self.hop_dir = (nxt[0] - self.cell[0], nxt[1] - self.cell[1])
         self.target_cardinal = math.atan2(self.hop_dir[1], self.hop_dir[0])
@@ -358,6 +356,7 @@ class MazeMotion:
         ranges, amin, ainc = scan
         moved = math.hypot(x - self.hop_start[0], y - self.hop_start[1])
         if moved >= CELL_SIZE_M - self.hop_arrive_slack_m:           # arrived
+            self.brain.mark_traversal(self.cell, self.hop_target)    # count the COMPLETED traversal (was: at pick)
             self.cell = self.hop_target
             self.hop_attempts.clear()                                # fresh cell -> reset attempts
             self.settle_until = t + self.settle_s

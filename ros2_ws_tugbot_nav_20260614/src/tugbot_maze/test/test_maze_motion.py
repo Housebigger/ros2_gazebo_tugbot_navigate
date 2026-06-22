@@ -310,3 +310,35 @@ def test_backout_timeout_escalates():
         assert m.phase == 'center'
     m._route(10.0, 10.0, 0.0)                   # attempts exhausted -> normal turn, no re-arm
     assert m.phase == 'turn'
+
+
+def test_mark_traversal_counts_on_arrival_not_on_pick():
+    from tugbot_maze.flood_fill_brain import FloodFillBrain
+    b = FloodFillBrain()
+    b.mark((5, 5), 'E', True); b.mark((5, 5), 'W', True)   # open N/S -> routes toward exit (N)
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.hop_dir = (0, -1)          # arrived from S; not a dead-end (N also open)
+    m._route(10.0, 10.0, 0.0)
+    assert m.phase == 'turn' and m.hop_target is not None
+    tgt = m.hop_target
+    assert b._edge_traversal_count((5, 5), tgt) == 0          # NOT counted at pick
+    m.phase = 'drive'; m.hop_start = (10.0, 10.0)
+    arrive = (10.0 + 2.0 * m.hop_dir[0], 10.0 + 2.0 * m.hop_dir[1], 0.0)
+    m._drive(arrive, _scan_at(MazeSim(load_segments(), cell_center(tgt), 0.0)), 0.1)
+    assert b._edge_traversal_count((5, 5), tgt) == 1          # counted on arrival
+
+
+def test_failed_hop_does_not_inflate_traversal():
+    from tugbot_maze.flood_fill_brain import FloodFillBrain
+    b = FloodFillBrain()
+    b.mark((5, 5), 'E', True); b.mark((5, 5), 'W', True)
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.hop_dir = (0, -1)
+    m._route(10.0, 10.0, 0.0)
+    tgt = m.hop_target
+    m.phase = 'drive'; m.hop_start = (10.0, 10.0); m.hop_deadline = 0.0; m.max_hop_attempts = 99
+    m.progress_pose = (10.0, 10.0); m.progress_t = 1.0       # wedge baseline (not crossing wedge_detect_s)
+    sim = MazeSim(load_segments(), cell_center((5, 5)), 0.0)
+    m._drive((10.4, 10.0, 0.0), _scan_at(sim), 1.0)           # moved 0.4 (<1.95), t>=deadline -> fail
+    assert m.phase == 'center'                                 # bounced back, did NOT arrive
+    assert b._edge_traversal_count((5, 5), tgt) == 0           # failed hop must NOT inflate
