@@ -24,7 +24,12 @@ def generate_launch_description():
     candidate_costcritic_275_profile = LaunchConfiguration('candidate_costcritic_275_profile')
     phase26p_mppi_diagnostics_profile = LaunchConfiguration('phase26p_mppi_diagnostics_profile')
     phase26p_candidate_mppi_diagnostics_profile = LaunchConfiguration('phase26p_candidate_mppi_diagnostics_profile')
+    floodfill_nav2_params = os.path.join(navigation_share, 'config', 'nav2_slam_floodfill_params.yaml')
     nav2_params_file = PythonExpression([
+        "'", floodfill_nav2_params, "' if '", explorer_type, "' == 'flood_fill' else ",
+        # ^ new clause ends with "else " (NO trailing quote); the existing chain's leading "'"
+        #   (next line) supplies the opening quote. A trailing quote here -> `else ''<path>` ->
+        #   launch eval SyntaxError (which py_compile does NOT catch).
         "'",
         os.path.join(navigation_share, 'config', 'nav2_slam_phase26p_candidate_mppi_diagnostics_params.yaml'),
         "' if '",

@@ -26,7 +26,7 @@ from tugbot_maze.flood_fill_brain import (
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
 from tugbot_maze.wall_localize import cell_center_offset
 from tugbot_maze.hop_controller import (
-    centering_command, cross_track_offset,
+    centering_command, grid_cross_track,
     side_distances, corridor_follow_command, profiled_turn_command, backout_command)
 
 
@@ -68,7 +68,8 @@ class MazeMotion:
                  align_timeout_s: float = 6.0, commit_offset_tol_m: float = 0.40,
                  boundary_margin_m: float = 0.40, k_corroborate: int = 2,
                  backout_v: float = 0.30, backout_timeout_s: float = 12.0,
-                 max_backout_attempts: int = 2):
+                 max_backout_attempts: int = 2,
+                 grid_fallback_max_m: float = 0.40):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.kd_turn = kd_turn          # derivative damping on rotate-in-place (vs latency overshoot)
@@ -91,6 +92,7 @@ class MazeMotion:
         self.k_corroborate = k_corroborate
         self.backout_v = backout_v; self.backout_timeout_s = backout_timeout_s
         self.max_backout_attempts = max_backout_attempts
+        self.grid_fallback_max_m = grid_fallback_max_m   # clamp on the open-junction odom fallback
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -410,8 +412,9 @@ class MazeMotion:
             self.align_start = None; self.latched_cardinal = None
             self.phase = 'center'
             return (0.0, 0.0, False)
-        ox, oy = cell_center_offset(ranges, amin, ainc, yaw)
-        fallback = cross_track_offset(ox, oy, self.hop_dir)        # open-junction fallback
+        fallback = max(-self.grid_fallback_max_m,
+                       min(self.grid_fallback_max_m,
+                           grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)))  # odom grid centerline (valid in open junctions), clamped to the smooth creep-and-steer regime
         d_left, d_right = side_distances(perp, self.hop_dir)
         if self.hop_dir[1] != 0:                                   # N/S travel: sides are E/W
             near = min(perp['E'], perp['W'])
