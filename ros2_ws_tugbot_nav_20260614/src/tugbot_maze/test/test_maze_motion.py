@@ -585,3 +585,32 @@ def test_unstick_reopen_clears_failed_hops_and_resets_tier():
     # at least one incident edge was reopened and its failed_hops cleared
     assert all(k[0] != (5, 5) or k not in m.failed_hops for k in [((5, 5), 'N')]) or \
            ((5, 5), 'N') not in m.failed_hops
+
+
+def test_wedge_gate_skips_when_rotating_in_place():
+    # MIS-ALIGNED (yaw far from cardinal): the follower zeroes v to turn in place and re-align;
+    # no positional progress must NOT be misread as a pin.
+    b = _two_exit_brain((5, 5), 'N', 'S')
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.hop_dir = (0, 1); m.hop_target = (5, 6)
+    m.target_cardinal = math.pi / 2                        # hop is N; robot points E (yaw=0) -> |yaw_err|=pi/2
+    m.phase = 'drive'; m.hop_start = (10.0, 10.0); m.hop_deadline = 1e12
+    m.progress_pose = (10.0, 10.0); m.progress_t = 0.0
+    sim = MazeSim(load_segments(), cell_center((5, 5)), 0.0)
+    m._drive((10.0, 10.0, 0.0), _scan_at(sim), m.wedge_detect_s + 5.0)  # moved=0 (<0.3) -> no front_block
+    assert m.phase == 'drive'                               # NOT wedged (no recover/center)
+    assert not b.is_wall((5, 5), 'N')                       # no false wall stamped
+    assert m.progress_t == m.wedge_detect_s + 5.0           # baseline reset (re-aligning is legit)
+
+
+def test_wedge_still_fires_on_real_pin():
+    # ALIGNED (yaw == cardinal) but not moving -> a genuine pin must still wedge.
+    b = _two_exit_brain((5, 5), 'N', 'S')
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.hop_dir = (1, 0); m.hop_target = (6, 5)
+    m.target_cardinal = 0.0                                # hop is E; robot points E (yaw=0) -> |yaw_err|=0
+    m.phase = 'drive'; m.hop_start = (10.0, 10.0); m.hop_deadline = 1e12
+    m.progress_pose = (10.0, 10.0); m.progress_t = 0.0
+    sim = MazeSim(load_segments(), cell_center((5, 5)), 0.0)
+    m._drive((10.0, 10.0, 0.0), _scan_at(sim), m.wedge_detect_s + 5.0)
+    assert m.phase in ('recover', 'center')                # wedge fired (recover; center if it gave up)

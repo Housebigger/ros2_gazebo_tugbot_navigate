@@ -132,6 +132,7 @@ class MazeMotion:
         self._latched = False                 # NH14 dead-maze permanent stop (set in _escape, Task 4)
         self.events = []                      # DIAG: structured STALL/ESCAPE/LATCH/UNSTICK strings (node drains)
         self._last_drive_v = 0.0              # DIAG: last corridor v (to spot wedge_stop, v~=0)
+        self.wedge_realign_yaw = 0.5          # |yaw_err|>=this => follower turns in place (v~=0), not a pin
 
     def step(self, pose, scan, t) -> Tuple[float, float, bool]:
         yaw = pose[2]                                   # measured yaw rate (for PD damping)
@@ -506,6 +507,8 @@ class MazeMotion:
         # it as a hop attempt; after max_hop_attempts give up on this edge (mark wall, re-route).
         if math.hypot(x - self.progress_pose[0], y - self.progress_pose[1]) > self.wedge_move_eps:
             self.progress_pose = (x, y); self.progress_t = t
+        elif abs(_norm(self.target_cardinal - yaw)) >= self.wedge_realign_yaw:  # heading far off cardinal =>
+            self.progress_pose = (x, y); self.progress_t = t  # follower turns in place (v~=0), not a pin -> no false wedge
         elif (t - self.progress_t) > self.wedge_detect_s:
             key = (self.cell, dirn)
             self.hop_attempts[key] = self.hop_attempts.get(key, 0) + 1
