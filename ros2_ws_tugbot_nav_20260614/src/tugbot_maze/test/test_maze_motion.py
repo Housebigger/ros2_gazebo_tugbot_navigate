@@ -397,3 +397,90 @@ def test_confined_prunes_out_of_window_entries():
     # old, out-of-window distinct cells must be pruned so they don't inflate the footprint
     m.recent = [(10.0, (1, 1)), (10.0, (2, 2)), (10.0, (3, 3)), (200.0, (5, 6))]
     assert m._confined(250.0) is True          # only (5,6)+(5,5) within [160,250] -> 2 <= K
+
+
+# ---- C3: escalating escape (_escape) + _backout guard ----
+
+def test_escape_tier1_reverses_to_prev_keeps_edge_open():
+    b = _two_exit_brain((5, 5), 'N', 'S')      # came from S=(5,4); forward N=(5,6)
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.last_seen_cell = (5, 5); m.prev_cell = (5, 4)
+    m.hop_dir = (0, 1); m.hop_target = (5, 6); m.visited = {(5, 4), (5, 5)}
+    m._escape((10.0, 10.0, 0.0), 100.0)
+    assert m.phase == 'backout' and m.backout_target == (5, 4)
+    assert m.escape_tier == 1 and m.escape_count == 1 and m._escape_backout is True
+    assert not b.is_wall((5, 5), 'N')          # Tier-1 leaves the forward edge OPEN (re-approach)
+    assert abs(m.backout_cardinal - math.pi / 2) < 1e-9   # face N -> reverse S into prev
+
+
+def test_escape_tier2_gives_up_edge_then_reverses():
+    b = _two_exit_brain((5, 5), 'N', 'S')
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.last_seen_cell = (5, 5); m.prev_cell = (5, 4)
+    m.hop_dir = (0, 1); m.hop_target = (5, 6); m.visited = {(5, 4), (5, 5)}
+    m.escape_tier = 1                          # already escalated once
+    m._escape((10.0, 10.0, 0.0), 100.0)
+    assert m.escape_tier == 2
+    assert b.is_wall((5, 5), 'N')              # Tier-2 GIVES UP the forward edge (real brain wall)
+    assert (5, 5) not in m.committed
+    assert m.phase == 'backout' and m.backout_target == (5, 4)
+
+
+def test_escape_tier_caps_at_max():
+    b = _two_exit_brain((5, 5), 'N', 'S')
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.last_seen_cell = (5, 5); m.prev_cell = (5, 4)
+    m.hop_dir = (0, 1); m.hop_target = (5, 6); m.visited = {(5, 4), (5, 5)}
+    m.escape_tier = 2
+    m._escape((10.0, 10.0, 0.0), 100.0)
+    assert m.escape_tier == 2                   # capped at max_escape_tier
+
+
+def test_escape_resets_explore_t_every_entry():
+    b = _two_exit_brain((5, 5), 'N', 'S')
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.last_seen_cell = (5, 5); m.prev_cell = (5, 4)
+    m.hop_dir = (0, 1); m.hop_target = (5, 6); m.visited = {(5, 4), (5, 5)}
+    m.explore_t = 10.0
+    m._escape((10.0, 10.0, 0.0), 500.0)
+    assert m.explore_t == 500.0                 # reset on entry (no busy-re-fire)
+
+
+def test_escape_no_reverse_falls_to_unstick():
+    b = _two_exit_brain((5, 5), 'N', 'S')       # (5,5) has E/W walled, N/S open
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.last_seen_cell = (5, 5); m.prev_cell = (1, 1)   # NOT adjacent
+    m.hop_dir = (0, 1); m.hop_target = (5, 6); m.visited = {(5, 5)}
+    m._escape((10.0, 10.0, 0.0), 100.0)
+    assert m.phase in ('center', 'stuck')       # handed to _unstick (reopened->center, or stuck)
+
+
+def test_escape_backout_timeout_does_not_charge_dead_end_budget():
+    m = MazeMotion()
+    m.cell = (5, 5); m._escape_backout = True
+    m.backout_start = (10.0, 10.0); m.backout_deadline = 0.0   # immediate timeout, no arrival
+    bc0 = m.backout_count
+    m._backout((10.0, 10.0, 0.0), 1.0)
+    assert m.backout_attempts.get((5, 5), 0) == 0     # escape-reverse timeout must NOT charge it
+    assert m.backout_count == bc0                     # nor inflate the dead-end metric
+    assert m._escape_backout is False                 # cleared on leaving backout (re-enables C2)
+
+
+def test_churn_escape_escalates_and_reroutes():
+    """MF8 churn-escape: under repeated no-progress fires in a confined region, the escape escalates
+    Tier-1 -> Tier-2, gives up the blocked edge, and next_cell then routes to a DIFFERENT cell
+    (flood reroute) -- so the robot provably leaves the churn instead of looping. Deterministic
+    FSM-level fixture (full physical liveness is validated in Gazebo)."""
+    from tugbot_maze.flood_fill_brain import FloodFillBrain
+    b = FloodFillBrain()                              # open map; (3,3) routes N toward the exit
+    m = MazeMotion(b)
+    m.cell = (3, 3); m.last_seen_cell = (3, 3); m.prev_cell = (3, 2)   # came from S=(3,2)
+    m.hop_dir = (0, 1); m.hop_target = (3, 4)         # forward N toward exit
+    m.visited = {(3, 2), (3, 3)}
+    assert b.next_cell((3, 3)) == (3, 4)              # baseline: routes forward N
+    m._escape((6.0, 6.0, 0.0), 100.0)                 # fire 1 -> Tier 1 (edge stays open)
+    assert m.escape_tier == 1 and not b.is_wall((3, 3), 'N')
+    m._escape((6.0, 6.0, 0.0), 200.0)                 # fire 2 (no new ground) -> Tier 2 gives up edge
+    assert m.escape_tier == 2 and b.is_wall((3, 3), 'N')
+    assert b.next_cell((3, 3)) != (3, 4)              # liveness: flood reroutes off the walled edge
+    assert m.escape_count == 2

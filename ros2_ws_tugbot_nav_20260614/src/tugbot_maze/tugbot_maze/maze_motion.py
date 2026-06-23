@@ -373,6 +373,40 @@ class MazeMotion:
         self.phase = 'stuck'
         return (0.0, 0.0, False)
 
+    def _escape(self, pose, t):
+        """No-progress escape (top-of-step watchdog fired: no new ground for no_progress_s while
+        confined). Escalates: Tier 1 = decisive one-cell reverse to the adjacent known-open prev_cell
+        (fresh re-approach clears a position-dependent false front_block); Tier 2 = ALSO give up the
+        blocked forward edge (real brain wall, reopenable by _unstick) so flood/next_cell route to the
+        nearest optimistic frontier (flood already IS 'retreat to nearest unexplored junction'). No
+        valid reverse -> hand to _unstick AT MOST ONCE this tick (terminal; C2 revives next tick)."""
+        x, y, yaw = pose
+        self.escape_count += 1
+        self.escape_tier = min(self.escape_tier + 1, self.max_escape_tier)
+        self.explore_t = t                                   # reset on EVERY entry (no busy-re-fire)
+        pc = self.prev_cell
+        man = None if pc is None else abs(pc[0] - self.cell[0]) + abs(pc[1] - self.cell[1])
+        d_prev = (_dir_name((pc[0] - self.cell[0], pc[1] - self.cell[1]))
+                  if (pc is not None and man == 1) else None)
+        can_reverse = d_prev is not None and not self.brain.is_wall(self.cell, d_prev)
+        if self.escape_tier >= 2 and self.hop_dir is not None:   # Tier 2+: GIVE UP the blocked edge
+            dirn = _dir_name(self.hop_dir)
+            self.brain.mark(self.cell, dirn, is_wall=True)       # the real routing change (symmetric)
+            self._stamp_loco_wall(self.cell, dirn)               # provenance: _unstick reopens loco first
+            self.committed.discard(self.cell)
+            self.failed_hops.pop((self.cell, dirn), None)
+        if can_reverse:                                          # Tier 1 & 2: one-cell reverse to prev
+            dx, dy = DIRS[d_prev]
+            self.backout_target = pc
+            self.backout_cardinal = math.atan2(-dy, -dx)         # face away from prev -> reverse into it
+            self.backout_start = (x, y)
+            self.backout_deadline = t + self.backout_timeout_s
+            self.center_start = None
+            self._escape_backout = True
+            self.phase = 'backout'
+            return (0.0, 0.0, False)
+        return self._unstick(t)                                  # no reverse -> _unstick once (MF5)
+
     def _turn(self, pose, t):
         yaw = pose[2]
         err = _norm(self.target_cardinal - yaw)
@@ -503,8 +537,9 @@ class MazeMotion:
         if arrived or t >= self.backout_deadline:
             if arrived:
                 self.cell = self.backout_target
-            else:
-                self.backout_attempts[self.cell] = self.backout_attempts.get(self.cell, 0) + 1
+            elif not self._escape_backout:                # an escape-reverse timeout must NOT charge
+                self.backout_attempts[self.cell] = self.backout_attempts.get(self.cell, 0) + 1  # the dead-end budget
+            self._escape_backout = False                  # clear on leaving backout (arrival or timeout)
             self.settle_until = t + self.settle_s
             self.center_start = None
             self.align_start = None; self.latched_cardinal = None
