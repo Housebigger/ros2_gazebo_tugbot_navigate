@@ -115,12 +115,28 @@ class MazeMotion:
         self.center_start = None        # when the current center episode began (for the timeout)
         self.prev_yaw = None; self.prev_t = None; self.yaw_rate = 0.0   # for PD damping
         self.dbg = {}                   # last-tick diagnostics (offset, walls, near) for logging
+        # --- no-progress watchdog + escalating escape + failed-hop deprioritizer ---
+        self.last_seen_cell = ENTRANCE_CELL   # for cell-change detection (prev_cell)
+        self.prev_cell = None                 # cell occupied just before the current one (reverse target)
+        self.visited = {ENTRANCE_CELL}        # cells ever occupied (monotonic; seeds the entrance)
+        self.explore_t = None                 # sim-time of last visited-growth (None = unseeded)
+        self.recent = []                      # [(t, cell)] appended on cell-change; rolling confinement window
+        self.escape_tier = 0                  # current escalation level (0 = none)
+        self.escape_count = 0                 # MONOTONIC observable (calibration/regression gate)
+        self._escape_backout = False          # tags an escape reverse (vs a dead-end back-out)
+        self.no_progress_s = 90.0             # window (calibrated in Task 6)
+        self.confine_k = 6                    # max distinct cells in-window to count as "confined" (Task 6)
+        self.max_escape_tier = 2
+        self.failed_hops = {}                 # (cell,dir) -> consecutive cross-occupation failed-hop count
+        self.failed_hop_limit = 3
+        self._latched = False                 # NH14 dead-maze permanent stop (set in _escape, Task 4)
 
     def step(self, pose, scan, t) -> Tuple[float, float, bool]:
         yaw = pose[2]                                   # measured yaw rate (for PD damping)
         if self.prev_t is not None and t > self.prev_t:
             self.yaw_rate = _norm(yaw - self.prev_yaw) / (t - self.prev_t)
         self.prev_yaw = yaw; self.prev_t = t
+        self._track_cell(t)
         if self.phase == 'done' or self.cell == EXIT_CELL:
             self.phase = 'done'
             return (0.0, 0.0, True)
@@ -233,11 +249,38 @@ class MazeMotion:
         if within_cell_core(coord, anchored[ax], self.boundary_margin_m):
             self.cell = anchored
 
+    def _track_cell(self, t):
+        """Maintain the exploration-progress clock + confinement record. The seed and visited-update
+        blocks run UNCONDITIONALLY (NOT gated on a cell change): at startup cell == last_seen_cell ==
+        ENTRANCE_CELL, so a change-gated seed would never fire -> explore_t stays None -> the C2
+        watchdog would be permanently disabled (F2 returns). Idempotent across the two calls
+        (step() and the top of _route, which closes the in-tick _reanchor lag)."""
+        if self.explore_t is None:                       # seed (absolute Gazebo clock ~1.78e9)
+            self.explore_t = t
+        if self.cell not in self.visited:                # NEW GROUND
+            self.visited.add(self.cell)
+            self.explore_t = t
+            self.escape_tier = 0                         # real progress clears in-flight escalation
+        if self.cell != self.last_seen_cell:             # cell-change bookkeeping
+            self.prev_cell = self.last_seen_cell
+            self.last_seen_cell = self.cell
+            self.recent.append((t, self.cell))
+
+    def _confined(self, t):
+        """True iff the robot stayed within <= confine_k distinct cells over the last no_progress_s
+        window. A tight ping-pong keeps a small rolling footprint (confined); a long legitimate
+        backtrack sweeps many distinct cells (not confined -> the watchdog stays silent)."""
+        self.recent = [(t2, c) for (t2, c) in self.recent if t2 >= t - self.no_progress_s]
+        footprint = {c for (_, c) in self.recent}
+        footprint.add(self.cell)
+        return len(footprint) <= self.confine_k
+
     def _route(self, x, y, t):
         """Pick next_cell and set up the hop. Run the unstick backstop if boxed in (next_cell None)
         OR if the exit is unreachable from here -- a false WALL can cut the map while leaving an
         open neighbour, in which case next_cell still returns a non-None inf-distance cell and the
         robot would wander a disconnected pocket forever."""
+        self._track_cell(t)                              # catch an in-tick _reanchor cell change
         nxt = self.brain.next_cell(self.cell)
         reachable = self.brain.flood().get(self.cell, math.inf) != math.inf
         if nxt is None or not reachable:

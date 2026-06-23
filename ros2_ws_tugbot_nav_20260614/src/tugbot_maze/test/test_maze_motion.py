@@ -342,3 +342,58 @@ def test_failed_hop_does_not_inflate_traversal():
     m._drive((10.4, 10.0, 0.0), _scan_at(sim), 1.0)           # moved 0.4 (<1.95), t>=deadline -> fail
     assert m.phase == 'center'                                 # bounced back, did NOT arrive
     assert b._edge_traversal_count((5, 5), tgt) == 0           # failed hop must NOT inflate
+
+
+# ---- C1: exploration-progress clock + confinement ----
+
+def _two_exit_brain(cell, open_a, open_b):
+    """cell open on exactly open_a/open_b (in-grid), walled elsewhere."""
+    from tugbot_maze.flood_fill_brain import FloodFillBrain, DIRS, in_grid
+    b = FloodFillBrain()
+    for d, (dx, dy) in DIRS.items():
+        nb = (cell[0] + dx, cell[1] + dy)
+        if in_grid(nb) and d not in (open_a, open_b):
+            b.mark(cell, d, True)
+    return b
+
+
+def test_track_cell_seeds_unconditionally_at_startup():
+    m = MazeMotion()                       # cell == last_seen_cell == ENTRANCE_CELL, NO cell change
+    m._track_cell(1.78e9)                  # large absolute clock, tick 1
+    assert m.explore_t == 1.78e9           # seeded even with no cell change (MF2)
+    assert ENTRANCE_CELL in m.visited      # entrance counts as visited ground
+
+
+def test_track_cell_new_ground_resets_explore_t_and_tier():
+    m = MazeMotion(); m._track_cell(1000.0)   # seed at entrance
+    m.escape_tier = 2
+    m.cell = (1, 1)                            # advance to NEW ground
+    m._track_cell(1005.0)
+    assert (1, 1) in m.visited and m.explore_t == 1005.0
+    assert m.prev_cell == ENTRANCE_CELL and m.escape_tier == 0   # progress clears escalation
+
+
+def test_track_cell_revisit_does_not_reset_explore_t():
+    m = MazeMotion(); m._track_cell(1000.0)    # visit entrance
+    m.cell = (1, 1); m._track_cell(1005.0)     # new ground -> explore_t = 1005
+    m.cell = ENTRANCE_CELL; m._track_cell(1010.0)   # REVISIT (already in visited)
+    assert m.explore_t == 1005.0               # revisit must NOT advance the clock (F1 fix)
+
+
+def test_confined_true_for_small_footprint_false_for_large():
+    m = MazeMotion(); m.no_progress_s = 90.0; m.confine_k = 6
+    m.cell = (5, 5)
+    m.recent = [(100.0, c) for c in [(5, 5), (5, 6), (5, 5), (5, 6)]]  # 2 distinct in-window
+    assert m._confined(120.0) is True
+    m.recent = [(100.0, c) for c in [(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)]]  # 7 distinct
+    assert m._confined(120.0) is False
+    m.recent = []                              # frozen single cell -> footprint {self.cell} size 1
+    assert m._confined(120.0) is True
+
+
+def test_confined_prunes_out_of_window_entries():
+    m = MazeMotion(); m.no_progress_s = 90.0; m.confine_k = 2
+    m.cell = (5, 5)
+    # old, out-of-window distinct cells must be pruned so they don't inflate the footprint
+    m.recent = [(10.0, (1, 1)), (10.0, (2, 2)), (10.0, (3, 3)), (200.0, (5, 6))]
+    assert m._confined(250.0) is True          # only (5,6)+(5,5) within [160,250] -> 2 <= K
