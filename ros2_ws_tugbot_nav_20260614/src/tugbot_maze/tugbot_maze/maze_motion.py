@@ -130,6 +130,8 @@ class MazeMotion:
         self.failed_hops = {}                 # (cell,dir) -> consecutive cross-occupation failed-hop count
         self.failed_hop_limit = 3
         self._latched = False                 # NH14 dead-maze permanent stop (set in _escape, Task 4)
+        self.events = []                      # DIAG: structured STALL/ESCAPE/LATCH/UNSTICK strings (node drains)
+        self._last_drive_v = 0.0              # DIAG: last corridor v (to spot wedge_stop, v~=0)
 
     def step(self, pose, scan, t) -> Tuple[float, float, bool]:
         yaw = pose[2]                                   # measured yaw rate (for PD damping)
@@ -376,8 +378,10 @@ class MazeMotion:
                 self.align_start = None; self.latched_cardinal = None
                 self.settle_until = t + self.settle_s
                 self.escape_tier = 0                          # map mutation -> retry the cheap Tier-1 first
+                self.events.append("UNSTICK reopen cell=%s n=%d" % (self.cell, len(incident or cand)))  # DIAG
                 self.phase = 'center'                          # explicit: re-route / re-sense next tick
                 return (0.0, 0.0, False)
+        self.events.append("UNSTICK exhausted -> stuck cell=%s" % (self.cell,))  # DIAG
         self.phase = 'stuck'
         return (0.0, 0.0, False)
 
@@ -404,6 +408,7 @@ class MazeMotion:
         valid reverse -> hand to _unstick AT MOST ONCE this tick (terminal; C2 revives next tick)."""
         x, y, yaw = pose
         if self._maze_exhausted():
+            self.events.append("LATCH cell=%s -> permanent stuck (maze_exhausted)" % (self.cell,))  # DIAG
             self.phase = 'stuck'; self._latched = True
             return (0.0, 0.0, False)
         self.escape_count += 1
@@ -414,12 +419,16 @@ class MazeMotion:
         d_prev = (_dir_name((pc[0] - self.cell[0], pc[1] - self.cell[1]))
                   if (pc is not None and man == 1) else None)
         can_reverse = d_prev is not None and not self.brain.is_wall(self.cell, d_prev)
-        if self.escape_tier >= 2 and self.hop_dir is not None:   # Tier 2+: GIVE UP the blocked edge
+        gave_up = self.escape_tier >= 2 and self.hop_dir is not None
+        if gave_up:                                              # Tier 2+: GIVE UP the blocked edge
             dirn = _dir_name(self.hop_dir)
             self.brain.mark(self.cell, dirn, is_wall=True)       # the real routing change (symmetric)
             self._stamp_loco_wall(self.cell, dirn)               # provenance: _unstick reopens loco first
             self.committed.discard(self.cell)
             self.failed_hops.pop((self.cell, dirn), None)
+        self.events.append("ESCAPE tier=%d count=%d cell=%s prev=%s can_reverse=%s gave_up_edge=%s"  # DIAG
+                           % (self.escape_tier, self.escape_count, self.cell, self.prev_cell,
+                              can_reverse, gave_up))
         if can_reverse:                                          # Tier 1 & 2: one-cell reverse to prev
             dx, dy = DIRS[d_prev]
             self.backout_target = pc
@@ -453,6 +462,26 @@ class MazeMotion:
                                   kd=self.kd_turn)        # decel profile: no latency overshoot
         return (0.0, w, False)
 
+    def _stall_event(self, reason, perp, moved, marked, x, y, yaw):
+        """DIAG: record WHY a drive hop stalled + the sensor state, to pinpoint the doorway pin
+        mechanism (false front_block vs side-wall wedge_stop vs off-center vs real pin)."""
+        if self.hop_dir and self.hop_dir[1] != 0:           # N/S travel -> side walls are E/W
+            near = min(perp.get('E', -1.0), perp.get('W', -1.0))
+        elif self.hop_dir:                                  # E/W travel -> side walls are N/S
+            near = min(perp.get('N', -1.0), perp.get('S', -1.0))
+        else:
+            near = -1.0
+        ct = (grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)
+              if self.hop_dir else 0.0)
+        dn = _dir_name(self.hop_dir) if self.hop_dir else '?'
+        key = (self.cell, dn)
+        self.events.append(
+            "STALL reason=%s cell=%s dir=%s perp_front=%.2f near=%.2f cross_track=%.2f yaw_err=%.2f "
+            "moved=%.2f last_v=%.2f hop_att=%d failed=%d marked=%s"
+            % (reason, self.cell, dn, perp.get(dn, -1.0), near, ct,
+               _norm(self.target_cardinal - yaw), moved, self._last_drive_v,
+               self.hop_attempts.get(key, 0), self.failed_hops.get(key, 0), marked))
+
     def _drive(self, pose, scan, t):
         x, y, yaw = pose
         ranges, amin, ainc = scan
@@ -470,6 +499,7 @@ class MazeMotion:
             self.phase = 'center'
             return (0.0, 0.0, False)
         dirn = _dir_name(self.hop_dir)
+        perp = cell_wall_perp_dist(ranges, amin, ainc, yaw)          # DIAG: computed early so stall events have it
         # Wedge detector: while driving, if the robot makes no real progress for wedge_detect_s
         # it is physically PINNED (the ~13-14 cell plateau: pose frozen, can't move in the tight
         # interior). Recover by reversing to free it, rather than grinding the hop timeout. Count
@@ -480,11 +510,13 @@ class MazeMotion:
             key = (self.cell, dirn)
             self.hop_attempts[key] = self.hop_attempts.get(key, 0) + 1
             self.failed_hops[key] = self.failed_hops.get(key, 0) + 1   # cross-occupation accumulator
+            marked = (self.hop_attempts[key] >= self.max_hop_attempts
+                      or self.failed_hops[key] >= self.failed_hop_limit)  # per-dwell OR cross-visit
+            self._stall_event('wedge', perp, moved, marked, x, y, yaw)    # DIAG
             self.center_start = None
             self.align_start = None; self.latched_cardinal = None
             self.settle_until = t + self.settle_s
-            if (self.hop_attempts[key] >= self.max_hop_attempts
-                    or self.failed_hops[key] >= self.failed_hop_limit):  # per-dwell OR cross-visit
+            if marked:
                 self.brain.mark(self.cell, dirn, is_wall=True)
                 self._stamp_loco_wall(self.cell, dirn)               # re-openable by _unstick (both reps)
                 self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
@@ -495,7 +527,6 @@ class MazeMotion:
                 self.recover_until = t + self.recover_s              # reverse to un-wedge
                 self.phase = 'recover'
             return (0.0, 0.0, False)
-        perp = cell_wall_perp_dist(ranges, amin, ainc, yaw)
         front_blocked = perp[dirn] < self.front_block_m and moved > 0.3
         if front_blocked or t >= self.hop_deadline:
             # A hop toward a sensed-OPEN edge failed (a front wall appeared, or it stalled).
@@ -508,8 +539,10 @@ class MazeMotion:
             key = (self.cell, dirn)
             self.hop_attempts[key] = self.hop_attempts.get(key, 0) + 1
             self.failed_hops[key] = self.failed_hops.get(key, 0) + 1   # cross-occupation accumulator
-            if (self.hop_attempts[key] >= self.max_hop_attempts
-                    or self.failed_hops[key] >= self.failed_hop_limit):
+            marked = (self.hop_attempts[key] >= self.max_hop_attempts
+                      or self.failed_hops[key] >= self.failed_hop_limit)
+            self._stall_event('front_block' if front_blocked else 'deadline', perp, moved, marked, x, y, yaw)  # DIAG
+            if marked:
                 self.brain.mark(self.cell, dirn, is_wall=True)
                 self._stamp_loco_wall(self.cell, dirn)               # re-openable by _unstick (both reps)
                 self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
@@ -539,6 +572,7 @@ class MazeMotion:
                                        v_max=self.cruise_v, w_max=self.w_max,
                                        lookahead_m=self.lookahead_m, wedge_slow_m=self.wedge_slow_m,
                                        wedge_stop_m=self.wedge_stop_m, wedge_v_floor=self.wedge_v_floor)
+        self._last_drive_v = v                                       # DIAG: spot wedge_stop (v~=0)
         return (v, w, False)
 
     def _recover(self, pose, t):

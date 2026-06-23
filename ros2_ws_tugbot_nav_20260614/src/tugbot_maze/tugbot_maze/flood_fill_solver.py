@@ -153,6 +153,10 @@ class FloodFillSolver(Node):
             s = self.scan_msg
             v, w, done = self.motion.step(pose, (s.ranges, s.angle_min, s.angle_increment), t)
             self._publish_cmd(v, w)
+            if self.motion.events:                            # DIAG: drain structured stall/escape events
+                for ev in self.motion.events:
+                    self.get_logger().info(ev)
+                self.motion.events.clear()
             self._prev_motion_cell, j = update_junctions(
                 self.junctions, self.brain, self.motion.cell, self._prev_motion_cell,
                 self.motion.sensed, t)
