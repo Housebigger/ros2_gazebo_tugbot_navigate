@@ -484,3 +484,52 @@ def test_churn_escape_escalates_and_reroutes():
     assert m.escape_tier == 2 and b.is_wall((3, 3), 'N')
     assert b.next_cell((3, 3)) != (3, 4)              # liveness: flood reroutes off the walled edge
     assert m.escape_count == 2
+
+
+def test_watchdog_fires_from_center_when_confined_and_no_progress():
+    b = _two_exit_brain((5, 5), 'N', 'S')
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.last_seen_cell = (5, 5); m.prev_cell = (5, 4)
+    m.hop_dir = (0, 1); m.hop_target = (5, 6); m.visited = {(5, 4), (5, 5)}; m.explore_t = 100.0
+    sim = MazeSim(load_segments(), cell_center((5, 5)), 0.0)
+    m.step(sim.pose, _scan_at(sim), 100.0 + m.no_progress_s + 1.0)
+    assert m.escape_count == 1                  # fired (no new ground + confined + past window)
+
+
+def test_watchdog_fires_from_stuck():
+    m = MazeMotion()
+    m.cell = (3, 1); m.last_seen_cell = (3, 1); m.prev_cell = (2, 1)
+    m.phase = 'stuck'; m.visited = {(2, 1), (3, 1)}; m.explore_t = 50.0
+    sim = MazeSim(load_segments(), cell_center((3, 1)), 0.0)
+    m.step(sim.pose, _scan_at(sim), 50.0 + m.no_progress_s + 1.0)
+    assert m.escape_count == 1                  # the F2 fix: stuck is no longer a permanent freeze
+
+
+def test_watchdog_silent_at_exit_cell():
+    m = MazeMotion()
+    m.cell = EXIT_CELL; m.last_seen_cell = EXIT_CELL; m.visited = {EXIT_CELL}; m.explore_t = 0.0
+    sim = MazeSim(load_segments(), cell_center(EXIT_CELL), 0.0)
+    v, w, done = m.step(sim.pose, _scan_at(sim), 1.0 + m.no_progress_s + 5.0)
+    assert done is True and m.escape_count == 0  # never escapes at the exit (guard non-vacuous)
+
+
+def test_watchdog_silent_when_not_confined():
+    m = MazeMotion(); m.confine_k = 6
+    m.cell = (5, 5); m.last_seen_cell = (5, 5); m.visited = {(5, 5)}; m.explore_t = 10.0
+    t = 10.0 + m.no_progress_s + 1.0
+    m.recent = [(t - 1, c) for c in [(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)]]  # 7 > K
+    sim = MazeSim(load_segments(), cell_center((5, 5)), 0.0)
+    m.step(sim.pose, _scan_at(sim), t)
+    assert m.escape_count == 0                  # large footprint -> not confined -> silent
+
+
+def test_watchdog_suppressed_during_escape_reverse():
+    b = _two_exit_brain((5, 5), 'N', 'S')
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.last_seen_cell = (5, 5); m.prev_cell = (5, 4)
+    m.hop_dir = (0, 1); m.hop_target = (5, 6); m.visited = {(5, 4), (5, 5)}; m.explore_t = 10.0
+    m.phase = 'backout'; m._escape_backout = True            # an escape reverse is executing
+    m.backout_start = (10.0, 10.0); m.backout_deadline = 1e12
+    sim = MazeSim(load_segments(), cell_center((5, 5)), 0.0)
+    m.step(sim.pose, _scan_at(sim), 10.0 + m.no_progress_s + 5.0)
+    assert m.escape_count == 0                  # not re-fired mid-escape (still in backout)

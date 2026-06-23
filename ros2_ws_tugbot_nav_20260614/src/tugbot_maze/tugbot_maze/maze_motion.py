@@ -137,6 +137,12 @@ class MazeMotion:
             self.yaw_rate = _norm(yaw - self.prev_yaw) / (t - self.prev_t)
         self.prev_yaw = yaw; self.prev_t = t
         self._track_cell(t)
+        if (self.phase != 'done' and self.cell != EXIT_CELL and not self._latched
+                and not self._escape_backout              # don't re-fire mid-escape reverse
+                and self.explore_t is not None
+                and (t - self.explore_t) > self.no_progress_s
+                and self._confined(t)):
+            return self._escape(pose, t)
         if self.phase == 'done' or self.cell == EXIT_CELL:
             self.phase = 'done'
             return (0.0, 0.0, True)
@@ -373,6 +379,20 @@ class MazeMotion:
         self.phase = 'stuck'
         return (0.0, 0.0, False)
 
+    def _maze_exhausted(self):
+        """Latched terminal: exit truly unreachable AND every reachable cell already visited AND no
+        un-reopened cut edge remains (nothing left to reopen). Avoids a benign forever-oscillation in
+        an unsolvable/fully-explored maze. Does not arise in the real solvable maze."""
+        if self.brain.flood().get(self.cell, math.inf) != math.inf:
+            return False                                  # exit still reachable -> not exhausted
+        R = self._reachable_component(self.cell)
+        if any(c not in self.visited for c in R):
+            return False                                  # reachable unexplored ground remains
+        cut = [(c, d) for c in R for d, (dx, dy) in DIRS.items()
+               if self.brain.is_wall(c, d) and (c, d) not in self.reopened
+               and in_grid((c[0] + dx, c[1] + dy)) and (c[0] + dx, c[1] + dy) not in R]
+        return not cut                                    # nothing left to reopen -> latch
+
     def _escape(self, pose, t):
         """No-progress escape (top-of-step watchdog fired: no new ground for no_progress_s while
         confined). Escalates: Tier 1 = decisive one-cell reverse to the adjacent known-open prev_cell
@@ -381,6 +401,9 @@ class MazeMotion:
         nearest optimistic frontier (flood already IS 'retreat to nearest unexplored junction'). No
         valid reverse -> hand to _unstick AT MOST ONCE this tick (terminal; C2 revives next tick)."""
         x, y, yaw = pose
+        if self._maze_exhausted():
+            self.phase = 'stuck'; self._latched = True
+            return (0.0, 0.0, False)
         self.escape_count += 1
         self.escape_tier = min(self.escape_tier + 1, self.max_escape_tier)
         self.explore_t = t                                   # reset on EVERY entry (no busy-re-fire)
