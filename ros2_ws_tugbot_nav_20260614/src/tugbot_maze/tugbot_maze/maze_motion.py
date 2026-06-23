@@ -370,10 +370,12 @@ class MazeMotion:
                     self.brain.mark(c, d, is_wall=False)     # re-open optimistically; a GOOD re-sense re-confirms
                     self.reopened.add((c, d)); self.reopened.add((nb, OPP[d]))      # both reps -> clean 1x bound
                     self.locomotion_walls.discard((c, d)); self.locomotion_walls.discard((nb, OPP[d]))
+                    self.failed_hops.pop((c, d), None); self.failed_hops.pop((nb, OPP[d]), None)
                     self.committed.discard(c); self.corrob.pop(c, None)             # keep `sensed`: re-WALL needs good
                 self.center_start = None
                 self.align_start = None; self.latched_cardinal = None
                 self.settle_until = t + self.settle_s
+                self.escape_tier = 0                          # map mutation -> retry the cheap Tier-1 first
                 self.phase = 'center'                          # explicit: re-route / re-sense next tick
                 return (0.0, 0.0, False)
         self.phase = 'stuck'
@@ -457,6 +459,9 @@ class MazeMotion:
         moved = math.hypot(x - self.hop_start[0], y - self.hop_start[1])
         if moved >= CELL_SIZE_M - self.hop_arrive_slack_m:           # arrived
             self.brain.mark_traversal(self.cell, self.hop_target)    # count the COMPLETED traversal (was: at pick)
+            _dirn = _dir_name(self.hop_dir)                          # clear failed_hops for THIS edge,
+            self.failed_hops.pop((self.cell, _dirn), None)           #   keyed on the PRE-advance cell (MF6)
+            self.failed_hops.pop((self.hop_target, OPP[_dirn]), None)
             self.cell = self.hop_target
             self.hop_attempts.clear()                                # fresh cell -> reset attempts
             self.settle_until = t + self.settle_s
@@ -474,14 +479,17 @@ class MazeMotion:
         elif (t - self.progress_t) > self.wedge_detect_s:
             key = (self.cell, dirn)
             self.hop_attempts[key] = self.hop_attempts.get(key, 0) + 1
+            self.failed_hops[key] = self.failed_hops.get(key, 0) + 1   # cross-occupation accumulator
             self.center_start = None
             self.align_start = None; self.latched_cardinal = None
             self.settle_until = t + self.settle_s
-            if self.hop_attempts[key] >= self.max_hop_attempts:      # give up this edge (last resort)
+            if (self.hop_attempts[key] >= self.max_hop_attempts
+                    or self.failed_hops[key] >= self.failed_hop_limit):  # per-dwell OR cross-visit
                 self.brain.mark(self.cell, dirn, is_wall=True)
                 self._stamp_loco_wall(self.cell, dirn)               # re-openable by _unstick (both reps)
                 self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
                 self.hop_attempts.pop(key, None)                     # so a poor re-entry won't re-sense
+                self.failed_hops.pop(key, None)
                 self.phase = 'center'                                # (and clobber) the WALL it just set
             else:
                 self.recover_until = t + self.recover_s              # reverse to un-wedge
@@ -499,11 +507,14 @@ class MazeMotion:
             # Mark a wall only as a last resort after max_hop_attempts genuine retries.
             key = (self.cell, dirn)
             self.hop_attempts[key] = self.hop_attempts.get(key, 0) + 1
-            if self.hop_attempts[key] >= self.max_hop_attempts:
+            self.failed_hops[key] = self.failed_hops.get(key, 0) + 1   # cross-occupation accumulator
+            if (self.hop_attempts[key] >= self.max_hop_attempts
+                    or self.failed_hops[key] >= self.failed_hop_limit):
                 self.brain.mark(self.cell, dirn, is_wall=True)
                 self._stamp_loco_wall(self.cell, dirn)               # re-openable by _unstick (both reps)
                 self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
                 self.hop_attempts.pop(key, None)                     # so a poor re-entry won't re-sense
+                self.failed_hops.pop(key, None)
             # non-max: just retry (re-center); re-sensing happens only from a GOOD re-entry, never
             # from this off-position post-failure pose (that off-pose re-sense was the (3,4) churn).
             self.settle_until = t + self.settle_s

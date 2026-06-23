@@ -533,3 +533,55 @@ def test_watchdog_suppressed_during_escape_reverse():
     sim = MazeSim(load_segments(), cell_center((5, 5)), 0.0)
     m.step(sim.pose, _scan_at(sim), 10.0 + m.no_progress_s + 5.0)
     assert m.escape_count == 0                  # not re-fired mid-escape (still in backout)
+
+
+def test_failed_hops_persists_across_arrivals_and_walls_edge():
+    b = _two_exit_brain((5, 5), 'N', 'S')
+    m = MazeMotion(b); m.max_hop_attempts = 99      # isolate failed_hops from the per-dwell cap
+    m.cell = (5, 5); m.hop_dir = (0, 1); m.hop_target = (5, 6)
+    sim = MazeSim(load_segments(), cell_center((5, 5)), 0.0)
+    for _ in range(m.failed_hop_limit):
+        m.hop_attempts.clear()                      # simulate the wholesale clear that any arrival does
+        m.phase = 'drive'; m.hop_start = (10.0, 10.0); m.hop_deadline = 0.0
+        m.progress_pose = (10.0, 10.0); m.progress_t = 1.0   # wedge baseline (not crossing wedge_detect_s)
+        m._drive((10.4, 10.0, 0.0), _scan_at(sim), 1.0)   # moved 0.4 (<arrive), t>=deadline -> fail
+    assert b.is_wall((5, 5), 'N')                   # failed_hops survived the clears -> edge given up (F3)
+
+
+def test_single_failed_hop_does_not_wall():
+    b = _two_exit_brain((5, 5), 'N', 'S')
+    m = MazeMotion(b); m.max_hop_attempts = 99
+    m.cell = (5, 5); m.hop_dir = (0, 1); m.hop_target = (5, 6)
+    sim = MazeSim(load_segments(), cell_center((5, 5)), 0.0)
+    m.phase = 'drive'; m.hop_start = (10.0, 10.0); m.hop_deadline = 0.0
+    m.progress_pose = (10.0, 10.0); m.progress_t = 1.0       # wedge baseline (not crossing wedge_detect_s)
+    m._drive((10.4, 10.0, 0.0), _scan_at(sim), 1.0)
+    assert not b.is_wall((5, 5), 'N') and m.failed_hops[((5, 5), 'N')] == 1
+
+
+def test_successful_hop_clears_failed_hops_for_edge():
+    b = _two_exit_brain((5, 5), 'N', 'S')
+    m = MazeMotion(b); m.max_hop_attempts = 99
+    m.cell = (5, 5); m.hop_dir = (0, 1); m.hop_target = (5, 6)
+    m.failed_hops[((5, 5), 'N')] = 2
+    m.phase = 'drive'; m.hop_start = (10.0, 10.0)
+    sim = MazeSim(load_segments(), cell_center((5, 6)), 0.0)
+    m._drive((10.0, 12.0, 0.0), _scan_at(sim), 0.1)         # moved ~2.0 -> arrival
+    assert m.cell == (5, 6)
+    assert ((5, 5), 'N') not in m.failed_hops              # cleared on success, pre-advance key (MF6)
+
+
+def test_unstick_reopen_clears_failed_hops_and_resets_tier():
+    from tugbot_maze.flood_fill_brain import FloodFillBrain
+    b = FloodFillBrain()
+    # box (5,5) in with WALLs on all four sides so _unstick must reopen a cut edge
+    for d in ('N', 'S', 'E', 'W'):
+        b.mark((5, 5), d, True)
+    m = MazeMotion(b)
+    m.cell = (5, 5); m.escape_tier = 2
+    m.failed_hops[((5, 5), 'N')] = 3
+    m._unstick(1.0)
+    assert m.escape_tier == 0                              # map mutation (reopen) resets escalation
+    # at least one incident edge was reopened and its failed_hops cleared
+    assert all(k[0] != (5, 5) or k not in m.failed_hops for k in [((5, 5), 'N')]) or \
+           ((5, 5), 'N') not in m.failed_hops
