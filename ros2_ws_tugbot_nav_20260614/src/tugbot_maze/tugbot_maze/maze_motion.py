@@ -406,10 +406,14 @@ class MazeMotion:
         gave_up = self.escape_tier >= 2 and self.hop_dir is not None
         if gave_up:                                              # Tier 2+: GIVE UP the blocked edge
             dirn = _dir_name(self.hop_dir)
-            self.brain.mark(self.cell, dirn, is_wall=True)       # the real routing change (symmetric)
-            self._stamp_loco_wall(self.cell, dirn)               # provenance: _unstick reopens loco first
-            self.committed.discard(self.cell)
-            self.failed_hops.pop((self.cell, dirn), None)
+            nb = (self.cell[0] + DIRS[dirn][0], self.cell[1] + DIRS[dirn][1])
+            if nb not in self.visited:                           # never give up an edge to a VISITED cell
+                self.brain.mark(self.cell, dirn, is_wall=True)   # the real routing change (symmetric)
+                self._stamp_loco_wall(self.cell, dirn)           # provenance: _unstick reopens loco first
+                self.committed.discard(self.cell)
+                self.failed_hops.pop((self.cell, dirn), None)
+            else:
+                gave_up = False                                  # visited edge stays open (accurate logging)
         self.events.append("ESCAPE tier=%d count=%d cell=%s prev=%s can_reverse=%s gave_up_edge=%s"  # DIAG
                            % (self.escape_tier, self.escape_count, self.cell, self.prev_cell,
                               can_reverse, gave_up))
@@ -509,10 +513,12 @@ class MazeMotion:
             self.align_start = None; self.latched_cardinal = None
             self.settle_until = t + self.settle_s
             if marked:
-                self.brain.mark(self.cell, dirn, is_wall=True)
-                self._stamp_loco_wall(self.cell, dirn)               # re-openable by _unstick (both reps)
-                self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
-                self.hop_attempts.pop(key, None)                     # so a poor re-entry won't re-sense
+                nb = (self.cell[0] + DIRS[dirn][0], self.cell[1] + DIRS[dirn][1])
+                if nb not in self.visited:                           # never wall an edge to a VISITED cell
+                    self.brain.mark(self.cell, dirn, is_wall=True)
+                    self._stamp_loco_wall(self.cell, dirn)           # re-openable by _unstick (both reps)
+                    self.committed.discard(self.cell)                # un-commit; cell stays in `sensed`
+                self.hop_attempts.pop(key, None)                     # reset per-edge counter (re-route/re-approach)
                 self.failed_hops.pop(key, None)
                 self.phase = 'center'                                # (and clobber) the WALL it just set
             else:
@@ -535,10 +541,12 @@ class MazeMotion:
                       or self.failed_hops[key] >= self.failed_hop_limit)
             self._stall_event('front_block' if front_blocked else 'deadline', perp, moved, marked, x, y, yaw)  # DIAG
             if marked:
-                self.brain.mark(self.cell, dirn, is_wall=True)
-                self._stamp_loco_wall(self.cell, dirn)               # re-openable by _unstick (both reps)
-                self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
-                self.hop_attempts.pop(key, None)                     # so a poor re-entry won't re-sense
+                nb = (self.cell[0] + DIRS[dirn][0], self.cell[1] + DIRS[dirn][1])
+                if nb not in self.visited:                           # never wall an edge to a VISITED cell
+                    self.brain.mark(self.cell, dirn, is_wall=True)
+                    self._stamp_loco_wall(self.cell, dirn)           # re-openable by _unstick (both reps)
+                    self.committed.discard(self.cell)                # un-commit; cell stays in `sensed`
+                self.hop_attempts.pop(key, None)                     # reset per-edge counter (re-route/re-approach)
                 self.failed_hops.pop(key, None)
             # non-max: just retry (re-center); re-sensing happens only from a GOOD re-entry, never
             # from this off-position post-failure pose (that off-pose re-sense was the (3,4) churn).

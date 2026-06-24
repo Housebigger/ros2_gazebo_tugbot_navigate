@@ -623,3 +623,30 @@ def test_front_block_gated_by_heading():
     assert m._front_blocked(perp, 'E', 0.5, 0.0) is True      # aligned + short front + moved>0.3 -> block
     assert m._front_blocked(perp, 'E', 0.5, 0.5) is False     # |yaw_err|=0.5 >= front_block_max_yaw -> no block
     assert m._front_blocked(perp, 'E', 0.2, 0.0) is False     # moved<=0.3 -> no block
+
+
+def test_giveup_does_not_wall_edge_to_visited_cell():
+    # The robot came from (2,4); a failed hop back toward it must NOT wall the (visited) edge.
+    b = _two_exit_brain((3, 4), 'W', 'S')                  # (3,4) open W/S (W -> (2,4))
+    m = MazeMotion(b)
+    m.cell = (3, 4); m.hop_dir = (-1, 0); m.hop_target = (2, 4); m.target_cardinal = math.pi
+    m.visited = {(2, 4), (3, 4)}                            # (2,4) already visited
+    m.max_hop_attempts = 1                                  # this failure reaches the giveup cap
+    m.phase = 'drive'; m.hop_start = (6.0, 8.0); m.hop_deadline = 0.0
+    m.progress_pose = (6.0, 8.0); m.progress_t = 1.0       # seed wedge baseline (avoid the wedge path)
+    sim = MazeSim(load_segments(), cell_center((3, 4)), 0.0)
+    m._drive((6.4, 8.0, 0.0), _scan_at(sim), 1.0)          # moved 0.4 (<arrive), t>=deadline -> giveup
+    assert not b.is_wall((3, 4), 'W')                       # edge to the VISITED cell must stay OPEN
+
+
+def test_giveup_still_walls_edge_to_unvisited_cell():
+    b = _two_exit_brain((3, 4), 'W', 'S')
+    m = MazeMotion(b)
+    m.cell = (3, 4); m.hop_dir = (-1, 0); m.hop_target = (2, 4); m.target_cardinal = math.pi
+    m.visited = {(3, 4)}                                    # (2,4) NOT visited
+    m.max_hop_attempts = 1
+    m.phase = 'drive'; m.hop_start = (6.0, 8.0); m.hop_deadline = 0.0
+    m.progress_pose = (6.0, 8.0); m.progress_t = 1.0       # seed wedge baseline (avoid the wedge path)
+    sim = MazeSim(load_segments(), cell_center((3, 4)), 0.0)
+    m._drive((6.4, 8.0, 0.0), _scan_at(sim), 1.0)
+    assert b.is_wall((3, 4), 'W')                          # unvisited-cell edge still walled (unchanged)
