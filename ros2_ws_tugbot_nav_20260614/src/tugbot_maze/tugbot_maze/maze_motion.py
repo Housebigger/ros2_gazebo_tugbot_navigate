@@ -131,8 +131,7 @@ class MazeMotion:
         self.max_escape_tier = 2
         self.failed_hops = {}                 # (cell,dir) -> consecutive cross-occupation failed-hop count
         self.failed_hop_limit = 3
-        self._latched = False                 # NH14 dead-maze permanent stop (set in _escape, Task 4)
-        self.events = []                      # DIAG: structured STALL/ESCAPE/LATCH/UNSTICK strings (node drains)
+        self.events = []                      # DIAG: structured STALL/ESCAPE/UNSTICK strings (node drains)
         self._last_drive_v = 0.0              # DIAG: last corridor v (to spot wedge_stop, v~=0)
         self.wedge_realign_yaw = 0.5          # |yaw_err|>=this => follower turns in place (v~=0), not a pin
 
@@ -142,7 +141,7 @@ class MazeMotion:
             self.yaw_rate = _norm(yaw - self.prev_yaw) / (t - self.prev_t)
         self.prev_yaw = yaw; self.prev_t = t
         self._track_cell(t)
-        if (self.phase != 'done' and self.cell != EXIT_CELL and not self._latched
+        if (self.phase != 'done' and self.cell != EXIT_CELL
                 and not self._escape_backout              # don't re-fire mid-escape reverse
                 and self.explore_t is not None
                 and (t - self.explore_t) > self.no_progress_s
@@ -388,20 +387,6 @@ class MazeMotion:
         self.phase = 'stuck'
         return (0.0, 0.0, False)
 
-    def _maze_exhausted(self):
-        """Latched terminal: exit truly unreachable AND every reachable cell already visited AND no
-        un-reopened cut edge remains (nothing left to reopen). Avoids a benign forever-oscillation in
-        an unsolvable/fully-explored maze. Does not arise in the real solvable maze."""
-        if self.brain.flood().get(self.cell, math.inf) != math.inf:
-            return False                                  # exit still reachable -> not exhausted
-        R = self._reachable_component(self.cell)
-        if any(c not in self.visited for c in R):
-            return False                                  # reachable unexplored ground remains
-        cut = [(c, d) for c in R for d, (dx, dy) in DIRS.items()
-               if self.brain.is_wall(c, d) and (c, d) not in self.reopened
-               and in_grid((c[0] + dx, c[1] + dy)) and (c[0] + dx, c[1] + dy) not in R]
-        return not cut                                    # nothing left to reopen -> latch
-
     def _escape(self, pose, t):
         """No-progress escape (top-of-step watchdog fired: no new ground for no_progress_s while
         confined). Escalates: Tier 1 = decisive one-cell reverse to the adjacent known-open prev_cell
@@ -410,10 +395,6 @@ class MazeMotion:
         nearest optimistic frontier (flood already IS 'retreat to nearest unexplored junction'). No
         valid reverse -> hand to _unstick AT MOST ONCE this tick (terminal; C2 revives next tick)."""
         x, y, yaw = pose
-        if self._maze_exhausted():
-            self.events.append("LATCH cell=%s -> permanent stuck (maze_exhausted)" % (self.cell,))  # DIAG
-            self.phase = 'stuck'; self._latched = True
-            return (0.0, 0.0, False)
         self.escape_count += 1
         self.escape_tier = min(self.escape_tier + 1, self.max_escape_tier)
         self.explore_t = t                                   # reset on EVERY entry (no busy-re-fire)
