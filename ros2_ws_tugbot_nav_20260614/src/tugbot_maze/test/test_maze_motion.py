@@ -652,9 +652,10 @@ def test_giveup_still_walls_edge_to_unvisited_cell():
     assert b.is_wall((3, 4), 'W')                          # unvisited-cell edge still walled (unchanged)
 
 
-def test_keepout_clearance_uses_full_scan_min():
+def test_keepout_clearance_forward_hemisphere_ignores_rear():
+    amin, ainc = -math.pi, math.pi / 2                   # 4 beams: -pi(rear), -pi/2(side), 0(front), pi/2(side)
     m = MazeMotion()
-    # spurious 0.02 filtered; 0.45 is the min valid full-scan return (< side perp 0.88)
-    assert m._keepout_clearance(0.88, [2.0, 1.5, 0.45, float('inf'), 0.02]) == 0.45
-    assert m._keepout_clearance(0.30, [2.0, 1.5]) == 0.30        # cardinal side smaller than any beam
-    assert m._keepout_clearance(0.70, [float('inf'), float('inf')]) == 0.70   # no finite beams -> near
+    ranges = [0.30, 2.0, 0.45, 2.0]                       # rear 0.30 behind -> ignored; front 0.45 counts
+    assert abs(m._keepout_clearance(0.88, ranges, amin, ainc) - 0.45) < 1e-9
+    assert m._keepout_clearance(0.30, [2.0, 2.0, 2.0, 2.0], amin, ainc) == 0.30   # cardinal `near` smaller
+    assert m._keepout_clearance(0.70, [0.02, float('inf'), 0.02, float('inf')], amin, ainc) == 0.70  # spurious/inf -> near

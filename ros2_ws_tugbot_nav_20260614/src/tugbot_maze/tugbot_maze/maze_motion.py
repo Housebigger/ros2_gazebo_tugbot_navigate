@@ -135,7 +135,7 @@ class MazeMotion:
         self.failed_hop_limit = 3
         self.events = []                      # DIAG: structured STALL/ESCAPE/UNSTICK strings (node drains)
         self._last_drive_v = 0.0              # DIAG: last corridor v (to spot wedge_stop, v~=0)
-        self.wedge_realign_yaw = 0.5          # |yaw_err|>=this => follower turns in place (v~=0), not a pin
+        self.wedge_realign_yaw = 0.4          # |yaw_err|>=this => follower turns in place (v~=0), not a pin
 
     def step(self, pose, scan, t) -> Tuple[float, float, bool]:
         yaw = pose[2]                                   # measured yaw rate (for PD damping)
@@ -472,12 +472,18 @@ class MazeMotion:
                _norm(self.target_cardinal - yaw), moved, self._last_drive_v,
                self.hop_attempts.get(key, 0), self.failed_hops.get(key, 0), marked))
 
-    def _keepout_clearance(self, near, ranges):
-        """Nearest obstacle in ANY direction (the safety bubble): min of the cardinal side clearance and
-        the full LIDAR scan, filtering spurious near-zero / inf returns (catches diagonal/corner returns
-        the cardinal perp misses)."""
-        finite = [r for r in ranges if r is not None and math.isfinite(r) and r > 0.05]
-        return min(near, min(finite)) if finite else near
+    def _keepout_clearance(self, near, ranges, amin, ainc):
+        """Nearest obstacle in the FORWARD hemisphere + sides (cos(bearing) >= 0), EXCLUDING the rear
+        (a wall behind is not a forward-collision risk). Filters spurious near-zero / inf returns.
+        Catches forward/side/corner returns the cardinal perp misses, without the rear walls that
+        caused spurious creep (run 20260624_220733)."""
+        best = near
+        for i, r in enumerate(ranges):
+            if r is None or not math.isfinite(r) or r <= 0.05:
+                continue
+            if math.cos(amin + i * ainc) >= 0.0 and r < best:   # forward half-plane (|bearing| <= 90 deg)
+                best = r
+        return best
 
     def _front_blocked(self, perp, dirn, moved, yaw):
         """A hop is front-blocked only when ALIGNED: a short front reading while mis-aligned is an
@@ -503,6 +509,8 @@ class MazeMotion:
             return (0.0, 0.0, False)
         dirn = _dir_name(self.hop_dir)
         perp = cell_wall_perp_dist(ranges, amin, ainc, yaw)          # DIAG: computed early so stall events have it
+        near = (min(perp['E'], perp['W']) if self.hop_dir[1] != 0 else min(perp['N'], perp['S']))  # side clearance
+        keepout_clear = self._keepout_clearance(near, ranges, amin, ainc)   # safety bubble (forward+sides): wedge gate + slow
         # Wedge detector: while driving, if the robot makes no real progress for wedge_detect_s
         # it is physically PINNED (the ~13-14 cell plateau: pose frozen, can't move in the tight
         # interior). Recover by reversing to free it, rather than grinding the hop timeout. Count
@@ -568,13 +576,8 @@ class MazeMotion:
                        min(self.grid_fallback_max_m,
                            grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)))  # odom grid centerline (valid in open junctions), clamped to the smooth creep-and-steer regime
         d_left, d_right = side_distances(perp, self.hop_dir)
-        if self.hop_dir[1] != 0:                                   # N/S travel: sides are E/W
-            near = min(perp['E'], perp['W'])
-        else:                                                      # E/W travel: sides are N/S
-            near = min(perp['N'], perp['S'])
         self.dbg['sides'] = (round(d_left, 2), round(d_right, 2))  # live centerline diagnostics
-        self.dbg['near'] = round(near, 2)
-        keepout_clear = self._keepout_clearance(near, ranges)      # safety bubble: nearest obstacle, any direction
+        self.dbg['near'] = round(near, 2)                          # near + keepout_clear computed early (above)
         self.dbg['keepout'] = round(keepout_clear, 2)
         v, w = corridor_follow_command(yaw, self.target_cardinal, d_left, d_right, keepout_clear,
                                        fallback_cross=fallback, wall_seen_m=self.wall_seen_m,
