@@ -140,7 +140,7 @@ def corridor_drive_command(yaw: float, cardinal_yaw: float, cross_track: float,
                            w_max: float = 0.5, kp_ang: float = 1.5, lookahead_m: float = 0.7,
                            slow_angle: float = 0.6, wedge_slow_m: float = 0.50,
                            wedge_stop_m: float = 0.40, wedge_v_floor: float = 0.10,
-                           max_cross_steer: float = 0.25
+                           max_cross_steer: float = 0.35
                            ) -> Tuple[float, float]:
     """Drive forward along `cardinal_yaw` while converging onto the corridor centerline.
 
@@ -170,7 +170,7 @@ def corridor_follow_command(yaw: float, cardinal_yaw: float, d_left: float, d_ri
                             w_max: float = 0.5, kp_ang: float = 1.5, lookahead_m: float = 0.7,
                             slow_angle: float = 0.6, wedge_slow_m: float = 0.50,
                             wedge_stop_m: float = 0.40, wedge_v_floor: float = 0.10,
-                            max_cross_steer: float = 0.25
+                            max_cross_steer: float = 0.35
                             ) -> Tuple[float, float]:
     """Symmetric wall-following straight drive. Derives the lateral centerline offset from the
     two side-wall distances (centerline_cross), clamps it, then steers/throttles with the proven

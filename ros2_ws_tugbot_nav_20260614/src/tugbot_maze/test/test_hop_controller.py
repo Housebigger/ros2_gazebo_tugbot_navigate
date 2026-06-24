@@ -288,3 +288,9 @@ def test_cross_track_steer_is_capped():
 def test_small_cross_track_unaffected_by_cap():
     w = corridor_drive_command(0.0, 0.0, 0.10, None, kp_ang=1.5, lookahead_m=0.7, max_cross_steer=0.25)[1]
     assert abs(w - 1.5 * math.atan2(-0.10, 0.7)) < 1e-6   # below cap -> unchanged
+
+
+def test_max_cross_steer_default_loosened():
+    import inspect
+    assert inspect.signature(corridor_drive_command).parameters['max_cross_steer'].default == 0.35
+    assert inspect.signature(corridor_follow_command).parameters['max_cross_steer'].default == 0.35

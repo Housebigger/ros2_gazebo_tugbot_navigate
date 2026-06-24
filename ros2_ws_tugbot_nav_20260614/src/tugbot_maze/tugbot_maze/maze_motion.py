@@ -94,7 +94,7 @@ class MazeMotion:
         self.backout_v = backout_v; self.backout_timeout_s = backout_timeout_s
         self.max_backout_attempts = max_backout_attempts
         self.grid_fallback_max_m = grid_fallback_max_m   # clamp on the open-junction odom fallback
-        self.max_cross_steer = 0.25      # cap on the cross-track-induced heading deviation (junctions)
+        self.max_cross_steer = 0.35      # cap on the cross-track-induced heading deviation (junctions)
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
