@@ -650,3 +650,11 @@ def test_giveup_still_walls_edge_to_unvisited_cell():
     sim = MazeSim(load_segments(), cell_center((3, 4)), 0.0)
     m._drive((6.4, 8.0, 0.0), _scan_at(sim), 1.0)
     assert b.is_wall((3, 4), 'W')                          # unvisited-cell edge still walled (unchanged)
+
+
+def test_keepout_clearance_uses_full_scan_min():
+    m = MazeMotion()
+    # spurious 0.02 filtered; 0.45 is the min valid full-scan return (< side perp 0.88)
+    assert m._keepout_clearance(0.88, [2.0, 1.5, 0.45, float('inf'), 0.02]) == 0.45
+    assert m._keepout_clearance(0.30, [2.0, 1.5]) == 0.30        # cardinal side smaller than any beam
+    assert m._keepout_clearance(0.70, [float('inf'), float('inf')]) == 0.70   # no finite beams -> near

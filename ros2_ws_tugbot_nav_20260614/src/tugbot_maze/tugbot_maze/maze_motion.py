@@ -58,7 +58,7 @@ class MazeMotion:
                  yaw_tol_rad: float = 0.10, turn_settle_ticks: int = 3,
                  hop_arrive_slack_m: float = 0.05, front_block_m: float = 0.7,
                  lookahead_m: float = 0.7, max_cross_track_m: float = 0.6,
-                 wedge_slow_m: float = 0.50, wedge_stop_m: float = 0.40,
+                 wedge_slow_m: float = 0.60, wedge_stop_m: float = 0.40,
                  wedge_v_floor: float = 0.10, hop_timeout_s: float = 25.0,
                  settle_s: float = 0.4, max_hop_attempts: int = 3,
                  center_timeout_s: float = 4.0, turn_timeout_s: float = 5.0,
@@ -95,6 +95,8 @@ class MazeMotion:
         self.max_backout_attempts = max_backout_attempts
         self.grid_fallback_max_m = grid_fallback_max_m   # clamp on the open-junction odom fallback
         self.max_cross_steer = 0.35      # cap on the cross-track-induced heading deviation (junctions)
+        self.safety_radius = 0.60        # LIDAR clearance: within this, the keep-out overrides the cap + slows
+        self.keepout_max_cross_steer = 0.8   # emergency steer authority when a wall is within safety_radius
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -470,6 +472,13 @@ class MazeMotion:
                _norm(self.target_cardinal - yaw), moved, self._last_drive_v,
                self.hop_attempts.get(key, 0), self.failed_hops.get(key, 0), marked))
 
+    def _keepout_clearance(self, near, ranges):
+        """Nearest obstacle in ANY direction (the safety bubble): min of the cardinal side clearance and
+        the full LIDAR scan, filtering spurious near-zero / inf returns (catches diagonal/corner returns
+        the cardinal perp misses)."""
+        finite = [r for r in ranges if r is not None and math.isfinite(r) and r > 0.05]
+        return min(near, min(finite)) if finite else near
+
     def _front_blocked(self, perp, dirn, moved, yaw):
         """A hop is front-blocked only when ALIGNED: a short front reading while mis-aligned is an
         angled beam hitting a side/corner wall (false), not a real obstacle (walls come from SENSING)."""
@@ -565,14 +574,18 @@ class MazeMotion:
             near = min(perp['N'], perp['S'])
         self.dbg['sides'] = (round(d_left, 2), round(d_right, 2))  # live centerline diagnostics
         self.dbg['near'] = round(near, 2)
-        v, w = corridor_follow_command(yaw, self.target_cardinal, d_left, d_right, near,
+        keepout_clear = self._keepout_clearance(near, ranges)      # safety bubble: nearest obstacle, any direction
+        self.dbg['keepout'] = round(keepout_clear, 2)
+        v, w = corridor_follow_command(yaw, self.target_cardinal, d_left, d_right, keepout_clear,
                                        fallback_cross=fallback, wall_seen_m=self.wall_seen_m,
                                        half_corridor_m=self.half_corridor_m,
                                        max_cross_track_m=self.max_cross_track_m,
                                        v_max=self.cruise_v, w_max=self.w_max,
                                        lookahead_m=self.lookahead_m, wedge_slow_m=self.wedge_slow_m,
                                        wedge_stop_m=self.wedge_stop_m, wedge_v_floor=self.wedge_v_floor,
-                                       max_cross_steer=self.max_cross_steer)
+                                       max_cross_steer=self.max_cross_steer,
+                                       safety_radius=self.safety_radius,
+                                       keepout_max_cross_steer=self.keepout_max_cross_steer)
         self._last_drive_v = v                                       # DIAG: spot wedge_stop (v~=0)
         return (v, w, False)
 
