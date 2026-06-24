@@ -294,3 +294,14 @@ def test_max_cross_steer_default_loosened():
     import inspect
     assert inspect.signature(corridor_drive_command).parameters['max_cross_steer'].default == 0.35
     assert inspect.signature(corridor_follow_command).parameters['max_cross_steer'].default == 0.35
+
+
+def test_keepout_overrides_cross_steer_cap_when_close():
+    # near a wall (clearance < safety_radius): emergency cap allows stronger centering than normal.
+    # kp_ang=1.0, w_max=2.0 so w doesn't saturate and the two caps are distinguishable.
+    w_close = corridor_drive_command(0.0, 0.0, 2.0, 0.5, kp_ang=1.0, w_max=2.0, lookahead_m=0.7,
+                                     max_cross_steer=0.35, safety_radius=0.60, keepout_max_cross_steer=0.8)[1]
+    w_far = corridor_drive_command(0.0, 0.0, 2.0, 1.0, kp_ang=1.0, w_max=2.0, lookahead_m=0.7,
+                                   max_cross_steer=0.35, safety_radius=0.60, keepout_max_cross_steer=0.8)[1]
+    assert abs(w_close - (-0.8)) < 1e-6     # clearance 0.5 < 0.60 -> emergency cap 0.8 -> w=-0.8
+    assert abs(w_far - (-0.35)) < 1e-6      # clearance 1.0 >= 0.60 -> normal cap 0.35 -> w=-0.35
