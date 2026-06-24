@@ -77,6 +77,7 @@ class MazeMotion:
         self.center_tol_m = center_tol_m; self.yaw_tol_rad = yaw_tol_rad
         self.turn_settle_ticks = turn_settle_ticks; self.hop_arrive_slack_m = hop_arrive_slack_m
         self.front_block_m = front_block_m; self.lookahead_m = lookahead_m
+        self.front_block_max_yaw = 0.30  # |yaw_err|>=this: a short front reading is an angled beam (false block)
         self.max_cross_track_m = max_cross_track_m; self.wedge_slow_m = wedge_slow_m
         self.wedge_stop_m = wedge_stop_m; self.wedge_v_floor = wedge_v_floor
         self.hop_timeout_s = hop_timeout_s; self.settle_s = settle_s
@@ -484,6 +485,12 @@ class MazeMotion:
                _norm(self.target_cardinal - yaw), moved, self._last_drive_v,
                self.hop_attempts.get(key, 0), self.failed_hops.get(key, 0), marked))
 
+    def _front_blocked(self, perp, dirn, moved, yaw):
+        """A hop is front-blocked only when ALIGNED: a short front reading while mis-aligned is an
+        angled beam hitting a side/corner wall (false), not a real obstacle (walls come from SENSING)."""
+        return (perp[dirn] < self.front_block_m and moved > 0.3
+                and abs(_norm(self.target_cardinal - yaw)) < self.front_block_max_yaw)
+
     def _drive(self, pose, scan, t):
         x, y, yaw = pose
         ranges, amin, ainc = scan
@@ -531,7 +538,7 @@ class MazeMotion:
                 self.recover_until = t + self.recover_s              # reverse to un-wedge
                 self.phase = 'recover'
             return (0.0, 0.0, False)
-        front_blocked = perp[dirn] < self.front_block_m and moved > 0.3
+        front_blocked = self._front_blocked(perp, dirn, moved, yaw)
         if front_blocked or t >= self.hop_deadline:
             # A hop toward a sensed-OPEN edge failed (a front wall appeared, or it stalled).
             # Do NOT trust this as a wall: walls come from SENSING (robust projection-median),

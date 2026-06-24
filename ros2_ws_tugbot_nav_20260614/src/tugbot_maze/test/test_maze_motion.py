@@ -614,3 +614,12 @@ def test_wedge_still_fires_on_real_pin():
     sim = MazeSim(load_segments(), cell_center((5, 5)), 0.0)
     m._drive((10.0, 10.0, 0.0), _scan_at(sim), m.wedge_detect_s + 5.0)
     assert m.phase in ('recover', 'center')                # wedge fired (recover; center if it gave up)
+
+
+def test_front_block_gated_by_heading():
+    m = MazeMotion(); m.target_cardinal = 0.0                 # hop cardinal = E
+    m.hop_dir = (1, 0)
+    perp = {'E': 0.5, 'N': 2.0, 'S': 2.0, 'W': 2.0}          # short front (E), open sides
+    assert m._front_blocked(perp, 'E', 0.5, 0.0) is True      # aligned + short front + moved>0.3 -> block
+    assert m._front_blocked(perp, 'E', 0.5, 0.5) is False     # |yaw_err|=0.5 >= front_block_max_yaw -> no block
+    assert m._front_blocked(perp, 'E', 0.2, 0.0) is False     # moved<=0.3 -> no block
