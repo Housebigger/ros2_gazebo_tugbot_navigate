@@ -277,3 +277,14 @@ def test_grid_cross_track_all_dirs():
 def test_grid_cross_track_on_centerline_is_zero():
     assert grid_cross_track(10.0, 10.0, (5, 5), (0, 1)) == 0.0
     assert grid_cross_track(10.0, 10.0, (5, 5), (1, 0)) == 0.0
+
+
+def test_cross_track_steer_is_capped():
+    # huge cross_track, robot aligned to cardinal (yaw=0): steering capped to kp_ang*max_cross_steer
+    v, w = corridor_drive_command(0.0, 0.0, 2.0, None, kp_ang=1.5, lookahead_m=0.7, max_cross_steer=0.25)
+    assert abs(w - (-1.5 * 0.25)) < 1e-6          # capped (uncapped would be atan2(-2,0.7)*1.5 -> clamp -0.5)
+
+
+def test_small_cross_track_unaffected_by_cap():
+    w = corridor_drive_command(0.0, 0.0, 0.10, None, kp_ang=1.5, lookahead_m=0.7, max_cross_steer=0.25)[1]
+    assert abs(w - 1.5 * math.atan2(-0.10, 0.7)) < 1e-6   # below cap -> unchanged

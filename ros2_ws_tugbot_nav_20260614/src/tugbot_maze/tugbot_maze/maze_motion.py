@@ -93,6 +93,7 @@ class MazeMotion:
         self.backout_v = backout_v; self.backout_timeout_s = backout_timeout_s
         self.max_backout_attempts = max_backout_attempts
         self.grid_fallback_max_m = grid_fallback_max_m   # clamp on the open-junction odom fallback
+        self.max_cross_steer = 0.25      # cap on the cross-track-induced heading deviation (junctions)
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -574,7 +575,8 @@ class MazeMotion:
                                        max_cross_track_m=self.max_cross_track_m,
                                        v_max=self.cruise_v, w_max=self.w_max,
                                        lookahead_m=self.lookahead_m, wedge_slow_m=self.wedge_slow_m,
-                                       wedge_stop_m=self.wedge_stop_m, wedge_v_floor=self.wedge_v_floor)
+                                       wedge_stop_m=self.wedge_stop_m, wedge_v_floor=self.wedge_v_floor,
+                                       max_cross_steer=self.max_cross_steer)
         self._last_drive_v = v                                       # DIAG: spot wedge_stop (v~=0)
         return (v, w, False)
 
