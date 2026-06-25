@@ -659,3 +659,53 @@ def test_keepout_clearance_forward_hemisphere_ignores_rear():
     assert abs(m._keepout_clearance(0.88, ranges, amin, ainc) - 0.45) < 1e-9
     assert m._keepout_clearance(0.30, [2.0, 2.0, 2.0, 2.0], amin, ainc) == 0.30   # cardinal `near` smaller
     assert m._keepout_clearance(0.70, [0.02, float('inf'), 0.02, float('inf')], amin, ainc) == 0.70  # spurious/inf -> near
+
+
+def test_center_reconciles_cell_to_odom_after_persistent_desync():
+    import math
+    from tugbot_maze.maze_motion import MazeMotion
+    m = MazeMotion()
+    m.cell = (4, 9); m.phase = 'center'
+    n = 16; scan = ([3.0] * n, -math.pi, 2 * math.pi / n)         # open all around (no walls)
+    m.mem.observe((4, 9), 9.23, 18.0, 100.0)                      # desync starts at t=100 (odom (5,9))
+    m._center((9.23, 18.0, math.pi / 2), scan, 100.0 + m.mem.reconcile_persist_s + 0.5)
+    assert m.cell == (5, 9)                                       # snapped to odom
+    assert any(e.startswith("RECONCILE") for e in m.events)
+
+
+def test_drive_giveup_routes_wall_mark_through_mapmemory():
+    import math
+    from tugbot_maze.maze_motion import MazeMotion
+    from tugbot_maze.map_memory import MapMemory
+    calls = []
+
+    class Spy(MapMemory):
+        def mark_wall_on_failure(self, cell, d, **kw):
+            calls.append((cell, d)); return False                 # simulate suppression
+
+    m = MazeMotion()
+    m.mem = Spy(m.brain)
+    m.cell = (4, 9); m.hop_dir = (1, 0); m.hop_target = (5, 9); m.target_cardinal = 0.0  # E hop
+    m.phase = 'drive'; m.hop_start = (8.0, 18.0); m.hop_deadline = 1e12
+    m.progress_pose = (8.2, 18.0); m.progress_t = 0.0
+    m.visited = {(4, 9)}                                          # (5,9) NOT visited -> giveup attempts a mark
+    m.hop_attempts[((4, 9), 'E')] = m.max_hop_attempts - 1        # next failure marks
+    n = 16; scan = ([3.0] * n, -math.pi, 2 * math.pi / n)
+    m._drive((8.2, 18.0, 0.0), scan, m.wedge_detect_s + 5.0)      # no progress, aligned -> wedge giveup
+    assert calls == [((4, 9), 'E')]                               # routed through the gateway
+    assert m.brain.is_wall((4, 9), 'E') is False                 # suppressed -> not walled
+
+
+def test_drive_giveup_marks_wall_when_not_lateral_pin():
+    import math
+    from tugbot_maze.maze_motion import MazeMotion
+    m = MazeMotion()
+    m.cell = (4, 9); m.hop_dir = (1, 0); m.hop_target = (5, 9); m.target_cardinal = 0.0
+    m.phase = 'drive'; m.hop_start = (8.0, 18.0); m.hop_deadline = 1e12
+    m.progress_pose = (8.2, 18.0); m.progress_t = 0.0
+    m.visited = {(4, 9)}
+    m.hop_attempts[((4, 9), 'E')] = m.max_hop_attempts - 1
+    n = 16; scan = ([3.0] * n, -math.pi, 2 * math.pi / n)         # near ~3.0 > safety -> NOT a pin
+    m._drive((8.2, 18.0, 0.0), scan, m.wedge_detect_s + 5.0)
+    assert m.brain.is_wall((4, 9), 'E') is True                  # real giveup -> marked
+    assert m.mem.suppressed == 0

@@ -28,6 +28,7 @@ from tugbot_maze.wall_localize import cell_center_offset
 from tugbot_maze.hop_controller import (
     centering_command, grid_cross_track,
     side_distances, corridor_follow_command, profiled_turn_command, backout_command)
+from tugbot_maze.map_memory import MapMemory
 
 
 def _norm(a: float) -> float:
@@ -69,8 +70,10 @@ class MazeMotion:
                  boundary_margin_m: float = 0.40, k_corroborate: int = 2,
                  backout_v: float = 0.30, backout_timeout_s: float = 12.0,
                  max_backout_attempts: int = 2,
-                 grid_fallback_max_m: float = 0.40):
+                 grid_fallback_max_m: float = 0.40,
+                 mem: Optional['MapMemory'] = None):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
+        self.mem = mem if mem is not None else MapMemory(self.brain)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.kd_turn = kd_turn          # derivative damping on rotate-in-place (vs latency overshoot)
         self.turn_w_max = turn_w_max    # gentler cap for rotate-in-place (less latency overshoot)
@@ -95,8 +98,9 @@ class MazeMotion:
         self.max_backout_attempts = max_backout_attempts
         self.grid_fallback_max_m = grid_fallback_max_m   # clamp on the open-junction odom fallback
         self.max_cross_steer = 0.35      # cap on the cross-track-induced heading deviation (junctions)
-        self.safety_radius = 0.60        # LIDAR clearance: within this, the keep-out overrides the cap + slows
+        self.safety_radius = 0.70        # LIDAR clearance: within this, the keep-out overrides the cap + slows
         self.keepout_max_cross_steer = 0.8   # emergency steer authority when a wall is within safety_radius
+        self.keepout_repulse_gain = 0.6      # active keep-out: steer-away strength within safety_radius
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -143,6 +147,7 @@ class MazeMotion:
             self.yaw_rate = _norm(yaw - self.prev_yaw) / (t - self.prev_t)
         self.prev_yaw = yaw; self.prev_t = t
         self._track_cell(t)
+        self.mem.observe(self.cell, pose[0], pose[1], t)
         if (self.phase != 'done' and self.cell != EXIT_CELL
                 and not self._escape_backout              # don't re-fire mid-escape reverse
                 and self.explore_t is not None
@@ -169,6 +174,13 @@ class MazeMotion:
     def _center(self, pose, scan, t):
         x, y, yaw = pose
         ranges, amin, ainc = scan
+        target = self.mem.reconcile_target(self.cell, x, y, t)
+        if target != self.cell:
+            self.events.append("RECONCILE %s -> %s (desync>%.0fs)"
+                               % (self.cell, target, self.mem.reconcile_persist_s))
+            self.cell = target                              # relabel only; committed wall-knowledge unchanged
+            self.hop_attempts.clear(); self.hop_dir = None
+            self.center_start = None; self.align_start = None; self.latched_cardinal = None
         # Fast-path: a committed cell is trusted -- skip centering/align/sensing; re-anchor
         # (hysteresis) and route. Revisits must not re-run the 4 s centering.
         if self.cell in self.committed:
@@ -532,9 +544,12 @@ class MazeMotion:
             if marked:
                 nb = (self.cell[0] + DIRS[dirn][0], self.cell[1] + DIRS[dirn][1])
                 if nb not in self.visited:                           # never wall an edge to a VISITED cell
-                    self.brain.mark(self.cell, dirn, is_wall=True)
-                    self._stamp_loco_wall(self.cell, dirn)           # re-openable by _unstick (both reps)
-                    self.committed.discard(self.cell)                # un-commit; cell stays in `sensed`
+                    ct = grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)
+                    if self.mem.mark_wall_on_failure(self.cell, dirn, perp_front=perp[dirn],
+                                                     near=near, cross_track=ct,
+                                                     safety_radius=self.safety_radius):  # suppress lateral pins
+                        self._stamp_loco_wall(self.cell, dirn)       # re-openable by _unstick (both reps)
+                        self.committed.discard(self.cell)            # un-commit; cell stays in `sensed`
                 self.hop_attempts.pop(key, None)                     # reset per-edge counter (re-route/re-approach)
                 self.failed_hops.pop(key, None)
                 self.phase = 'center'                                # (and clobber) the WALL it just set
@@ -560,9 +575,12 @@ class MazeMotion:
             if marked:
                 nb = (self.cell[0] + DIRS[dirn][0], self.cell[1] + DIRS[dirn][1])
                 if nb not in self.visited:                           # never wall an edge to a VISITED cell
-                    self.brain.mark(self.cell, dirn, is_wall=True)
-                    self._stamp_loco_wall(self.cell, dirn)           # re-openable by _unstick (both reps)
-                    self.committed.discard(self.cell)                # un-commit; cell stays in `sensed`
+                    ct = grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)
+                    if self.mem.mark_wall_on_failure(self.cell, dirn, perp_front=perp[dirn],
+                                                     near=near, cross_track=ct,
+                                                     safety_radius=self.safety_radius):  # suppress lateral pins
+                        self._stamp_loco_wall(self.cell, dirn)       # re-openable by _unstick (both reps)
+                        self.committed.discard(self.cell)            # un-commit; cell stays in `sensed`
                 self.hop_attempts.pop(key, None)                     # reset per-edge counter (re-route/re-approach)
                 self.failed_hops.pop(key, None)
             # non-max: just retry (re-center); re-sensing happens only from a GOOD re-entry, never
@@ -588,7 +606,8 @@ class MazeMotion:
                                        wedge_stop_m=self.wedge_stop_m, wedge_v_floor=self.wedge_v_floor,
                                        max_cross_steer=self.max_cross_steer,
                                        safety_radius=self.safety_radius,
-                                       keepout_max_cross_steer=self.keepout_max_cross_steer)
+                                       keepout_max_cross_steer=self.keepout_max_cross_steer,
+                                       keepout_repulse_gain=self.keepout_repulse_gain)
         self._last_drive_v = v                                       # DIAG: spot wedge_stop (v~=0)
         return (v, w, False)
 
