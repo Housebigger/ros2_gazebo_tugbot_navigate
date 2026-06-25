@@ -18,6 +18,7 @@ import tf2_ros
 
 from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, pose_to_cell)
+from tugbot_maze.map_memory import MapMemory
 from tugbot_maze.maze_motion import MazeMotion
 from tugbot_maze.junction_log import JunctionLog, update_junctions
 from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw
@@ -55,12 +56,14 @@ class FloodFillSolver(Node):
         self.junction_log_path = os.path.join(self.junction_log_dir or 'log', 'junctions.json')
 
         self.brain = FloodFillBrain(exit_cell=EXIT_CELL)
+        self.mem = MapMemory(self.brain)
         self.motion = MazeMotion(self.brain, cruise_v=self.cruise_v,
                                  center_tol_m=self.center_tol_m,
                                  yaw_tol_rad=self.yaw_tol_rad,
                                  hop_arrive_slack_m=self.hop_arrive_slack_m,
                                  front_block_m=self.front_block_m,
-                                 hop_timeout_s=self.hop_timeout_s)
+                                 hop_timeout_s=self.hop_timeout_s,
+                                 mem=self.mem)
         self.junctions = JunctionLog()
         self._prev_motion_cell = None
         self.scan_msg: Optional[LaserScan] = None
@@ -153,6 +156,10 @@ class FloodFillSolver(Node):
             s = self.scan_msg
             v, w, done = self.motion.step(pose, (s.ranges, s.angle_min, s.angle_increment), t)
             self._publish_cmd(v, w)
+            if self.motion.events:                            # DIAG: drain structured stall/escape events
+                for ev in self.motion.events:
+                    self.get_logger().info(ev)
+                self.motion.events.clear()
             self._prev_motion_cell, j = update_junctions(
                 self.junctions, self.brain, self.motion.cell, self._prev_motion_cell,
                 self.motion.sensed, t)
@@ -174,9 +181,10 @@ class FloodFillSolver(Node):
             return
         odom_cell = pose_to_cell(pose[0], pose[1])
         dist = math.hypot(pose[0] - self.exit_x, pose[1] - self.exit_y)
-        self.get_logger().info('DIAG pose=(%.2f, %.2f) dcell=%s odomcell=%s dist_to_exit=%.2f phase=%s/%s'
+        self.get_logger().info('DIAG pose=(%.2f, %.2f) dcell=%s odomcell=%s dist_to_exit=%.2f phase=%s/%s mem_supp=%d mem_rec=%d'
                                % (pose[0], pose[1], self.motion.cell, odom_cell, dist,
-                                  self.phase, self.motion.phase))
+                                  self.phase, self.motion.phase,
+                                  self.motion.mem.suppressed, self.motion.mem.reconciles))
         if self.sense_debug and self.motion.dbg:
             d = self.motion.dbg
             self.get_logger().info('SENSE cell=%s pose=%s off=%s good=%s committed=%s corrob=%s walls=%s'

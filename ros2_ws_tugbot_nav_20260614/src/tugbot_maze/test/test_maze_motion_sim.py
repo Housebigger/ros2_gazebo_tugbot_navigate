@@ -35,7 +35,7 @@ def _run(drift, latency=0, dt=0.1, max_steps=30000):
                 backout_advances += 1                     # a back-out moved us to a new (parent) cell
         prev_phase = m.phase
         if done:
-            return True, collided, max_desync, m.backout_count, backout_advances
+            return True, collided, max_desync, m.backout_count, backout_advances, m.escape_count
         sim.step(v, w, dt)
         if sim.collides(sim.x, sim.y):                    # body entered a wall margin (true pose)
             collided = True
@@ -43,7 +43,7 @@ def _run(drift, latency=0, dt=0.1, max_steps=30000):
             tc = pose_to_cell(sim.x, sim.y)
             max_desync = max(max_desync, abs(tc[0] - m.cell[0]) + abs(tc[1] - m.cell[1]))
         t += dt
-    return (m.cell == EXIT_CELL), collided, max_desync, m.backout_count, backout_advances
+    return (m.cell == EXIT_CELL), collided, max_desync, m.backout_count, backout_advances, m.escape_count
 
 
 # Gazebo-relevant operating regime: moderate wheel-odom drift (Gazebo's is ~0.25 m total,
@@ -54,17 +54,18 @@ def _run(drift, latency=0, dt=0.1, max_steps=30000):
 # representative of this Gazebo and conflicts with odom re-anchoring.
 @pytest.mark.parametrize("drift,latency", [(0.0, 0), (0.03, 0), (0.05, 0), (0.05, 2), (0.05, 3)])
 def test_reaches_exit_without_collision_or_desync(drift, latency):
-    reached, collided, max_desync, _, _ = _run(drift, latency)
+    reached, collided, max_desync, _, _, esc = _run(drift, latency)
     assert reached, f"did not reach the exit cell (drift={drift}, latency={latency})"
     assert not collided, f"robot body collided with a wall (drift={drift}, latency={latency})"
     assert max_desync <= 1, f"dcell desynced by {max_desync} (drift={drift}, latency={latency})"
+    assert esc == 0, f"no-progress watchdog fired ({esc}x) on the CLEAN solve (drift={drift}, latency={latency})"
 
 
 def test_backout_is_exercised_end_to_end():
     """The decisive dead-end back-out must actually fire during the offline solve and advance the
     robot to the parent cell -- guards against a silently-disabled/regressed back-out that still
     happens to reach the exit via the fallback path."""
-    reached, collided, _, backout_count, backout_advances = _run(0.0, 0)
+    reached, collided, _, backout_count, backout_advances, _ = _run(0.0, 0)
     assert reached and not collided
     assert backout_count > 0, "dead-end back-out never fired in the offline solve"
     assert backout_advances > 0, "no back-out advanced the robot to the parent cell"

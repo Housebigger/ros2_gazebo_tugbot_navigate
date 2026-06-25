@@ -28,6 +28,7 @@ from tugbot_maze.wall_localize import cell_center_offset
 from tugbot_maze.hop_controller import (
     centering_command, grid_cross_track,
     side_distances, corridor_follow_command, profiled_turn_command, backout_command)
+from tugbot_maze.map_memory import MapMemory
 
 
 def _norm(a: float) -> float:
@@ -58,7 +59,7 @@ class MazeMotion:
                  yaw_tol_rad: float = 0.10, turn_settle_ticks: int = 3,
                  hop_arrive_slack_m: float = 0.05, front_block_m: float = 0.7,
                  lookahead_m: float = 0.7, max_cross_track_m: float = 0.6,
-                 wedge_slow_m: float = 0.50, wedge_stop_m: float = 0.40,
+                 wedge_slow_m: float = 0.60, wedge_stop_m: float = 0.40,
                  wedge_v_floor: float = 0.10, hop_timeout_s: float = 25.0,
                  settle_s: float = 0.4, max_hop_attempts: int = 3,
                  center_timeout_s: float = 4.0, turn_timeout_s: float = 5.0,
@@ -69,14 +70,17 @@ class MazeMotion:
                  boundary_margin_m: float = 0.40, k_corroborate: int = 2,
                  backout_v: float = 0.30, backout_timeout_s: float = 12.0,
                  max_backout_attempts: int = 2,
-                 grid_fallback_max_m: float = 0.40):
+                 grid_fallback_max_m: float = 0.40,
+                 mem: Optional['MapMemory'] = None):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
+        self.mem = mem if mem is not None else MapMemory(self.brain)
         self.cruise_v = cruise_v; self.w_max = w_max; self.kp_turn = kp_turn
         self.kd_turn = kd_turn          # derivative damping on rotate-in-place (vs latency overshoot)
         self.turn_w_max = turn_w_max    # gentler cap for rotate-in-place (less latency overshoot)
         self.center_tol_m = center_tol_m; self.yaw_tol_rad = yaw_tol_rad
         self.turn_settle_ticks = turn_settle_ticks; self.hop_arrive_slack_m = hop_arrive_slack_m
         self.front_block_m = front_block_m; self.lookahead_m = lookahead_m
+        self.front_block_max_yaw = 0.30  # |yaw_err|>=this: a short front reading is an angled beam (false block)
         self.max_cross_track_m = max_cross_track_m; self.wedge_slow_m = wedge_slow_m
         self.wedge_stop_m = wedge_stop_m; self.wedge_v_floor = wedge_v_floor
         self.hop_timeout_s = hop_timeout_s; self.settle_s = settle_s
@@ -93,6 +97,10 @@ class MazeMotion:
         self.backout_v = backout_v; self.backout_timeout_s = backout_timeout_s
         self.max_backout_attempts = max_backout_attempts
         self.grid_fallback_max_m = grid_fallback_max_m   # clamp on the open-junction odom fallback
+        self.max_cross_steer = 0.35      # cap on the cross-track-induced heading deviation (junctions)
+        self.safety_radius = 0.70        # LIDAR clearance: within this, the keep-out overrides the cap + slows
+        self.keepout_max_cross_steer = 0.8   # emergency steer authority when a wall is within safety_radius
+        self.keepout_repulse_gain = 0.6      # active keep-out: steer-away strength within safety_radius
         self.cell = ENTRANCE_CELL
         self.phase = 'center'
         self.sensed = set()
@@ -115,12 +123,37 @@ class MazeMotion:
         self.center_start = None        # when the current center episode began (for the timeout)
         self.prev_yaw = None; self.prev_t = None; self.yaw_rate = 0.0   # for PD damping
         self.dbg = {}                   # last-tick diagnostics (offset, walls, near) for logging
+        # --- no-progress watchdog + escalating escape + failed-hop deprioritizer ---
+        self.last_seen_cell = ENTRANCE_CELL   # for cell-change detection (prev_cell)
+        self.prev_cell = None                 # cell occupied just before the current one (reverse target)
+        self.visited = {ENTRANCE_CELL}        # cells ever occupied (monotonic; seeds the entrance)
+        self.explore_t = None                 # sim-time of last visited-growth (None = unseeded)
+        self.recent = []                      # [(t, cell)] appended on cell-change; rolling confinement window
+        self.escape_tier = 0                  # current escalation level (0 = none)
+        self.escape_count = 0                 # MONOTONIC observable (calibration/regression gate)
+        self._escape_backout = False          # tags an escape reverse (vs a dead-end back-out)
+        self.no_progress_s = 90.0             # window (calibrated in Task 6)
+        self.confine_k = 6                    # max distinct cells in-window to count as "confined" (Task 6)
+        self.max_escape_tier = 2
+        self.failed_hops = {}                 # (cell,dir) -> consecutive cross-occupation failed-hop count
+        self.failed_hop_limit = 3
+        self.events = []                      # DIAG: structured STALL/ESCAPE/UNSTICK strings (node drains)
+        self._last_drive_v = 0.0              # DIAG: last corridor v (to spot wedge_stop, v~=0)
+        self.wedge_realign_yaw = 0.4          # |yaw_err|>=this => follower turns in place (v~=0), not a pin
 
     def step(self, pose, scan, t) -> Tuple[float, float, bool]:
         yaw = pose[2]                                   # measured yaw rate (for PD damping)
         if self.prev_t is not None and t > self.prev_t:
             self.yaw_rate = _norm(yaw - self.prev_yaw) / (t - self.prev_t)
         self.prev_yaw = yaw; self.prev_t = t
+        self._track_cell(t)
+        self.mem.observe(self.cell, pose[0], pose[1], t)
+        if (self.phase != 'done' and self.cell != EXIT_CELL
+                and not self._escape_backout              # don't re-fire mid-escape reverse
+                and self.explore_t is not None
+                and (t - self.explore_t) > self.no_progress_s
+                and self._confined(t)):
+            return self._escape(pose, t)
         if self.phase == 'done' or self.cell == EXIT_CELL:
             self.phase = 'done'
             return (0.0, 0.0, True)
@@ -141,6 +174,13 @@ class MazeMotion:
     def _center(self, pose, scan, t):
         x, y, yaw = pose
         ranges, amin, ainc = scan
+        target = self.mem.reconcile_target(self.cell, x, y, t)
+        if target != self.cell:
+            self.events.append("RECONCILE %s -> %s (desync>%.0fs)"
+                               % (self.cell, target, self.mem.reconcile_persist_s))
+            self.cell = target                              # relabel only; committed wall-knowledge unchanged
+            self.hop_attempts.clear(); self.hop_dir = None
+            self.center_start = None; self.align_start = None; self.latched_cardinal = None
         # Fast-path: a committed cell is trusted -- skip centering/align/sensing; re-anchor
         # (hysteresis) and route. Revisits must not re-run the 4 s centering.
         if self.cell in self.committed:
@@ -233,11 +273,38 @@ class MazeMotion:
         if within_cell_core(coord, anchored[ax], self.boundary_margin_m):
             self.cell = anchored
 
+    def _track_cell(self, t):
+        """Maintain the exploration-progress clock + confinement record. The seed and visited-update
+        blocks run UNCONDITIONALLY (NOT gated on a cell change): at startup cell == last_seen_cell ==
+        ENTRANCE_CELL, so a change-gated seed would never fire -> explore_t stays None -> the C2
+        watchdog would be permanently disabled (F2 returns). Idempotent across the two calls
+        (step() and the top of _route, which closes the in-tick _reanchor lag)."""
+        if self.explore_t is None:                       # seed (absolute Gazebo clock ~1.78e9)
+            self.explore_t = t
+        if self.cell not in self.visited:                # NEW GROUND
+            self.visited.add(self.cell)
+            self.explore_t = t
+            self.escape_tier = 0                         # real progress clears in-flight escalation
+        if self.cell != self.last_seen_cell:             # cell-change bookkeeping
+            self.prev_cell = self.last_seen_cell
+            self.last_seen_cell = self.cell
+            self.recent.append((t, self.cell))
+
+    def _confined(self, t):
+        """True iff the robot stayed within <= confine_k distinct cells over the last no_progress_s
+        window. A tight ping-pong keeps a small rolling footprint (confined); a long legitimate
+        backtrack sweeps many distinct cells (not confined -> the watchdog stays silent)."""
+        self.recent = [(t2, c) for (t2, c) in self.recent if t2 >= t - self.no_progress_s]
+        footprint = {c for (_, c) in self.recent}
+        footprint.add(self.cell)
+        return len(footprint) <= self.confine_k
+
     def _route(self, x, y, t):
         """Pick next_cell and set up the hop. Run the unstick backstop if boxed in (next_cell None)
         OR if the exit is unreachable from here -- a false WALL can cut the map while leaving an
         open neighbour, in which case next_cell still returns a non-None inf-distance cell and the
         robot would wander a disconnected pocket forever."""
+        self._track_cell(t)                              # catch an in-tick _reanchor cell change
         nxt = self.brain.next_cell(self.cell)
         reachable = self.brain.flood().get(self.cell, math.inf) != math.inf
         if nxt is None or not reachable:
@@ -265,8 +332,6 @@ class MazeMotion:
             self.center_start = None
             self.phase = 'backout'
             return (0.0, 0.0, False)
-        if nxt != self.hop_target:                       # count a Tremaux traversal once per new hop
-            self.brain.mark_traversal(self.cell, nxt)
         self.hop_target = nxt
         self.hop_dir = (nxt[0] - self.cell[0], nxt[1] - self.cell[1])
         self.target_cardinal = math.atan2(self.hop_dir[1], self.hop_dir[0])
@@ -323,14 +388,60 @@ class MazeMotion:
                     self.brain.mark(c, d, is_wall=False)     # re-open optimistically; a GOOD re-sense re-confirms
                     self.reopened.add((c, d)); self.reopened.add((nb, OPP[d]))      # both reps -> clean 1x bound
                     self.locomotion_walls.discard((c, d)); self.locomotion_walls.discard((nb, OPP[d]))
+                    self.failed_hops.pop((c, d), None); self.failed_hops.pop((nb, OPP[d]), None)
                     self.committed.discard(c); self.corrob.pop(c, None)             # keep `sensed`: re-WALL needs good
                 self.center_start = None
                 self.align_start = None; self.latched_cardinal = None
                 self.settle_until = t + self.settle_s
+                self.escape_tier = 0                          # map mutation -> retry the cheap Tier-1 first
+                self.events.append("UNSTICK reopen cell=%s n=%d" % (self.cell, len(incident or cand)))  # DIAG
                 self.phase = 'center'                          # explicit: re-route / re-sense next tick
                 return (0.0, 0.0, False)
+        self.events.append("UNSTICK exhausted -> stuck cell=%s" % (self.cell,))  # DIAG
         self.phase = 'stuck'
         return (0.0, 0.0, False)
+
+    def _escape(self, pose, t):
+        """No-progress escape (top-of-step watchdog fired: no new ground for no_progress_s while
+        confined). Escalates: Tier 1 = decisive one-cell reverse to the adjacent known-open prev_cell
+        (fresh re-approach clears a position-dependent false front_block); Tier 2 = ALSO give up the
+        blocked forward edge (real brain wall, reopenable by _unstick) so flood/next_cell route to the
+        nearest optimistic frontier (flood already IS 'retreat to nearest unexplored junction'). No
+        valid reverse -> hand to _unstick AT MOST ONCE this tick (terminal; C2 revives next tick)."""
+        x, y, yaw = pose
+        self.escape_count += 1
+        self.escape_tier = min(self.escape_tier + 1, self.max_escape_tier)
+        self.explore_t = t                                   # reset on EVERY entry (no busy-re-fire)
+        pc = self.prev_cell
+        man = None if pc is None else abs(pc[0] - self.cell[0]) + abs(pc[1] - self.cell[1])
+        d_prev = (_dir_name((pc[0] - self.cell[0], pc[1] - self.cell[1]))
+                  if (pc is not None and man == 1) else None)
+        can_reverse = d_prev is not None and not self.brain.is_wall(self.cell, d_prev)
+        gave_up = self.escape_tier >= 2 and self.hop_dir is not None
+        if gave_up:                                              # Tier 2+: GIVE UP the blocked edge
+            dirn = _dir_name(self.hop_dir)
+            nb = (self.cell[0] + DIRS[dirn][0], self.cell[1] + DIRS[dirn][1])
+            if nb not in self.visited:                           # never give up an edge to a VISITED cell
+                self.brain.mark(self.cell, dirn, is_wall=True)   # the real routing change (symmetric)
+                self._stamp_loco_wall(self.cell, dirn)           # provenance: _unstick reopens loco first
+                self.committed.discard(self.cell)
+                self.failed_hops.pop((self.cell, dirn), None)
+            else:
+                gave_up = False                                  # visited edge stays open (accurate logging)
+        self.events.append("ESCAPE tier=%d count=%d cell=%s prev=%s can_reverse=%s gave_up_edge=%s"  # DIAG
+                           % (self.escape_tier, self.escape_count, self.cell, self.prev_cell,
+                              can_reverse, gave_up))
+        if can_reverse:                                          # Tier 1 & 2: one-cell reverse to prev
+            dx, dy = DIRS[d_prev]
+            self.backout_target = pc
+            self.backout_cardinal = math.atan2(-dy, -dx)         # face away from prev -> reverse into it
+            self.backout_start = (x, y)
+            self.backout_deadline = t + self.backout_timeout_s
+            self.center_start = None
+            self._escape_backout = True
+            self.phase = 'backout'
+            return (0.0, 0.0, False)
+        return self._unstick(t)                                  # no reverse -> _unstick once (MF5)
 
     def _turn(self, pose, t):
         yaw = pose[2]
@@ -353,11 +464,54 @@ class MazeMotion:
                                   kd=self.kd_turn)        # decel profile: no latency overshoot
         return (0.0, w, False)
 
+    def _stall_event(self, reason, perp, moved, marked, x, y, yaw):
+        """DIAG: record WHY a drive hop stalled + the sensor state, to pinpoint the doorway pin
+        mechanism (false front_block vs side-wall wedge_stop vs off-center vs real pin)."""
+        if self.hop_dir and self.hop_dir[1] != 0:           # N/S travel -> side walls are E/W
+            near = min(perp.get('E', -1.0), perp.get('W', -1.0))
+        elif self.hop_dir:                                  # E/W travel -> side walls are N/S
+            near = min(perp.get('N', -1.0), perp.get('S', -1.0))
+        else:
+            near = -1.0
+        ct = (grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)
+              if self.hop_dir else 0.0)
+        dn = _dir_name(self.hop_dir) if self.hop_dir else '?'
+        key = (self.cell, dn)
+        self.events.append(
+            "STALL reason=%s cell=%s dir=%s perp_front=%.2f near=%.2f cross_track=%.2f yaw_err=%.2f "
+            "moved=%.2f last_v=%.2f hop_att=%d failed=%d marked=%s"
+            % (reason, self.cell, dn, perp.get(dn, -1.0), near, ct,
+               _norm(self.target_cardinal - yaw), moved, self._last_drive_v,
+               self.hop_attempts.get(key, 0), self.failed_hops.get(key, 0), marked))
+
+    def _keepout_clearance(self, near, ranges, amin, ainc):
+        """Nearest obstacle in the FORWARD hemisphere + sides (cos(bearing) >= 0), EXCLUDING the rear
+        (a wall behind is not a forward-collision risk). Filters spurious near-zero / inf returns.
+        Catches forward/side/corner returns the cardinal perp misses, without the rear walls that
+        caused spurious creep (run 20260624_220733)."""
+        best = near
+        for i, r in enumerate(ranges):
+            if r is None or not math.isfinite(r) or r <= 0.05:
+                continue
+            if math.cos(amin + i * ainc) >= 0.0 and r < best:   # forward half-plane (|bearing| <= 90 deg)
+                best = r
+        return best
+
+    def _front_blocked(self, perp, dirn, moved, yaw):
+        """A hop is front-blocked only when ALIGNED: a short front reading while mis-aligned is an
+        angled beam hitting a side/corner wall (false), not a real obstacle (walls come from SENSING)."""
+        return (perp[dirn] < self.front_block_m and moved > 0.3
+                and abs(_norm(self.target_cardinal - yaw)) < self.front_block_max_yaw)
+
     def _drive(self, pose, scan, t):
         x, y, yaw = pose
         ranges, amin, ainc = scan
         moved = math.hypot(x - self.hop_start[0], y - self.hop_start[1])
         if moved >= CELL_SIZE_M - self.hop_arrive_slack_m:           # arrived
+            self.brain.mark_traversal(self.cell, self.hop_target)    # count the COMPLETED traversal (was: at pick)
+            _dirn = _dir_name(self.hop_dir)                          # clear failed_hops for THIS edge,
+            self.failed_hops.pop((self.cell, _dirn), None)           #   keyed on the PRE-advance cell (MF6)
+            self.failed_hops.pop((self.hop_target, OPP[_dirn]), None)
             self.cell = self.hop_target
             self.hop_attempts.clear()                                # fresh cell -> reset attempts
             self.settle_until = t + self.settle_s
@@ -366,30 +520,44 @@ class MazeMotion:
             self.phase = 'center'
             return (0.0, 0.0, False)
         dirn = _dir_name(self.hop_dir)
+        perp = cell_wall_perp_dist(ranges, amin, ainc, yaw)          # DIAG: computed early so stall events have it
+        near = (min(perp['E'], perp['W']) if self.hop_dir[1] != 0 else min(perp['N'], perp['S']))  # side clearance
+        keepout_clear = self._keepout_clearance(near, ranges, amin, ainc)   # safety bubble (forward+sides): wedge gate + slow
         # Wedge detector: while driving, if the robot makes no real progress for wedge_detect_s
         # it is physically PINNED (the ~13-14 cell plateau: pose frozen, can't move in the tight
         # interior). Recover by reversing to free it, rather than grinding the hop timeout. Count
         # it as a hop attempt; after max_hop_attempts give up on this edge (mark wall, re-route).
         if math.hypot(x - self.progress_pose[0], y - self.progress_pose[1]) > self.wedge_move_eps:
             self.progress_pose = (x, y); self.progress_t = t
+        elif abs(_norm(self.target_cardinal - yaw)) >= self.wedge_realign_yaw:  # heading far off cardinal =>
+            self.progress_pose = (x, y); self.progress_t = t  # follower turns in place (v~=0), not a pin -> no false wedge
         elif (t - self.progress_t) > self.wedge_detect_s:
             key = (self.cell, dirn)
             self.hop_attempts[key] = self.hop_attempts.get(key, 0) + 1
+            self.failed_hops[key] = self.failed_hops.get(key, 0) + 1   # cross-occupation accumulator
+            marked = (self.hop_attempts[key] >= self.max_hop_attempts
+                      or self.failed_hops[key] >= self.failed_hop_limit)  # per-dwell OR cross-visit
+            self._stall_event('wedge', perp, moved, marked, x, y, yaw)    # DIAG
             self.center_start = None
             self.align_start = None; self.latched_cardinal = None
             self.settle_until = t + self.settle_s
-            if self.hop_attempts[key] >= self.max_hop_attempts:      # give up this edge (last resort)
-                self.brain.mark(self.cell, dirn, is_wall=True)
-                self._stamp_loco_wall(self.cell, dirn)               # re-openable by _unstick (both reps)
-                self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
-                self.hop_attempts.pop(key, None)                     # so a poor re-entry won't re-sense
+            if marked:
+                nb = (self.cell[0] + DIRS[dirn][0], self.cell[1] + DIRS[dirn][1])
+                if nb not in self.visited:                           # never wall an edge to a VISITED cell
+                    ct = grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)
+                    if self.mem.mark_wall_on_failure(self.cell, dirn, perp_front=perp[dirn],
+                                                     near=near, cross_track=ct,
+                                                     safety_radius=self.safety_radius):  # suppress lateral pins
+                        self._stamp_loco_wall(self.cell, dirn)       # re-openable by _unstick (both reps)
+                        self.committed.discard(self.cell)            # un-commit; cell stays in `sensed`
+                self.hop_attempts.pop(key, None)                     # reset per-edge counter (re-route/re-approach)
+                self.failed_hops.pop(key, None)
                 self.phase = 'center'                                # (and clobber) the WALL it just set
             else:
                 self.recover_until = t + self.recover_s              # reverse to un-wedge
                 self.phase = 'recover'
             return (0.0, 0.0, False)
-        perp = cell_wall_perp_dist(ranges, amin, ainc, yaw)
-        front_blocked = perp[dirn] < self.front_block_m and moved > 0.3
+        front_blocked = self._front_blocked(perp, dirn, moved, yaw)
         if front_blocked or t >= self.hop_deadline:
             # A hop toward a sensed-OPEN edge failed (a front wall appeared, or it stalled).
             # Do NOT trust this as a wall: walls come from SENSING (robust projection-median),
@@ -400,11 +568,21 @@ class MazeMotion:
             # Mark a wall only as a last resort after max_hop_attempts genuine retries.
             key = (self.cell, dirn)
             self.hop_attempts[key] = self.hop_attempts.get(key, 0) + 1
-            if self.hop_attempts[key] >= self.max_hop_attempts:
-                self.brain.mark(self.cell, dirn, is_wall=True)
-                self._stamp_loco_wall(self.cell, dirn)               # re-openable by _unstick (both reps)
-                self.committed.discard(self.cell)                    # un-commit; cell stays in `sensed`
-                self.hop_attempts.pop(key, None)                     # so a poor re-entry won't re-sense
+            self.failed_hops[key] = self.failed_hops.get(key, 0) + 1   # cross-occupation accumulator
+            marked = (self.hop_attempts[key] >= self.max_hop_attempts
+                      or self.failed_hops[key] >= self.failed_hop_limit)
+            self._stall_event('front_block' if front_blocked else 'deadline', perp, moved, marked, x, y, yaw)  # DIAG
+            if marked:
+                nb = (self.cell[0] + DIRS[dirn][0], self.cell[1] + DIRS[dirn][1])
+                if nb not in self.visited:                           # never wall an edge to a VISITED cell
+                    ct = grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)
+                    if self.mem.mark_wall_on_failure(self.cell, dirn, perp_front=perp[dirn],
+                                                     near=near, cross_track=ct,
+                                                     safety_radius=self.safety_radius):  # suppress lateral pins
+                        self._stamp_loco_wall(self.cell, dirn)       # re-openable by _unstick (both reps)
+                        self.committed.discard(self.cell)            # un-commit; cell stays in `sensed`
+                self.hop_attempts.pop(key, None)                     # reset per-edge counter (re-route/re-approach)
+                self.failed_hops.pop(key, None)
             # non-max: just retry (re-center); re-sensing happens only from a GOOD re-entry, never
             # from this off-position post-failure pose (that off-pose re-sense was the (3,4) churn).
             self.settle_until = t + self.settle_s
@@ -416,19 +594,21 @@ class MazeMotion:
                        min(self.grid_fallback_max_m,
                            grid_cross_track(x, y, self.cell, self.hop_dir, cell_size_m=CELL_SIZE_M)))  # odom grid centerline (valid in open junctions), clamped to the smooth creep-and-steer regime
         d_left, d_right = side_distances(perp, self.hop_dir)
-        if self.hop_dir[1] != 0:                                   # N/S travel: sides are E/W
-            near = min(perp['E'], perp['W'])
-        else:                                                      # E/W travel: sides are N/S
-            near = min(perp['N'], perp['S'])
         self.dbg['sides'] = (round(d_left, 2), round(d_right, 2))  # live centerline diagnostics
-        self.dbg['near'] = round(near, 2)
-        v, w = corridor_follow_command(yaw, self.target_cardinal, d_left, d_right, near,
+        self.dbg['near'] = round(near, 2)                          # near + keepout_clear computed early (above)
+        self.dbg['keepout'] = round(keepout_clear, 2)
+        v, w = corridor_follow_command(yaw, self.target_cardinal, d_left, d_right, keepout_clear,
                                        fallback_cross=fallback, wall_seen_m=self.wall_seen_m,
                                        half_corridor_m=self.half_corridor_m,
                                        max_cross_track_m=self.max_cross_track_m,
                                        v_max=self.cruise_v, w_max=self.w_max,
                                        lookahead_m=self.lookahead_m, wedge_slow_m=self.wedge_slow_m,
-                                       wedge_stop_m=self.wedge_stop_m, wedge_v_floor=self.wedge_v_floor)
+                                       wedge_stop_m=self.wedge_stop_m, wedge_v_floor=self.wedge_v_floor,
+                                       max_cross_steer=self.max_cross_steer,
+                                       safety_radius=self.safety_radius,
+                                       keepout_max_cross_steer=self.keepout_max_cross_steer,
+                                       keepout_repulse_gain=self.keepout_repulse_gain)
+        self._last_drive_v = v                                       # DIAG: spot wedge_stop (v~=0)
         return (v, w, False)
 
     def _recover(self, pose, t):
@@ -461,8 +641,9 @@ class MazeMotion:
         if arrived or t >= self.backout_deadline:
             if arrived:
                 self.cell = self.backout_target
-            else:
-                self.backout_attempts[self.cell] = self.backout_attempts.get(self.cell, 0) + 1
+            elif not self._escape_backout:                # an escape-reverse timeout must NOT charge
+                self.backout_attempts[self.cell] = self.backout_attempts.get(self.cell, 0) + 1  # the dead-end budget
+            self._escape_backout = False                  # clear on leaving backout (arrival or timeout)
             self.settle_until = t + self.settle_s
             self.center_start = None
             self.align_start = None; self.latched_cardinal = None

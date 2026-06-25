@@ -277,3 +277,66 @@ def test_grid_cross_track_all_dirs():
 def test_grid_cross_track_on_centerline_is_zero():
     assert grid_cross_track(10.0, 10.0, (5, 5), (0, 1)) == 0.0
     assert grid_cross_track(10.0, 10.0, (5, 5), (1, 0)) == 0.0
+
+
+def test_cross_track_steer_is_capped():
+    # huge cross_track, robot aligned to cardinal (yaw=0): steering capped to kp_ang*max_cross_steer
+    v, w = corridor_drive_command(0.0, 0.0, 2.0, None, kp_ang=1.5, lookahead_m=0.7, max_cross_steer=0.25)
+    assert abs(w - (-1.5 * 0.25)) < 1e-6          # capped (uncapped would be atan2(-2,0.7)*1.5 -> clamp -0.5)
+
+
+def test_small_cross_track_unaffected_by_cap():
+    w = corridor_drive_command(0.0, 0.0, 0.10, None, kp_ang=1.5, lookahead_m=0.7, max_cross_steer=0.25)[1]
+    assert abs(w - 1.5 * math.atan2(-0.10, 0.7)) < 1e-6   # below cap -> unchanged
+
+
+def test_max_cross_steer_default_loosened():
+    import inspect
+    assert inspect.signature(corridor_drive_command).parameters['max_cross_steer'].default == 0.35
+    assert inspect.signature(corridor_follow_command).parameters['max_cross_steer'].default == 0.35
+
+
+def test_keepout_overrides_cross_steer_cap_when_close():
+    # near a wall (clearance < safety_radius): emergency cap allows stronger centering than normal.
+    # kp_ang=1.0, w_max=2.0 so w doesn't saturate and the two caps are distinguishable.
+    w_close = corridor_drive_command(0.0, 0.0, 2.0, 0.5, kp_ang=1.0, w_max=2.0, lookahead_m=0.7,
+                                     max_cross_steer=0.35, safety_radius=0.60, keepout_max_cross_steer=0.8)[1]
+    w_far = corridor_drive_command(0.0, 0.0, 2.0, 1.0, kp_ang=1.0, w_max=2.0, lookahead_m=0.7,
+                                   max_cross_steer=0.35, safety_radius=0.60, keepout_max_cross_steer=0.8)[1]
+    assert abs(w_close - (-0.8)) < 1e-6     # clearance 0.5 < 0.60 -> emergency cap 0.8 -> w=-0.8
+    assert abs(w_far - (-0.35)) < 1e-6      # clearance 1.0 >= 0.60 -> normal cap 0.35 -> w=-0.35
+
+
+def test_repulsion_steers_away_from_near_right_wall():
+    import math
+    from tugbot_maze.hop_controller import corridor_follow_command
+    yaw = math.pi / 2; cardinal = math.pi / 2                      # N travel; for N: left=W, right=E
+    _, w0 = corridor_follow_command(yaw, cardinal, 0.85, 0.85, 0.85, safety_radius=0.70)  # centered
+    _, w1 = corridor_follow_command(yaw, cardinal, 0.85, 0.30, 0.30, safety_radius=0.70)  # near right (E)
+    assert w1 > w0                                                 # near right -> steer LEFT (+w, CCW toward W)
+
+
+def test_repulsion_steers_away_from_near_left_wall():
+    import math
+    from tugbot_maze.hop_controller import corridor_follow_command
+    yaw = math.pi / 2; cardinal = math.pi / 2
+    _, w0 = corridor_follow_command(yaw, cardinal, 0.85, 0.85, 0.85, safety_radius=0.70)
+    _, w1 = corridor_follow_command(yaw, cardinal, 0.30, 0.85, 0.30, safety_radius=0.70)  # near left (W)
+    assert w1 < w0                                                 # near left -> steer RIGHT (-w)
+
+
+def test_repulsion_noop_when_centered_and_clear():
+    import math
+    from tugbot_maze.hop_controller import corridor_follow_command
+    yaw = math.pi / 2; cardinal = math.pi / 2
+    v, w = corridor_follow_command(yaw, cardinal, 0.88, 0.88, 0.88, safety_radius=0.70)
+    assert abs(w) < 1e-9 and v > 0.0                               # both sides > radius -> bias 0
+
+
+def test_repulsion_stays_within_cross_track_envelope():
+    import math
+    from tugbot_maze.hop_controller import corridor_follow_command
+    yaw = math.pi / 2; cardinal = math.pi / 2
+    _, w = corridor_follow_command(yaw, cardinal, 0.85, 0.05, 0.05, safety_radius=0.70,
+                                   keepout_repulse_gain=5.0, max_cross_track_m=0.6, w_max=0.5)
+    assert abs(w) <= 0.5 + 1e-9
