@@ -61,3 +61,19 @@ def test_observe_resets_desync_when_synced():
     m.observe((5, 9), 9.23, 18.0, 101.0)
     assert m.reconcile_target((5, 9), 9.23, 18.0, 110.0) == (5, 9)
     assert m.reconciles == 0
+
+
+def test_reconcile_resets_clock_when_pose_moves():
+    m = MapMemory(FloodFillBrain(), reconcile_persist_s=8.0, reconcile_move_eps=0.5)
+    m.observe((4, 9), 9.23, 18.0, 100.0)                 # desync begins at pose x=9.23 (odom (5,9))
+    m.observe((4, 9), 9.85, 18.0, 104.0)                 # still odom (5,9) but moved 0.62m -> clock restarts
+    assert m.reconcile_target((4, 9), 9.85, 18.0, 108.5) == (4, 9)   # 4.5s since restart < 8 -> no snap
+    assert m.reconciles == 0
+
+
+def test_reconcile_snaps_when_pose_stays_pinned():
+    m = MapMemory(FloodFillBrain(), reconcile_persist_s=8.0, reconcile_move_eps=0.5)
+    m.observe((4, 9), 9.23, 18.0, 100.0)
+    m.observe((4, 9), 9.25, 18.02, 104.0)                # pose within eps -> clock keeps running
+    assert m.reconcile_target((4, 9), 9.25, 18.02, 108.5) == (5, 9)  # ~8.5s pinned -> snap
+    assert m.reconciles == 1

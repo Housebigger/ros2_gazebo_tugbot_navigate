@@ -10,6 +10,7 @@ Sensing-driven marks stay in MazeMotion._center (already quality-gated). ROS-fre
 beyond the monotonic t passed in.
 """
 from __future__ import annotations
+import math
 from typing import Optional
 
 from tugbot_maze.flood_fill_brain import FloodFillBrain, pose_to_cell, in_grid, Cell
@@ -17,12 +18,15 @@ from tugbot_maze.flood_fill_brain import FloodFillBrain, pose_to_cell, in_grid, 
 
 class MapMemory:
     def __init__(self, brain: FloodFillBrain, *, front_open_m: float = 1.3,
-                 pin_cross_m: float = 0.5, reconcile_persist_s: float = 8.0):
+                 pin_cross_m: float = 0.5, reconcile_persist_s: float = 8.0,
+                 reconcile_move_eps: float = 0.5):
         self.brain = brain
         self.front_open_m = front_open_m          # a forward reading > this is "open" (no wall ahead)
         self.pin_cross_m = pin_cross_m            # |cross_track| beyond this is "well off centerline"
         self.reconcile_persist_s = reconcile_persist_s
+        self.reconcile_move_eps = reconcile_move_eps
         self._desync_since: Optional[float] = None
+        self._desync_pose = None
         self.suppressed = 0                       # observable: false WALL marks suppressed
         self.reconciles = 0                       # observable: forced odom snaps
 
@@ -44,12 +48,21 @@ class MapMemory:
         return True
 
     def observe(self, dcell: Cell, x: float, y: float, t: float) -> None:
-        """Call every tick. Track how long the planner cell has disagreed with the odom cell."""
+        """Call every tick. Track how long the planner cell has disagreed with the odom cell
+        WHILE THE ROBOT IS PINNED. The desync clock RESTARTS whenever the pose moves more than
+        reconcile_move_eps from where the desync began -- a slowly TRANSITING boundary straddle
+        (pose moving) is not a pin and must not reconcile; only a genuinely frozen body at a
+        wrong cell (the (4,9) trap) accrues the full window."""
         odom = pose_to_cell(x, y)
         if (not in_grid(odom)) or odom == dcell:
             self._desync_since = None
-        elif self._desync_since is None:
+            self._desync_pose = None
+        elif self._desync_since is None:                       # desync begins -> anchor the clock + pose
             self._desync_since = t
+            self._desync_pose = (x, y)
+        elif math.hypot(x - self._desync_pose[0], y - self._desync_pose[1]) > self.reconcile_move_eps:
+            self._desync_since = t                             # pose moved -> transiting, not pinned -> restart
+            self._desync_pose = (x, y)
 
     def reconcile_target(self, dcell: Cell, x: float, y: float, t: float) -> Cell:
         """Return the odom cell to adopt when the desync has persisted >= reconcile_persist_s,
