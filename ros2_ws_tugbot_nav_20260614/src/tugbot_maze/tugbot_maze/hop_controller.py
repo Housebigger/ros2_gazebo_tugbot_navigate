@@ -141,7 +141,7 @@ def corridor_drive_command(yaw: float, cardinal_yaw: float, cross_track: float,
                            slow_angle: float = 0.6, wedge_slow_m: float = 0.60,
                            wedge_stop_m: float = 0.40, wedge_v_floor: float = 0.10,
                            max_cross_steer: float = 0.35,
-                           safety_radius: float = 0.60, keepout_max_cross_steer: float = 0.8
+                           safety_radius: float = 0.70, keepout_max_cross_steer: float = 0.8
                            ) -> Tuple[float, float]:
     """Drive forward along `cardinal_yaw` while converging onto the corridor centerline.
 
@@ -173,7 +173,8 @@ def corridor_follow_command(yaw: float, cardinal_yaw: float, d_left: float, d_ri
                             slow_angle: float = 0.6, wedge_slow_m: float = 0.60,
                             wedge_stop_m: float = 0.40, wedge_v_floor: float = 0.10,
                             max_cross_steer: float = 0.35,
-                            safety_radius: float = 0.60, keepout_max_cross_steer: float = 0.8
+                            safety_radius: float = 0.70, keepout_max_cross_steer: float = 0.8,
+                            keepout_repulse_gain: float = 0.6
                             ) -> Tuple[float, float]:
     """Symmetric wall-following straight drive. Derives the lateral centerline offset from the
     two side-wall distances (centerline_cross), clamps it, then steers/throttles with the proven
@@ -182,6 +183,15 @@ def corridor_follow_command(yaw: float, cardinal_yaw: float, d_left: float, d_ri
     vanished at openings -- closing the off-center-entry -> wedge path."""
     cross = centerline_cross(d_left, d_right, fallback_cross=fallback_cross,
                              wall_seen_m=wall_seen_m, half_corridor_m=half_corridor_m)
+    # Active keep-out repulsion: a side wall within safety_radius pushes the centerline target
+    # AWAY from it (toward the open side), proportional to the intrusion depth. centerline_cross
+    # only converges to CENTER; this repels so the 0.35 m robot won't graze the corner while
+    # creeping through a doorway. cross is +left-of-centre and the follower steers to reduce it,
+    # so near-LEFT (d_left<d_right) adds +bias (steer right, away); near-RIGHT adds -bias.
+    near_side = min(d_left, d_right)
+    if near_side < safety_radius:
+        bias = keepout_repulse_gain * (safety_radius - near_side)
+        cross += bias if d_left < d_right else -bias
     cross = max(-max_cross_track_m, min(max_cross_track_m, cross))
     return corridor_drive_command(yaw, cardinal_yaw, cross, near_wall_m, v_max=v_max,
                                   w_max=w_max, kp_ang=kp_ang, lookahead_m=lookahead_m,
