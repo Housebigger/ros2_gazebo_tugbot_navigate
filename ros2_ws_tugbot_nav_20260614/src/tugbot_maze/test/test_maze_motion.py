@@ -709,3 +709,28 @@ def test_drive_giveup_marks_wall_when_not_lateral_pin():
     m._drive((8.2, 18.0, 0.0), scan, m.wedge_detect_s + 5.0)
     assert m.brain.is_wall((4, 9), 'E') is True                  # real giveup -> marked
     assert m.mem.suppressed == 0
+
+
+def test_drive_giveup_suppresses_real_lateral_pin_end_to_end():
+    # End-to-end through the REAL MapMemory: a lateral-pin geometry (open front + side wall within
+    # safety_radius + large cross-track) must SUPPRESS the giveup mark, yet still reset the per-edge
+    # counter and re-center (retry, don't wall). n=16 -> only the cardinal-aligned beam lands in each
+    # +/-22deg window, so per-direction perp == that beam.
+    import math
+    from tugbot_maze.maze_motion import MazeMotion
+    m = MazeMotion()
+    m.cell = (4, 9); m.hop_dir = (1, 0); m.hop_target = (5, 9); m.target_cardinal = 0.0  # E hop
+    m.phase = 'drive'; m.hop_start = (8.0, 18.6); m.hop_deadline = 1e12
+    m.progress_pose = (8.2, 18.6); m.progress_t = 0.0            # no progress, aligned -> wedge giveup
+    m.visited = {(4, 9)}                                          # (5,9) NOT visited -> giveup attempts a mark
+    m.hop_attempts[((4, 9), 'E')] = m.max_hop_attempts - 1        # next failure marks
+    n = 16; ranges = [3.0] * n                                   # open all around by default
+    ranges[12] = 0.4                                             # N side wall at 0.4 < safety_radius (0.70)
+    scan = (ranges, -math.pi, 2 * math.pi / n)
+    # cross_track = pose_y - 2*row = 18.6 - 18.0 = 0.6 > pin_cross_m (0.5); perp['E']=3.0 > front_open_m
+    m._drive((8.2, 18.6, 0.0), scan, m.wedge_detect_s + 5.0)
+    assert m.mem.suppressed == 1                                  # real gateway classified it a pin
+    assert m.brain.is_wall((4, 9), 'E') is False                 # suppressed -> edge NOT walled
+    assert ((4, 9), 'E') not in m.locomotion_walls               # no loco-wall stamped
+    assert ((4, 9), 'E') not in m.hop_attempts                   # per-edge counter still reset
+    assert m.phase == 'center'                                   # ...and re-centered (retry)
