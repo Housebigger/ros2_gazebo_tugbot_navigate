@@ -24,7 +24,7 @@ from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, CELL_SIZE_M, pose_to_cell, in_grid, DIRS, OPP,
     open_exits)
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
-from tugbot_maze.wall_localize import cell_center_offset
+from tugbot_maze.wall_localize import cell_center_offset, perimeter_offset
 from tugbot_maze.hop_controller import (
     centering_command, grid_cross_track,
     side_distances, corridor_follow_command, profiled_turn_command, backout_command)
@@ -123,6 +123,7 @@ class MazeMotion:
         self.center_start = None        # when the current center episode began (for the timeout)
         self.prev_yaw = None; self.prev_t = None; self.yaw_rate = 0.0   # for PD damping
         self.dbg = {}                   # last-tick diagnostics (offset, walls, near) for logging
+        self.pose_corr = [0.0, 0.0]     # global odom drift correction (perimeter re-anchor)
         # --- no-progress watchdog + escalating escape + failed-hop deprioritizer ---
         self.last_seen_cell = ENTRANCE_CELL   # for cell-change detection (prev_cell)
         self.prev_cell = None                 # cell occupied just before the current one (reverse target)
@@ -142,6 +143,7 @@ class MazeMotion:
         self.wedge_realign_yaw = 0.4          # |yaw_err|>=this => follower turns in place (v~=0), not a pin
 
     def step(self, pose, scan, t) -> Tuple[float, float, bool]:
+        pose = (pose[0] + self.pose_corr[0], pose[1] + self.pose_corr[1], pose[2])  # global drift correction
         yaw = pose[2]                                   # measured yaw rate (for PD damping)
         if self.prev_t is not None and t > self.prev_t:
             self.yaw_rate = _norm(yaw - self.prev_yaw) / (t - self.prev_t)
@@ -195,6 +197,7 @@ class MazeMotion:
         if self.center_start is None:
             self.center_start = t
         ox, oy = cell_center_offset(ranges, amin, ainc, yaw)
+        ox, oy = self._perimeter_reanchor(x, y, ranges, amin, ainc, yaw, ox, oy)
         v, w, centered = centering_command((x, y, yaw), ox, oy,
                                            tol=self.center_tol_m, yaw_tol=self.yaw_tol_rad,
                                            w_max=self.turn_w_max, kp_ang=self.kp_turn,
@@ -229,6 +232,7 @@ class MazeMotion:
         # Quality gate (BINDING = position), atomic with the sense below. The (3,4) flicker is
         # position-driven (boundary-straddle), not yaw -- so position is the commit criterion.
         ox, oy = cell_center_offset(ranges, amin, ainc, yaw)
+        ox, oy = self._perimeter_reanchor(x, y, ranges, amin, ainc, yaw, ox, oy, reset=False)
         pos_ok = within_commit_offset(ox, oy, self.commit_offset_tol)
         taxis = 0 if (self.hop_dir and self.hop_dir[0] != 0) else 1
         coord = x if taxis == 0 else y
@@ -258,6 +262,27 @@ class MazeMotion:
                         'committed': self.cell in self.committed, 'resensed': was_sensed,
                         'corrob': self.corrob.get(self.cell, (None, 0))[1]}
         return self._route(x, y, t)
+
+    def _perimeter_reanchor(self, x, y, ranges, amin, ainc, yaw, ox, oy, *, reset=True):
+        """Boundary-cell absolute re-anchor from the maze perimeter wall. Returns the boundary-axis
+        centering offset overridden with the perimeter's absolute value (drift-immune, trustworthy
+        even when off-center). When reset=True, ALSO resets the global odom drift on that axis
+        (pose_corr) so downstream cells navigate accurately. Odom-gated: a perimeter return whose
+        implied cell disagrees with pose_to_cell is an interior wall (mis-fire) and is skipped.
+        reset is False at the second (commit-gate) call site so pose_corr is updated at most once
+        per tick (the first call already reset it)."""
+        peri = perimeter_offset(ranges, amin, ainc, yaw, self.cell)
+        for axis, (true_coord, implied) in peri.items():
+            if implied != pose_to_cell(x, y)[axis]:
+                continue                                  # odom-gate: interior wall read -> skip
+            if reset:
+                self.pose_corr[axis] += true_coord - (x if axis == 0 else y)   # global drift reset
+            off = true_coord - CELL_SIZE_M * self.cell[axis]              # local recenter offset (robot-minus-center)
+            if axis == 0:
+                ox = off
+            else:
+                oy = off
+        return ox, oy
 
     def _reanchor(self, x, y):
         """Bounded (1-cell) re-anchor of self.cell to the odom cell, with hysteresis: only flip

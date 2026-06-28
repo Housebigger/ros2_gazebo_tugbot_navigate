@@ -20,6 +20,7 @@ import numpy as np
 import yaml
 
 from tugbot_maze.flood_fill_brain import CELL_SIZE_M
+from tugbot_maze.footprint import FOOT_X_FRONT, FOOT_X_REAR, FOOT_HALF_W
 
 Segment = Tuple[float, float, float, float]   # (x0, y0, x1, y1), map frame
 
@@ -180,11 +181,57 @@ class MazeSim:
         proj = self._a + t[:, None] * self._e                     # (S,2)
         return np.linalg.norm(p[None, :] - proj, axis=1)          # (S,)
 
-    def collides(self, x, y) -> bool:
-        d = self._point_seg_dists(x, y)
-        if d.size == 0:
+    def collides(self, x, y, yaw=None) -> bool:
+        """Footprint collision oracle. With yaw, tests the TRUE asymmetric footprint rectangle
+        (base_link X in [FOOT_X_REAR, FOOT_X_FRONT], |Y| <= FOOT_HALF_W) inflated by the wall
+        half-thickness -- catches the rear gripper, tighter on the sides than the old 0.35 m circle.
+        Without yaw (legacy x,y-only callers), falls back to a conservative bounding circle."""
+        if self.segs.shape[0] == 0:
             return False
-        return bool(np.any(d < self.robot_radius_m + self.wall_half_thickness_m))
+        m = self.wall_half_thickness_m
+        if yaw is None:
+            d = self._point_seg_dists(x, y)
+            radius = max(abs(FOOT_X_REAR), FOOT_X_FRONT, FOOT_HALF_W,
+                         math.hypot(FOOT_X_REAR, FOOT_HALF_W))
+            return bool(np.any(d < radius + m))
+        # yaw given: EXACT min distance from each wall-segment centerline to the TRUE footprint
+        # rectangle [FOOT_X_REAR, FOOT_X_FRONT] x [-FOOT_HALF_W, FOOT_HALF_W] in base_link.
+        # Collision iff that distance < wall_half_thickness (the wall surface reaches the body).
+        c, s = math.cos(yaw), math.sin(yaw)
+        ax = self.segs[:, 0] - x; ay = self.segs[:, 1] - y
+        bx = self.segs[:, 2] - x; by = self.segs[:, 3] - y
+        Ax =  c * ax + s * ay;  Ay = -s * ax + c * ay        # seg endpoint A in base_link (S,)
+        Bx =  c * bx + s * by;  By = -s * bx + c * by        # seg endpoint B in base_link (S,)
+        x0, x1 = FOOT_X_REAR, FOOT_X_FRONT
+        y0, y1 = -FOOT_HALF_W, FOOT_HALF_W
+        dx = Bx - Ax; dy = By - Ay
+        # (1) Liang-Barsky: does segment intersect the rectangle? -> distance 0
+        t0 = np.zeros(Ax.shape); t1 = np.ones(Ax.shape)
+        intersects = np.ones(Ax.shape, dtype=bool)
+        for pi, qi in ((-dx, Ax - x0), (dx, x1 - Ax), (-dy, Ay - y0), (dy, y1 - Ay)):
+            parallel = np.abs(pi) < 1e-12
+            intersects &= ~(parallel & (qi < 0))             # parallel & outside slab -> miss
+            with np.errstate(divide='ignore', invalid='ignore'):
+                r = qi / pi
+            t0 = np.where((pi < 0) & ~parallel, np.maximum(t0, r), t0)   # entering
+            t1 = np.where((pi > 0) & ~parallel, np.minimum(t1, r), t1)   # leaving
+        intersects &= (t0 <= t1)
+        # (2) disjoint case: min of seg-endpoints-to-box and box-corners-to-seg
+        def _pt_to_box(px, py):
+            ox = np.maximum(np.maximum(x0 - px, 0.0), px - x1)
+            oy = np.maximum(np.maximum(y0 - py, 0.0), py - y1)
+            return np.hypot(ox, oy)
+        def _corner_to_seg(cx, cy):
+            wx = cx - Ax; wy = cy - Ay
+            L2 = dx * dx + dy * dy
+            tt = np.where(L2 > 1e-12, (wx * dx + wy * dy) / np.maximum(L2, 1e-12), 0.0)
+            tt = np.clip(tt, 0.0, 1.0)
+            return np.hypot(cx - (Ax + tt * dx), cy - (Ay + tt * dy))
+        mind = np.minimum.reduce([_pt_to_box(Ax, Ay), _pt_to_box(Bx, By),
+                                  _corner_to_seg(x0, y0), _corner_to_seg(x1, y0),
+                                  _corner_to_seg(x1, y1), _corner_to_seg(x0, y1)])
+        mind = np.where(intersects, 0.0, mind)
+        return bool(np.any(mind < m))
 
     def step(self, v, w, dt):
         if self.cmd_latency_steps > 0:                 # apply the command from N ticks ago
@@ -198,7 +245,7 @@ class MazeSim:
             v, w = self.v_cur, self.w_cur
         nx = self.x + v * math.cos(self.yaw) * dt
         ny = self.y + v * math.sin(self.yaw) * dt
-        if not self.collides(nx, ny):
+        if not self.collides(nx, ny, self.yaw):
             self.x, self.y = nx, ny
         # Rotation always applies (turning in place is safe; lets TURN_AWAY recover).
         self.yaw = math.atan2(math.sin(self.yaw + w * dt), math.cos(self.yaw + w * dt))
