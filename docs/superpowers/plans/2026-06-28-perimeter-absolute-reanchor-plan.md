@@ -195,6 +195,34 @@ IMPORTANT: confirm the sign in Step 1. If `cell_center_offset` returns center-mi
 
 ---
 
+## Task 2 — REVISION (2026-06-28): global drift-reset + odom cross-check gate
+
+Empirical findings during execution (verified): `perimeter_offset` (a) returns `{}` for interior cells (the bulk of the NE struggle, cx 8,9, gets no help), and (b) **mis-fires** when `self.cell` is a boundary cell but the robot is physically one cell short with a walled edge — it reads the interior wall as the perimeter (robot at (18.6,10) in cell (9,5) believing (10,5) → returns `(20.61, cell 10)`). `pose_to_cell(odom)` is correct there `(9,5)` and disagrees with the perimeter's implied cell → an **odom cross-check catches the mis-fire**. The user chose the **GLOBAL DRIFT-RESET** integration (resets accumulated odom drift on a boundary fix → downstream interior cells benefit, not just the boundary leg). This SUPERSEDES the Task 2 Step 4 "local offset override only" above.
+
+Revised Task 2:
+- **`__init__`:** add `self.pose_corr = [0.0, 0.0]` (accumulated drift correction, map frame).
+- **top of `step()`:** apply it before dispatch — `pose = (pose[0] + self.pose_corr[0], pose[1] + self.pose_corr[1], pose[2])` — so EVERY phase uses the corrected pose. (On this baseline `step` is the plain dispatch — no footprint wrapper.)
+- **in `_center` (boundary cells), after `ox,oy = cell_center_offset(...)`:**
+```python
+        peri = perimeter_offset(ranges, amin, ainc, yaw, self.cell)
+        for axis, (true_coord, implied) in peri.items():
+            pc = pose_to_cell(x, y)                      # x,y are the CORRECTED pose in _center
+            if implied != pc[axis]:
+                continue                                 # odom-gate: perimeter saw an interior wall (mis-fire) -> skip
+            self.pose_corr[axis] += true_coord - (x if axis == 0 else y)   # GLOBAL drift reset on this axis
+            off = true_coord - CELL_SIZE_M * self.cell[axis]               # LOCAL recenter offset (robot-minus-center)
+            if axis == 0: ox = off
+            else:         oy = off
+```
+  (Confirm `x, y` in `_center` are already the corrected pose; if `_center` re-reads `pose[0]/pose[1]`, ensure those are the corrected values. Match the `ox/oy` sign to `cell_center_offset` = **robot-minus-center**, confirmed in T1.) The global reset makes the corrected pose match the absolute perimeter coordinate → subsequent ticks (and `_reanchor`, which uses the corrected pose) are accurate, fixing the 1-cell desync downstream WITHOUT a separate perimeter dcell-correction.
+- **Tests** (`test_maze_motion_sim.py`):
+  1. **recenter guard** (as in Step 2 above): robot 0.6 m off-center in (10,5) recenters to x≈20 via the local offset.
+  2. **global drift-reset:** with injected odom drift, drive the robot into a boundary cell; after `_center`, `MazeMotion`'s corrected pose matches the true `sim` pose within tol (drift removed) — FAILS without the reset.
+  3. **mis-fire guard:** robot physically in (9,5) believing (10,5) on a walled-edge row → `pose_corr` unchanged and no false dcell flip (the odom-gate skipped the bad reading).
+- Commit message: `feat: perimeter global drift-reset re-anchor in _center (odom-gated)`.
+
+---
+
 ## Task 3: Final regression + build sanity + Gazebo handoff
 
 **Files:** none (verification only).
