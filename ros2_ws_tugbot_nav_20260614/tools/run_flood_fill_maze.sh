@@ -4,7 +4,7 @@
 # and must reach the exit on its own. Same process/SHM hygiene as run_solver_maze.sh.
 #
 # Usage: tools/run_flood_fill_maze.sh [MAX_SECONDS] [HEADLESS] [USE_RVIZ] [POSE_SOURCE] [SENSE_DEBUG]
-#   POSE_SOURCE: slam (default) | odom_locked  (wheel-odometry localization)
+#   POSE_SOURCE: scan_match (default; ICP to known wall map) | odom_locked | slam
 #   SENSE_DEBUG: false (default) | true  (log per-cell sensed walls + min LIDAR ranges)
 set +u
 WS="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,7 +15,7 @@ source install/setup.bash
 MAX_SECONDS="${1:-1500}"
 HEADLESS="${2:-true}"
 USE_RVIZ="${3:-false}"
-POSE_SOURCE="${4:-slam}"
+POSE_SOURCE="${4:-scan_match}"
 SENSE_DEBUG="${5:-false}"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 ART="log/flood_fill_run_${STAMP}"

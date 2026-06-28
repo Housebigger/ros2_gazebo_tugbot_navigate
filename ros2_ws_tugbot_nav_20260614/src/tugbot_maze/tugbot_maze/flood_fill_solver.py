@@ -34,10 +34,11 @@ class FloodFillSolver(Node):
         self.base_frame = self.declare_parameter('base_frame', 'base_link').value
         self.map_frame = self.declare_parameter('map_frame', 'map').value
         self.odom_frame = self.declare_parameter('odom_frame', 'odom').value
-        # pose_source: 'slam' (live map->base_link) | 'odom_locked' (freeze map->odom
-        # once at startup, then track on wheel odometry only -- avoids slam_toolbox
-        # pose degradation in the narrow repetitive corridors).
-        self.pose_source = self.declare_parameter('pose_source', 'slam').value
+        # pose_source: 'scan_match' (DEFAULT) -- ICP-match the live LIDAR to the known
+        # wall map for an absolute pose every tick; the only source that reliably
+        # completes the maze (8/8 Gazebo). | 'odom_locked' (freeze map->odom at startup,
+        # then wheel odometry only) | 'slam' (live map->base_link). Latter two kept for A/B.
+        self.pose_source = self.declare_parameter('pose_source', 'scan_match').value
         # sense_debug: dump full LIDAR scan at startup for footprint characterization.
         self.sense_debug = bool(self.declare_parameter('sense_debug', False).value)
         self.goal_events_topic = self.declare_parameter('goal_events_topic', '/maze/goal_events').value

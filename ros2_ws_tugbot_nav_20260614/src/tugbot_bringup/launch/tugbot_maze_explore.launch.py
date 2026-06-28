@@ -274,7 +274,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_respawn', default_value='False', description='Respawn Nav2 nodes if they crash.'),
         DeclareLaunchArgument('log_level', default_value='info', description='Nav2 log level.'),
         DeclareLaunchArgument('explorer_type', default_value='maze_dfs', description='Explorer implementation: maze_dfs, frontier, tremaux, wall_follower, or flood_fill.'),
-        DeclareLaunchArgument('pose_source', default_value='slam', description="flood_fill localization source: 'slam' (live map->base_link) or 'odom_locked' (freeze map->odom at startup, then track wheel odometry only -- avoids SLAM degradation in narrow corridors)."),
+        DeclareLaunchArgument('pose_source', default_value='scan_match', description="flood_fill localization source: 'scan_match' (DEFAULT; ICP-match live LIDAR to the known wall map for an absolute pose -- reliably completes the maze, 8/8 Gazebo), 'odom_locked' (freeze map->odom at startup, then wheel odometry only), or 'slam' (live map->base_link)."),
         DeclareLaunchArgument('sense_debug', default_value='false', description='flood_fill: log per-cell sensed walls + min LIDAR ranges (diagnostics).'),
         DeclareLaunchArgument('junction_log_dir', default_value='', description='flood_fill: directory for the per-run junctions.json artifact (empty -> <cwd>/log).'),
         DeclareLaunchArgument('follow_side', default_value='left', description='Wall-follower hand for explorer_type:=wall_follower: left or right. The maze_sim guarantee proof selected left as faster and robust.'),

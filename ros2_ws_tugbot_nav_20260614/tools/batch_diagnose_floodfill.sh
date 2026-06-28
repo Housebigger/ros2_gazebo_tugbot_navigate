@@ -6,7 +6,7 @@
 # single-run anecdote.
 #
 # Usage: tools/batch_diagnose_floodfill.sh [N] [MAX_SECONDS] [HEADLESS] [USE_RVIZ] [POSE_SOURCE] [SENSE_DEBUG]
-#   defaults: N=8 MAX_SECONDS=1200 HEADLESS=true USE_RVIZ=false POSE_SOURCE=odom_locked SENSE_DEBUG=true
+#   defaults: N=8 MAX_SECONDS=1200 HEADLESS=true USE_RVIZ=false POSE_SOURCE=scan_match SENSE_DEBUG=true
 #
 # Notes:
 #   - HEADLESS=true / USE_RVIZ=false are deliberate batch defaults (speed +
@@ -23,7 +23,7 @@ N="${1:-8}"
 MAX_SECONDS="${2:-1200}"
 HEADLESS="${3:-true}"
 USE_RVIZ="${4:-false}"
-POSE_SOURCE="${5:-odom_locked}"
+POSE_SOURCE="${5:-scan_match}"
 SENSE_DEBUG="${6:-true}"
 
 STAMP="$(date +%Y%m%d_%H%M%S)"
