@@ -145,7 +145,11 @@ class FloodFillSolver(Node):
             return self._sm_corrected
         prior = odom_prior(self._sm_corrected, self._sm_last_odom, odom_base)
         s = self.scan_msg
-        est, info = self.localizer.correct(prior, s.ranges, s.angle_min, s.angle_increment)
+        try:
+            est, info = self.localizer.correct(prior, s.ranges, s.angle_min, s.angle_increment)
+        except Exception as e:           # never let a localizer hiccup kill the node mid-batch
+            self.get_logger().warning('scan_match correct() failed: %r; using odom prior' % (e,))
+            est, info = prior, {'rejected': True, 'error': repr(e)}
         self._sm_corrected = est
         self._sm_last_odom = odom_base
         self._sm_seq = self._scan_seq
