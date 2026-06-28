@@ -181,8 +181,8 @@ class FloodFillSolver(Node):
             return
         odom_cell = pose_to_cell(pose[0], pose[1])
         dist = math.hypot(pose[0] - self.exit_x, pose[1] - self.exit_y)
-        self.get_logger().info('DIAG pose=(%.2f, %.2f) dcell=%s odomcell=%s dist_to_exit=%.2f phase=%s/%s mem_supp=%d mem_rec=%d'
-                               % (pose[0], pose[1], self.motion.cell, odom_cell, dist,
+        self.get_logger().info('DIAG pose=(%.2f, %.2f, %.2f) dcell=%s odomcell=%s dist_to_exit=%.2f phase=%s/%s mem_supp=%d mem_rec=%d'
+                               % (pose[0], pose[1], pose[2], self.motion.cell, odom_cell, dist,
                                   self.phase, self.motion.phase,
                                   self.motion.mem.suppressed, self.motion.mem.reconciles))
         if self.sense_debug and self.motion.dbg:
