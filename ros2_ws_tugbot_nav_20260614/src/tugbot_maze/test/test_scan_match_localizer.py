@@ -62,3 +62,77 @@ def test_associate_empty_returns_distinct_unaliased_arrays():
     foot2, n2, dist2 = loc2._associate(np.array([[1.0, 2.0]]))
     assert foot2 is not n2
     assert np.all(np.isinf(dist2))
+
+
+import pytest
+from tugbot_maze.maze_sim import MazeSim, load_segments
+from tugbot_maze.scan_match_localizer import _wrap
+
+_SCAN_KW = dict(n_beams=360, fov_rad=2 * math.pi)
+
+
+def _scan_at(segs, pose):
+    sim = MazeSim(segs, (pose[0], pose[1]), pose[2])
+    return sim.scan(**_SCAN_KW)
+
+
+# Corridor poses (cell centers) with clear side walls and good observability.
+_RECOVERY_POSES = [(2.0, 2.0, math.pi / 2), (2.0, 6.0, math.pi / 2),
+                   (8.0, 2.0, 0.0), (4.0, 8.0, 0.0)]
+
+
+@pytest.mark.parametrize("true_pose", _RECOVERY_POSES)
+def test_recovers_true_pose_under_prior_drift(true_pose):
+    segs = load_segments()
+    loc = ScanMatchLocalizer(segs, scan_offset_x=0.0)
+    ranges, amin, ainc = _scan_at(segs, true_pose)
+    prior = (true_pose[0] + 0.35, true_pose[1] - 0.25, true_pose[2] + math.radians(7))
+    est, info = loc.correct(prior, ranges, amin, ainc)
+    assert not info["rejected"], f"unexpectedly rejected at {true_pose}: {info}"
+    assert math.hypot(est[0] - true_pose[0], est[1] - true_pose[1]) < 0.05, info
+    assert abs(_wrap(est[2] - true_pose[2])) < math.radians(2), info
+
+
+def test_no_half_thickness_bias_at_true_pose():
+    segs = load_segments()
+    loc = ScanMatchLocalizer(segs, scan_offset_x=0.0)
+    true_pose = (2.0, 2.0, math.pi / 2)
+    ranges, amin, ainc = _scan_at(segs, true_pose)
+    est, _ = loc.correct(true_pose, ranges, amin, ainc)   # prior == truth
+    assert math.hypot(est[0] - true_pose[0], est[1] - true_pose[1]) < 0.02
+
+
+def test_open_axis_falls_back_to_prior():
+    # infinite-feeling N-S corridor: walls only on the x axis -> y unobservable
+    walls = [(-1.0, -5.0, -1.0, 5.0), (1.0, -5.0, 1.0, 5.0)]
+    loc = ScanMatchLocalizer(walls, scan_offset_x=0.0, usable_range_m=8.0)
+    ranges, amin, ainc = _scan_at(walls, (0.0, 0.0, math.pi / 2))
+    prior = (0.3, 0.4, math.pi / 2)                  # x off (constrained), y off (free)
+    est, info = loc.correct(prior, ranges, amin, ainc)
+    assert "y" in info["fell_back"], info
+    assert abs(est[0] - 0.0) < 0.05, f"x not corrected: {est}"
+    assert abs(est[1] - 0.4) < 0.05, f"y should stay at prior: {est}"
+
+
+def test_rejects_correction_beyond_clamp():
+    segs = load_segments()
+    loc = ScanMatchLocalizer(segs, scan_offset_x=0.0, trans_clamp_m=0.5)
+    true_pose = (2.0, 2.0, math.pi / 2)
+    ranges, amin, ainc = _scan_at(segs, true_pose)
+    prior = (true_pose[0] + 1.2, true_pose[1], true_pose[2])   # 1.2 m > clamp
+    est, info = loc.correct(prior, ranges, amin, ainc)
+    assert info["rejected"]
+    assert est == prior                                       # no wild jump
+
+
+def test_robust_to_outlier_returns():
+    segs = load_segments()
+    loc = ScanMatchLocalizer(segs, scan_offset_x=0.0)
+    true_pose = (8.0, 2.0, 0.0)
+    ranges, amin, ainc = _scan_at(segs, true_pose)
+    ranges = list(ranges)
+    for k in range(0, len(ranges), 11):                       # ~9% spurious short returns
+        ranges[k] = 0.4
+    prior = (true_pose[0] + 0.3, true_pose[1] - 0.2, true_pose[2] + math.radians(5))
+    est, info = loc.correct(prior, ranges, amin, ainc)
+    assert math.hypot(est[0] - true_pose[0], est[1] - true_pose[1]) < 0.08, info

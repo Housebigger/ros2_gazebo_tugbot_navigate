@@ -92,3 +92,76 @@ class ScanMatchLocalizer:
         sign = np.sign(np.sum((pts - foot_j) * n_j, axis=1))  # orient toward robot point
         sign[sign == 0] = 1.0
         return foot_j, n_j * sign[:, None], dist
+
+    def _solve_one(self, pose: Pose2D, pts: np.ndarray, max_corr_dist):
+        """One associate + gated Gauss-Newton step. Return (delta(3,), info)."""
+        foot, n, dist = self._associate(pts)
+        # Make the normal genuinely robot-facing (the documented _associate contract):
+        # orient toward the robot CENTER, not toward the endpoint. The two agree whenever
+        # the endpoint lies on the robot's side of the wall, but a prior error larger than
+        # the wall half-thickness pushes the endpoint across the wall centerline; orienting
+        # toward the endpoint there flips the residual's gradient and traps ICP at a spurious
+        # minimum ~half_thickness off the truth. Toward-center keeps r a true SIGNED residual
+        # (endpoint distance past the robot-side wall face) for arbitrary prior drift.
+        to_robot = np.stack([pose[0] - foot[:, 0], pose[1] - foot[:, 1]], axis=1)
+        sgn = np.sign(np.sum(to_robot * n, axis=1))
+        sgn[sgn == 0] = 1.0
+        n = n * sgn[:, None]
+        r = np.sum((pts - foot) * n, axis=1) - self.wall_half_thickness_m   # signed residual
+        if max_corr_dist is None:
+            inl = np.ones(pts.shape[0], dtype=bool)
+        else:
+            inl = np.abs(dist - self.wall_half_thickness_m) <= max_corr_dist
+        n_inl = int(np.count_nonzero(inl))
+        info: Dict = {"n_inliers": n_inl, "fell_back": set()}
+        if n_inl < self.min_inliers:
+            info["under_inliers"] = True
+            return np.zeros(3), info
+        ni, ri, pi = n[inl], r[inl], pts[inl]
+        cx, cy = pose[0], pose[1]
+        J = np.stack([ni[:, 0], ni[:, 1],
+                      -ni[:, 0] * (pi[:, 1] - cy) + ni[:, 1] * (pi[:, 0] - cx)], axis=1)
+        JtJ = J.T @ J
+        Jtb = -J.T @ ri
+        evals, evecs = np.linalg.eigh(JtJ[:2, :2])           # ascending
+        yaw_info = float(JtJ[2, 2])
+        damp = self.lm_lambda * max(float(np.trace(JtJ)), 1.0)
+        delta = np.linalg.solve(JtJ + damp * np.eye(3), Jtb)
+        fell = set()
+        if evals[0] < self.min_eig:                          # suppress weak translational dir
+            v = evecs[:, 0]
+            delta[:2] = delta[:2] - (delta[:2] @ v) * v
+            fell.add("x" if abs(v[0]) >= abs(v[1]) else "y")
+        if yaw_info < self.min_yaw_info:                     # suppress weak yaw
+            delta[2] = 0.0
+            fell.add("yaw")
+        info.update({"eig_min": float(evals[0]), "eig_max": float(evals[1]),
+                     "yaw_info": yaw_info, "fell_back": fell,
+                     "residual_rms": float(np.sqrt(np.mean(ri * ri)))})
+        return delta, info
+
+    def correct(self, prior_pose: Pose2D, ranges, angle_min, angle_inc):
+        """Return (corrected_pose, info). info: n_inliers, residual_rms, eig_min, eig_max,
+        fell_back (set in {'x','y','yaw'}), rejected (bool), iters (int)."""
+        x0, y0, t0 = float(prior_pose[0]), float(prior_pose[1]), float(prior_pose[2])
+        pose: Pose2D = (x0, y0, t0)
+        info: Dict = {"n_inliers": 0, "residual_rms": float("nan"), "eig_min": 0.0,
+                      "eig_max": 0.0, "fell_back": set(), "rejected": False, "iters": 0}
+        for it in range(self.max_iters):
+            pts = self._beams_to_points(pose, ranges, angle_min, angle_inc)
+            max_corr = None if it == 0 else self.max_corr_dist_m
+            delta, step = self._solve_one(pose, pts, max_corr)
+            info.update(step)
+            info["iters"] = it + 1
+            if step.get("under_inliers"):
+                info["rejected"] = True
+                return (x0, y0, t0), info
+            pose = (pose[0] + float(delta[0]), pose[1] + float(delta[1]),
+                    _wrap(pose[2] + float(delta[2])))
+            if math.hypot(float(delta[0]), float(delta[1])) < self.tol_m and abs(float(delta[2])) < 1e-3:
+                break
+        if (math.hypot(pose[0] - x0, pose[1] - y0) > self.trans_clamp_m
+                or abs(_wrap(pose[2] - t0)) > self.yaw_clamp_rad):
+            info["rejected"] = True
+            return (x0, y0, t0), info
+        return pose, info
