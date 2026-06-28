@@ -21,7 +21,9 @@ from tugbot_maze.flood_fill_brain import (
 from tugbot_maze.map_memory import MapMemory
 from tugbot_maze.maze_motion import MazeMotion
 from tugbot_maze.junction_log import JunctionLog, update_junctions
-from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw
+from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw, odom_prior
+from tugbot_maze.scan_match_localizer import ScanMatchLocalizer
+from tugbot_maze.maze_sim import load_segments
 from tugbot_maze.wall_follow_control import entering_done
 
 
@@ -65,6 +67,13 @@ class FloodFillSolver(Node):
                                  hop_timeout_s=self.hop_timeout_s,
                                  mem=self.mem)
         self.junctions = JunctionLog()
+        self._scan_seq = 0
+        self._sm_corrected = None
+        self._sm_last_odom = None
+        self._sm_seq = -1
+        self._sm_info = None
+        self.localizer = (ScanMatchLocalizer(load_segments())
+                          if self.pose_source == 'scan_match' else None)
         self._prev_motion_cell = None
         self.scan_msg: Optional[LaserScan] = None
         self.create_subscription(LaserScan, self.scan_topic, self._scan_cb, 10)
@@ -84,6 +93,7 @@ class FloodFillSolver(Node):
 
     def _scan_cb(self, msg):
         self.scan_msg = msg
+        self._scan_seq += 1
 
     def _lookup_tf(self, parent, child):
         try:
@@ -95,6 +105,8 @@ class FloodFillSolver(Node):
                 quat_to_yaw(q.x, q.y, q.z, q.w))
 
     def _lookup_pose(self):
+        if self.pose_source == 'scan_match':
+            return self._lookup_scan_match()
         if self.pose_source != 'odom_locked':
             return self._lookup_tf(self.map_frame, self.base_frame)
         # odom_locked: pose = (frozen map->odom) o (live odom->base_link).
@@ -113,6 +125,36 @@ class FloodFillSolver(Node):
                 'POSE_SOURCE=odom_locked: froze map->odom=(%.3f, %.3f, %.3f rad); '
                 'tracking on wheel odometry only from here.' % mo)
         return compose_2d(self.map_to_odom_locked, odom_base)
+
+    def _lookup_scan_match(self):
+        odom_base = self._lookup_tf(self.odom_frame, self.base_frame)
+        map_base = self._lookup_tf(self.map_frame, self.base_frame)
+        # Bootstrap: track live SLAM TF and seed anchors until driving with a scan in hand.
+        if self.phase in ('startup', 'entering') or self.scan_msg is None or odom_base is None:
+            if map_base is not None:
+                self._sm_corrected = map_base
+                self._sm_last_odom = odom_base
+                self._sm_seq = self._scan_seq
+            return map_base if map_base is not None else self._sm_corrected
+        if self._sm_corrected is None or self._sm_last_odom is None:
+            if map_base is not None:
+                self._sm_corrected = map_base
+            self._sm_last_odom = odom_base
+            return self._sm_corrected
+        if self._scan_seq == self._sm_seq:                 # already corrected for this scan
+            return self._sm_corrected
+        prior = odom_prior(self._sm_corrected, self._sm_last_odom, odom_base)
+        s = self.scan_msg
+        try:
+            est, info = self.localizer.correct(prior, s.ranges, s.angle_min, s.angle_increment)
+        except Exception as e:           # never let a localizer hiccup kill the node mid-batch
+            self.get_logger().warning('scan_match correct() failed: %r; using odom prior' % (e,))
+            est, info = prior, {'rejected': True, 'error': repr(e)}
+        self._sm_corrected = est
+        self._sm_last_odom = odom_base
+        self._sm_seq = self._scan_seq
+        self._sm_info = info
+        return est
 
     def _publish_cmd(self, v, w):
         m = Twist(); m.linear.x = float(v); m.angular.z = float(w); self.cmd_vel_pub.publish(m)
@@ -185,6 +227,14 @@ class FloodFillSolver(Node):
                                % (pose[0], pose[1], pose[2], self.motion.cell, odom_cell, dist,
                                   self.phase, self.motion.phase,
                                   self.motion.mem.suppressed, self.motion.mem.reconciles))
+        if self.pose_source == 'scan_match' and self._sm_info is not None:
+            i = self._sm_info
+            self.get_logger().info(
+                'MATCH rms=%.3f n=%d eigmin=%.2f fb=%s rejected=%s'
+                % (i.get('residual_rms', float('nan')), i.get('n_inliers', 0),
+                   i.get('eig_min', 0.0),
+                   ','.join(sorted(i.get('fell_back', set()))) or '-',
+                   i.get('rejected', False)))
         if self.sense_debug and self.motion.dbg:
             d = self.motion.dbg
             self.get_logger().info('SENSE cell=%s pose=%s off=%s good=%s committed=%s corrob=%s walls=%s'

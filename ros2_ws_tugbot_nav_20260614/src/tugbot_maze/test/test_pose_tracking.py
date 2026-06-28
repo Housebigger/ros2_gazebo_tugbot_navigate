@@ -1,6 +1,6 @@
 import math
 
-from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw
+from tugbot_maze.pose_tracking import compose_2d, inverse_2d, odom_prior, quat_to_yaw
 
 
 def test_compose_identity_parent_returns_child():
@@ -47,3 +47,29 @@ def test_quat_to_yaw_ninety_degrees():
 def test_quat_to_yaw_negative_ninety_degrees():
     h = math.sqrt(2) / 2
     assert math.isclose(quat_to_yaw(0.0, 0.0, -h, h), -math.pi / 2, abs_tol=1e-6)
+
+
+def _close(a, b, tol=1e-9):
+    return all(abs(x - y) < tol for x, y in zip(a, b))
+
+
+def test_inverse_2d_is_group_inverse():
+    p = (1.3, -2.1, 0.7)
+    assert _close(compose_2d(inverse_2d(p), p), (0.0, 0.0, 0.0))
+    assert _close(compose_2d(p, inverse_2d(p)), (0.0, 0.0, 0.0))
+
+
+def test_odom_prior_no_motion_returns_last_corrected():
+    corrected = (5.0, 3.0, 1.0)
+    odom = (2.0, 2.0, 0.5)
+    assert _close(odom_prior(corrected, odom, odom), corrected)
+
+
+def test_odom_prior_applies_odom_delta_in_body_frame():
+    # corrected pose faces +y (yaw=pi/2); odom advances +1 along its own x.
+    corrected = (0.0, 0.0, math.pi / 2)
+    last_odom = (0.0, 0.0, 0.0)
+    cur_odom = (1.0, 0.0, 0.0)            # +1 m forward in odom/base x
+    prior = odom_prior(corrected, last_odom, cur_odom)
+    # forward in body frame (yaw=pi/2) maps to +y in map
+    assert _close(prior, (0.0, 1.0, math.pi / 2), tol=1e-9)

@@ -25,3 +25,20 @@ def compose_2d(parent_to_mid: Pose2D, mid_to_child: Pose2D) -> Pose2D:
     x2, y2, t2 = mid_to_child
     c, s = math.cos(t1), math.sin(t1)
     return (x1 + c * x2 - s * y2, y1 + s * x2 + c * y2, t1 + t2)
+
+
+def inverse_2d(p: Pose2D) -> Pose2D:
+    """Inverse of a planar rigid transform."""
+    x, y, t = p
+    c, s = math.cos(t), math.sin(t)
+    return (-(c * x + s * y), (s * x - c * y), -t)
+
+
+def odom_prior(last_corrected: Pose2D, last_odom: Pose2D, cur_odom: Pose2D) -> Pose2D:
+    """Propagate the last corrected map pose by the odom motion since the last tick.
+
+    delta = (odom_last)^-1 o (odom_cur)  is the body-frame motion; applying it to
+    the last corrected map pose gives the prior for the current tick's scan match.
+    """
+    delta = compose_2d(inverse_2d(last_odom), cur_odom)
+    return compose_2d(last_corrected, delta)
