@@ -89,7 +89,8 @@ core, validated offline by a ROS-free maze simulator *before* any Gazebo run:
 `slam_toolbox` runs only to bootstrap the initial `map→base_link` pose; once driving, scan-match
 owns the pose. **Nav2 / costmaps are not in the flood-fill control loop.** Spec & plan:
 `docs/superpowers/specs/2026-06-28-scan-match-localization-design.md`,
-`docs/superpowers/plans/2026-06-28-scan-match-localization.md`.
+`docs/superpowers/plans/2026-06-28-scan-match-localization.md`. **Success-experience
+writeup** (the journey + transferable lessons): `doc/doc_experience/maze_autonomy_success_experience.md`.
 
 ## Diagnostic tooling
 
