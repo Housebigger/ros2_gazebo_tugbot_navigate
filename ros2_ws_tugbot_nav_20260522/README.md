@@ -7,10 +7,13 @@ from `ros2_ws_tugbot_nav_20260514` and reuses its proven Gazebo + `ros_gz_bridge
 (GCN)**; fully-autonomous discovery was attempted at length but plateaus short of the exit.
 
 > **Successor:** the fully-autonomous traversal problem was later *solved* in
-> `../ros2_ws_tugbot_nav_20260614` via reactive **wall-following** (the maze is a perfect
-> maze — a tree — so the left/right-hand rule is guaranteed to reach a boundary exit). See
-> that workspace's `README.md`. This `20260522` workspace remains the GCN-completion + the
-> autonomous-DFS baseline that motivated it.
+> `../ros2_ws_tugbot_nav_20260614` — **not** by wall-following (that "5/5" turned out to be a
+> perimeter *cheat*), but by a micromouse-style **cell-grid flood-fill** solver with
+> **scan-match localization** against the known wall map (`pose_source=scan_match`): 16/16
+> autonomous `EXIT_REACHED`, ~560 s/run, matching GCN's time but via autonomous route
+> discovery. The breakthrough was localization (the open-region odom desync), not search. See
+> that workspace's `README.md`. This `20260522` GCN workspace remains the reliable *guided*
+> (pre-computed) baseline + the autonomous-DFS baseline that motivated the whole effort.
 
 ## Modes
 

@@ -1,10 +1,19 @@
 # ros2_gazebo_tugbot_navigate
 
-Tugbot 在 ROS 2 Jazzy + Gazebo Harmonic 中的阶段化导航实验仓库：从视觉巡航最小闭环，到已知静态地图 Nav2 导航，再到未知环境自主探索建图、地图归档与自建地图静态回放。
+Tugbot 在 ROS 2 Jazzy + Gazebo Harmonic 中的阶段化导航实验仓库：从视觉巡航最小闭环，到已知静态地图 Nav2 导航，再到未知环境自主探索建图、地图归档与自建地图静态回放，最终到结构化迷宫的自主走迷宫通关（已知地图定位 + 自主路线发现）。
 
 这个仓库不是单一最终 demo，而是保留了三条互相衔接、可独立运行的工作空间。它适合用来学习和复现实验型移动机器人系统如何逐步搭建：先让仿真、桥接、感知和控制闭环稳定，再接入 Nav2 已知地图导航，最后扩展到 slam_toolbox 在线建图、frontier/perimeter 自主探索、地图保存、推荐地图归档和静态地图导航回放。
 
-说明：当前仓库中的最新自主探索工作空间目录名是 `ros2_ws_tugbot_nav_20260514/`。
+说明：仓库现含五个工作空间；最新里程碑是 `ros2_ws_tugbot_nav_20260614/`（结构化迷宫的自主走迷宫通关）。`ros2_ws_tugbot_nav_20260514/` 是自主探索建图与静态回放的里程碑工作空间，仍然有效。
+
+## 最新里程碑（2026-06）：结构化迷宫的自主走迷宫通关
+
+在 0419/0513/0514 的视觉巡航、已知地图导航、自主探索建图之上，仓库又演进出两个面向“结构化迷宫求解”的工作空间，把目标从“建图”推进到“在已知迷宫中自主走到出口”：
+
+- `ros2_ws_tugbot_nav_20260522`（GCN 引导走廊导航）：沿预计算的 BFS 走廊序列可靠通关（3/3），但路线是**预先计算**的，不是自主发现。长期作为唯一可靠的迷宫通关基线。
+- `ros2_ws_tugbot_nav_20260614`（自主迷宫求解，**当前最新**）：micromouse 式格栅 flood-fill 求解器 + `MazeMotion` 走廊运动 FSM，**用已知迷宫地图做 scan-match 绝对定位**（`pose_source=scan_match`，默认），路线仍由 flood-fill **自主发现**。**可靠自主通关：两批受控实验 16/16 `EXIT_REACHED`，~560s/次**——与 GCN 同速，但为自主发现。
+
+关键突破是**定位而非搜索**：受控诊断显示里程计死推会失同步（75% 的运行 desync），机器人自以为居中实则漂移 → 误感墙 → 误路（odom 下 0/8 通关）。改为每 tick 用 LIDAR 对已知墙图做 point-to-line ICP 求**绝对位姿**后，失同步归零，原有自主性自然生效（16/16）。配套的真实足迹碰撞 oracle 把碰撞率从 odom 下的 ~25–61% 测准并降到 ~0.33%（仅 cell (3,9) 一处边际擦碰残留）。完整说明见 `ros2_ws_tugbot_nav_20260614/README.md`。
 
 ## 当前结论
 
@@ -63,13 +72,15 @@ ros2_ws_tugbot_nav_20260514/doc/doc_report/phase15_phase14_map_manual_acceptance
 ros2_ws_tugbot_nav_20260514/doc/doc_report/phase16_phase14_static_replay_entry_report.md
 ```
 
-## 三个工作空间
+## 五个工作空间
 
 | 工作空间 | 定位 | 主要能力 | 推荐读者 |
 | --- | --- | --- | --- |
 | `ros2_ws_tugbot_20260419` | 视觉巡航最小闭环 | Gazebo + camera + 蓝线检测 + PID 控制 + 丢线搜索恢复 | 想理解最小仿真闭环、感知/控制分层的人 |
 | `ros2_ws_tugbot_nav_20260513` | 已知静态地图 Nav2 基线 | Gazebo + LaserScan + AMCL + map_server + Nav2 + RViz 人工 goal | 想复现经典已知地图导航的人 |
 | `ros2_ws_tugbot_nav_20260514` | 自主探索建图、推荐地图归档与静态回放 | 在线 SLAM、SLAM+Nav2、frontier/perimeter 探索、no-spin 稳定建图、Phase 14 推荐地图、Phase 14 静态回放入口 | 想研究未知环境探索建图完整链路的人 |
+| `ros2_ws_tugbot_nav_20260522` | 引导走廊迷宫通关（GCN） | 预计算 BFS 走廊序列可靠通关（3/3，guided）；Nav2/SLAM | 想看可靠但预计算的迷宫通关基线的人 |
+| `ros2_ws_tugbot_nav_20260614` | 自主迷宫求解（**当前最新**） | flood-fill 求解 + MazeMotion 运动 FSM + scan-match 已知地图定位；自主路线发现，16/16 通关 | 想研究自主迷宫求解与“已知地图定位”如何破解开放区定位墙的人 |
 
 ### 1. `ros2_ws_tugbot_20260419`：视觉巡航最小闭环
 
@@ -345,17 +356,22 @@ ros2_gazebo_tugbot_navigate/
 │       ├── tugbot_gazebo/
 │       ├── tugbot_navigation/
 │       └── tugbot_bringup/
-└── ros2_ws_tugbot_nav_20260514/
+├── ros2_ws_tugbot_nav_20260514/
+│   ├── README.md
+│   ├── doc/
+│   │   ├── doc_report/
+│   │   └── doc_experience/
+│   └── src/
+│       ├── tugbot_description/
+│       ├── tugbot_gazebo/
+│       ├── tugbot_navigation/
+│       ├── tugbot_bringup/
+│       └── tugbot_exploration/
+├── ros2_ws_tugbot_nav_20260522/        # GCN 引导走廊迷宫通关（src/tugbot_maze, tugbot_bringup, …）
+└── ros2_ws_tugbot_nav_20260614/        # 自主迷宫求解：flood-fill + scan-match 已知地图定位
     ├── README.md
-    ├── doc/
-    │   ├── doc_report/
-    │   └── doc_experience/
-    └── src/
-        ├── tugbot_description/
-        ├── tugbot_gazebo/
-        ├── tugbot_navigation/
-        ├── tugbot_bringup/
-        └── tugbot_exploration/
+    ├── tools/                          # run_flood_fill_maze.sh, batch_diagnose_floodfill.sh, diagnose_floodfill_runs.py
+    └── src/tugbot_maze/                # flood_fill_solver, maze_motion, scan_match_localizer, cell_walls, maze_sim, footprint, …
 ```
 
 说明：各工作空间下的 `build/`、`install/`、`log/` 是 colcon 构建产物，不是理解源码的首要入口。新 clone 后建议在对应工作空间内重新构建。
@@ -372,6 +388,8 @@ ros2_gazebo_tugbot_navigate/
 6. 回看 `ros2_ws_tugbot_nav_20260514/doc/doc_report/phase15_phase14_map_manual_acceptance_archive_report.md`，理解 Phase 14 推荐地图如何归档为当前成果。
 7. 回看 `ros2_ws_tugbot_nav_20260514/doc/doc_report/phase14_no_spin_mapping_stability_report.md`，理解 no-spin / 低角速度策略为什么被采用。
 8. 如果要继续改探索策略，读 `ros2_ws_tugbot_nav_20260514/doc/doc_experience/tugbot_autonomous_mapping_success_experience.md`。
+9. 读 `ros2_ws_tugbot_nav_20260522/README.md`，理解 GCN 引导走廊迷宫通关（可靠但预计算）。
+10. 读 `ros2_ws_tugbot_nav_20260614/README.md`，进入自主迷宫求解 + scan-match 已知地图定位，理解“开放区两轴定位墙”如何被破解——这是项目当前最新里程碑。
 
 ## 常用验证命令
 
