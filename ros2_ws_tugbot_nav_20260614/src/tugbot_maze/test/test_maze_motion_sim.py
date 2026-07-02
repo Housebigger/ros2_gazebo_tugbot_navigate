@@ -57,9 +57,9 @@ def _run(drift, latency=0, dt=0.1, max_steps=30000):
 @pytest.mark.parametrize("drift,latency", [
     (0.0, 0),
     (0.03, 0),
-    pytest.param(0.05, 0, marks=pytest.mark.xfail(reason="genuine true-footprint collision the circle oracle hid; main-baseline measurement", strict=True)),
-    pytest.param(0.05, 2, marks=pytest.mark.xfail(reason="genuine true-footprint collision the circle oracle hid; main-baseline measurement", strict=True)),
-    pytest.param(0.05, 3, marks=pytest.mark.xfail(reason="genuine true-footprint collision the circle oracle hid; main-baseline measurement", strict=True)),
+    (0.05, 0),
+    (0.05, 2),
+    (0.05, 3),
 ])
 def test_reaches_exit_without_collision_or_desync(drift, latency):
     reached, collided, max_desync, _, _, esc = _run(drift, latency)
