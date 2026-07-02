@@ -114,10 +114,20 @@ def test_centering_done_when_within_tol_or_open():
     assert centering_command((2.0, 2.0, 0.0), None, None, tol=0.12) == (0.0, 0.0, True)
 
 
-def test_centering_faces_axis_cardinal_before_driving():
-    # 0.3 m EAST of centre (ox>0) while facing east (yaw 0): must turn to face WEST (pi) first
+def test_centering_reverses_instead_of_turning_180():
+    # 0.3 m EAST of centre (ox>0) while facing EAST (yaw 0): the centre is directly BEHIND.
+    # Reverse-translate west; do NOT rotate ~180deg to face west (that off-centre rotation is
+    # what swept the rear gripper into the wall).
     v, w, done = centering_command((2.3, 2.0, 0.0), 0.3, None, tol=0.12, yaw_tol=0.10)
-    assert done is False and v == 0.0 and abs(w) > 0.0      # turning in place, not driving
+    assert done is False and v < 0.0 and abs(w) < 1e-6
+
+
+def test_centering_reverses_north_overshoot_at_boundary():
+    # (3,9)-style arrival overshoot: 0.4 m NORTH of centre while still facing NORTH (+pi/2).
+    # Centre is behind along the heading -> reverse south (retreats into the cleared corridor),
+    # not a 180deg in-place rotation.
+    v, w, done = centering_command((6.04, 18.40, math.pi / 2), None, 0.40, tol=0.10, yaw_tol=0.10)
+    assert done is False and v < 0.0 and abs(w) < 1e-6
 
 
 def test_centering_drives_forward_once_aligned():

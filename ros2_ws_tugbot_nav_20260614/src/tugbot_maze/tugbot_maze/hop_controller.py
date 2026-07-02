@@ -4,9 +4,11 @@ robot turns toward its goal before driving (no overshoot).
 
 Three commands:
   - hop_command:      point-to-point drive to an (x,y) target (turn-then-drive).
-  - centering_command: cardinal-aligned 1-axis re-centering -- face the worse axis's map
-    cardinal, then drive forward to null that offset. No diagonal chase, so the robot
-    stays cardinal-aligned and converges (the chase oscillated and ate the hop deadline).
+  - centering_command: cardinal-aligned 1-axis re-centering -- drive ALONG the worse axis
+    (reverse if the centre is behind, forward if ahead; rotate-to-face only when the axis is
+    perpendicular). No diagonal chase, so the robot stays cardinal-aligned and converges (the
+    chase oscillated and ate the hop deadline). Reversing an overshoot avoids the ~180deg
+    in-place turn that swept the rear gripper into a near wall.
   - hop_drive_command: straight cell hop that HOLDS the cardinal heading with continuous
     steering, so a small start mis-alignment / diff-drive bias can't accumulate into the
     large lateral drift that desynced the discrete cell tracker and triggered false walls.
@@ -20,6 +22,9 @@ def _norm(a: float) -> float:
     return math.atan2(math.sin(a), math.cos(a))
 
 
+_PARALLEL_COS = math.cos(math.radians(45.0))   # |heading·axis| >= this -> heading ~parallel to the axis
+
+
 def centering_command(pose, ox: Optional[float], oy: Optional[float], *,
                       tol: float = 0.12, yaw_tol: float = 0.10,
                       v_max: float = 0.4, w_max: float = 0.5,
@@ -30,9 +35,12 @@ def centering_command(pose, ox: Optional[float], oy: Optional[float], *,
 
     (ox, oy) is the robot's offset from the cell centre in MAP axes (+x=E, +y=N), as
     returned by cell_center_offset (a component is None for an open axis with no wall to
-    reference). Returns (v, w, done). Corrects the larger out-of-tol axis by facing the
-    map cardinal that reduces it, then driving forward (speed proportional to the
-    remaining offset). done=True when every referenced axis is within tol."""
+    reference). Returns (v, w, done). Corrects the larger out-of-tol axis by driving ALONG
+    that axis: forward when the centre is ahead, and in REVERSE when the centre is behind
+    (an along-heading overshoot) -- reversing retreats into the just-traversed, clear
+    corridor and avoids the ~180deg in-place rotation that sweeps the asymmetric rear
+    gripper into a near wall. Rotate-to-face is used only when the axis is perpendicular to
+    the heading (lateral centering). done=True when every referenced axis is within tol."""
     cands = []
     if ox is not None and abs(ox) > tol:
         cands.append(('x', ox))
@@ -41,16 +49,27 @@ def centering_command(pose, ox: Optional[float], oy: Optional[float], *,
     if not cands:
         return (0.0, 0.0, True)
     axis, off = max(cands, key=lambda c: abs(c[1]))
+    # Unit vector of the motion that reduces `off` along the correction axis (toward the centre).
     if axis == 'x':
-        want = math.pi if off > 0 else 0.0           # east of centre -> face west, drive
+        dx, dy = (-1.0 if off > 0 else 1.0), 0.0
     else:
-        want = -math.pi / 2 if off > 0 else math.pi / 2   # north of centre -> face south
-    dyaw = _norm(want - pose[2])
+        dx, dy = 0.0, (-1.0 if off > 0 else 1.0)
+    yaw = pose[2]
+    a = math.cos(yaw) * dx + math.sin(yaw) * dy      # +1 centre ahead, -1 centre behind, 0 perpendicular
+    speed = min(v_max, max(v_min, kp_lin * abs(off)))
+    # Anti-parallel: the centre is behind along the heading (an along-travel overshoot). Reverse-
+    # translate to null it -- retreats into the just-traversed, clear corridor -- instead of the
+    # ~180deg in-place rotation that sweeps the asymmetric rear gripper into a near wall (the (3,9)
+    # graze). A diff-drive robot cannot strafe, but it can reverse.
+    if a <= -_PARALLEL_COS:
+        return (-speed, 0.0, False)
+    # Perpendicular / not-yet-aligned: face the axis cardinal first, then drive forward (unchanged).
+    want = math.atan2(dy, dx)
+    dyaw = _norm(want - yaw)
     if abs(dyaw) > yaw_tol:
         w = kp_ang * dyaw - kd_ang * yaw_rate                         # PD: damp latency overshoot
-        return (0.0, max(-w_max, min(w_max, w)), False)               # face the axis first
-    v = min(v_max, max(v_min, kp_lin * abs(off)))    # drive forward to null the offset
-    return (v, 0.0, False)
+        return (0.0, max(-w_max, min(w_max, w)), False)
+    return (speed, 0.0, False)                                        # aligned -> drive forward to null
 
 
 def cross_track_offset(ox: Optional[float], oy: Optional[float], hop_dir) -> float:
