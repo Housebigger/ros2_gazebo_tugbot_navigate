@@ -10,6 +10,9 @@ rate is measured. Usage:
 
 A batch dir is one containing manifest.txt (one run dir per line); a run dir is one
 containing launch.log. Reproduces the documented (3,9) 0.33% baseline on the clean batches.
+
+Verified baseline: `replay_collision_oracle.py log/batch_diag_20260628_232253
+log/batch_diag_20260629_071328` -> runs=16 samples=1808 collide=6 rate=0.332%, by cell {(3,9):6}.
 """
 import argparse
 import math

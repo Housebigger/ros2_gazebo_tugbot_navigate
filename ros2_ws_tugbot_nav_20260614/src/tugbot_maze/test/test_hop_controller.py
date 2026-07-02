@@ -130,6 +130,14 @@ def test_centering_reverses_north_overshoot_at_boundary():
     assert done is False and v < 0.0 and abs(w) < 1e-6
 
 
+def test_centering_reverses_when_slightly_off_cardinal():
+    # A realistic arrival heading is not perfectly cardinal. 0.4 m NORTH of centre while facing
+    # ~6 deg off north still has the centre well within the anti-parallel (reverse) zone (the
+    # boundary is 45 deg), so it must still reverse -- not flip to a rotate.
+    v, w, done = centering_command((6.04, 18.40, math.pi / 2 + 0.1), None, 0.40, tol=0.10, yaw_tol=0.10)
+    assert done is False and v < 0.0 and abs(w) < 1e-6
+
+
 def test_centering_drives_forward_once_aligned():
     # 0.3 m EAST of centre, already facing WEST (yaw pi): drive forward to null the offset
     v, w, done = centering_command((2.3, 2.0, math.pi), 0.3, None, tol=0.12, yaw_tol=0.10)
