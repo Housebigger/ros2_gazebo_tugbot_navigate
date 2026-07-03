@@ -15,7 +15,8 @@ Gazebo batches, ~555–565 s/run (matching the *pre-computed* GCN baseline's tim
 **localization, not search**: matching the live 360° LIDAR against the known wall map for
 an absolute pose each tick (scan-match) eliminated the wheel-odometry desync that had
 capped every prior autonomous attempt. Offline true-footprint collision rate fell from the
-honest ~25–61 % (under drifting odom) to **~0.33 %** (one marginal residual graze, below).
+honest ~25–61 % (under drifting odom) to ~0.33 %, and the lone (3,9) residual graze was then
+**eliminated to 0 %** by a reverse-to-center fix (2026-07-03, below).
 
 ## Explorer modes
 
@@ -117,17 +118,26 @@ as a baseline:
    reference walls and far from the entrance, odometry drift + off-center mis-sensing produced phantom
    passages. That wall is exactly what scan-match localization broke.
 
-## Known residual
+## The (3,9) residual — resolved (2026-07-03)
 
-A ~**0.33 %** true-footprint graze persists at **cell (3,9)**: the asymmetric **rear gripper** comes
-within the 12 cm wall margin against the east cell wall (x≈7.03) during a maneuver while the robot is
-~0.5 m off-center (the cell *center* is always rotation-safe). It does not block completion (16/16).
+The lone ~0.33 % true-footprint graze at **cell (3,9)** is now **eliminated (0 %)**. An oracle
+replay of the DIAG poses (`tools/replay_collision_oracle.py`) pinned the mechanism: the robot
+arrives ~0.4 m past centre along its **north travel axis**, and `centering_command` corrected that
+overshoot by **rotating ~180° in place** to face south — and rotating while off-centre swept the
+asymmetric rear gripper (corner radius ≈0.55 m) through the north perimeter wall face. The endpoints
+are clear; only the mid-rotation arc grazed (hence the ~0.33 % transient).
 
-A **rotation-sweep clearance guard** was built to eliminate it (branch `rotation-sweep-clearance-guard`,
-**parked, unmerged**): it gated in-place rotations and translated toward the cell center before turning.
-The controlled Gazebo replay showed it **regressed** collisions (0.33 % → 0.43 % → 4.43 %) — the
-make-room translation, itself uncollision-checked, walked the robot *into* grazing poses and stalled
-there — so it was **abandoned**. Lesson recorded: a make-room maneuver near a wall must be
-collision-checked, and the root is the off-center *positioning* (a centering gap at boundary cells),
-not the rotation; a future fix should target centering, not rotation-gating. The branch's
-`collision_geometry.py` (shared true-footprint oracle) is the one reusable artifact if revisited.
+**Fix (`hop_controller.centering_command`):** a diff-drive robot cannot strafe, **but it can reverse**.
+When the axis to correct is anti-parallel to the heading (the cell centre is *behind* — an
+along-travel overshoot), it now **reverse-translates** along the heading to null the offset, instead
+of rotating 180°. Reverse retreats into the just-traversed, clear corridor (inherently safe, no
+sweep); perpendicular lateral centering is unchanged. **Controlled Gazebo validation (16 post-fix
+runs, 2 batches): 16/16 `EXIT_REACHED`, oracle collision rate 0/1788 = 0.000 %** (baseline 6/1808 =
+0.332 %, all (3,9)); offline the fix also cleared 3 formerly-`xfail` drift=0.05 rear-corner grazes.
+Spec/plan: `docs/superpowers/{specs,plans}/2026-07-03-reverse-to-center-boundary-overshoot*.md`.
+
+*Prior attempt, for the record:* a **rotation-sweep clearance guard** (branch
+`rotation-sweep-clearance-guard`, parked) had tried to *gate rotations* and made it **worse**
+(0.33 %→4.43 %) — because the culprit rotation was the centering one, and gating it pinned the robot
+off-centre. That failure is what pointed the fix at *centering* (specifically reversing the overshoot),
+not rotation-gating.
