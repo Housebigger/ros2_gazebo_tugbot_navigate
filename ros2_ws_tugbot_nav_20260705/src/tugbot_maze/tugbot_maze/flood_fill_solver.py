@@ -23,7 +23,9 @@ from tugbot_maze.maze_motion import MazeMotion
 from tugbot_maze.junction_log import JunctionLog, update_junctions
 from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw, odom_prior
 from tugbot_maze.scan_match_localizer import ScanMatchLocalizer
-from tugbot_maze.maze_sim import load_segments
+from tugbot_maze.maze_sim import load_segments, outer_segments
+from tugbot_maze.online_scan_match_localizer import (
+    OnlineScanMatchLocalizer, confirmed_wall_segments)
 from tugbot_maze.wall_follow_control import entering_done
 
 
@@ -73,8 +75,12 @@ class FloodFillSolver(Node):
         self._sm_last_odom = None
         self._sm_seq = -1
         self._sm_info = None
-        self.localizer = (ScanMatchLocalizer(load_segments())
-                          if self.pose_source == 'scan_match' else None)
+        if self.pose_source == 'scan_match':
+            self.localizer = ScanMatchLocalizer(load_segments())          # fed the full map (baseline)
+        elif self.pose_source == 'online_slam':
+            self.localizer = OnlineScanMatchLocalizer(outer_segments())   # perimeter only; interior grows online
+        else:
+            self.localizer = None
         self._prev_motion_cell = None
         self.scan_msg: Optional[LaserScan] = None
         self.create_subscription(LaserScan, self.scan_topic, self._scan_cb, 10)
@@ -106,7 +112,7 @@ class FloodFillSolver(Node):
                 quat_to_yaw(q.x, q.y, q.z, q.w))
 
     def _lookup_pose(self):
-        if self.pose_source == 'scan_match':
+        if self.pose_source in ('scan_match', 'online_slam'):
             return self._lookup_scan_match()
         if self.pose_source != 'odom_locked':
             return self._lookup_tf(self.map_frame, self.base_frame)
@@ -147,9 +153,16 @@ class FloodFillSolver(Node):
         prior = odom_prior(self._sm_corrected, self._sm_last_odom, odom_base)
         s = self.scan_msg
         try:
-            est, info = self.localizer.correct(prior, s.ranges, s.angle_min, s.angle_increment)
+            if self.pose_source == 'online_slam':
+                interior = confirmed_wall_segments(self.brain, self.motion.committed)
+                est, info = self.localizer.correct(
+                    prior, s.ranges, s.angle_min, s.angle_increment, interior)
+            else:
+                est, info = self.localizer.correct(
+                    prior, s.ranges, s.angle_min, s.angle_increment)
         except Exception as e:           # never let a localizer hiccup kill the node mid-batch
-            self.get_logger().warning('scan_match correct() failed: %r; using odom prior' % (e,))
+            self.get_logger().warning('%s correct() failed: %r; using odom prior'
+                                      % (self.pose_source, e))
             est, info = prior, {'rejected': True, 'error': repr(e)}
         self._sm_corrected = est
         self._sm_last_odom = odom_base
@@ -228,7 +241,7 @@ class FloodFillSolver(Node):
                                % (pose[0], pose[1], pose[2], self.motion.cell, odom_cell, dist,
                                   self.phase, self.motion.phase,
                                   self.motion.mem.suppressed, self.motion.mem.reconciles))
-        if self.pose_source == 'scan_match' and self._sm_info is not None:
+        if self.pose_source in ('scan_match', 'online_slam') and self._sm_info is not None:
             i = self._sm_info
             self.get_logger().info(
                 'MATCH rms=%.3f n=%d eigmin=%.2f fb=%s rejected=%s'
