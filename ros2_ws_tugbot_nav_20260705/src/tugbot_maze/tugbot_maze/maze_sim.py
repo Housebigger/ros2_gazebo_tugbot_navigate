@@ -75,6 +75,25 @@ def outer_boundary_box(path: Optional[str] = None) -> Tuple[float, float, float,
     return (min(xs), max(xs), min(ys), max(ys))
 
 
+def outer_segments(path: Optional[str] = None) -> List[Segment]:
+    """Return the maze's OUTER boundary wall centerlines (segments flagged `outer: true`),
+    in map frame. This is the legitimately-known perimeter used to seed online localization
+    when the interior wall map is withheld -- NOT the full map (`load_segments`)."""
+    if path is None:
+        path = default_segments_path()
+    with open(path) as f:
+        doc = yaml.safe_load(f)
+    segs: List[Segment] = []
+    for s in doc['segments']:
+        if s.get('outer'):
+            x0, y0 = px_to_map(float(s['p0_px'][0]), float(s['p0_px'][1]))
+            x1, y1 = px_to_map(float(s['p1_px'][0]), float(s['p1_px'][1]))
+            segs.append((x0, y0, x1, y1))
+    if not segs:
+        raise RuntimeError(f"no 'outer: true' segments found in {path!r}")
+    return segs
+
+
 def ground_truth_edge_open(sim: "MazeSim", a, b, samples: int = 10) -> bool:
     """True if the robot can traverse from cell-center a to cell-center b without
     colliding (samples the straight connector against the real wall segments).

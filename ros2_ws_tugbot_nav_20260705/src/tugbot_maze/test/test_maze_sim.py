@@ -197,3 +197,14 @@ def test_collides_exact_catches_wall_crossing_body():
     # A long wall passing straight through the footprint (distance 0) -> collision.
     sim = MazeSim([(-1.0, 0.0, 1.0, 0.0)], start_xy=(0.0, 0.0), start_yaw=0.0)
     assert sim.collides(0.0, 0.0, 0.0) is True
+
+
+def test_outer_segments_is_the_known_perimeter_subset():
+    from tugbot_maze.maze_sim import outer_segments, load_segments
+    outer = outer_segments()
+    full = load_segments()
+    assert len(outer) > 0
+    assert len(outer) < len(full)                     # interior walls are NOT included
+    full_set = {tuple(round(v, 3) for v in s) for s in full}
+    for s in outer:                                   # every perimeter seg is a real map wall
+        assert tuple(round(v, 3) for v in s) in full_set
