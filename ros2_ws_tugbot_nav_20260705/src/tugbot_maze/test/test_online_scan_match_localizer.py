@@ -30,3 +30,34 @@ def test_symmetric_edge_deduplicated():
     brain.mark((3, 4), 'N', True)                       # also marks (3,5) S == the same wall
     segs = confirmed_wall_segments(brain, {(3, 4), (3, 5)})
     assert len(segs) == 1                               # one physical wall, not two
+
+
+from tugbot_maze.online_scan_match_localizer import OnlineScanMatchLocalizer
+
+_NOSCAN = ([float('inf')] * 8, -math.pi, 2 * math.pi / 8)   # all-inf beams -> ICP returns prior
+
+
+def test_online_localizer_starts_with_perimeter_only():
+    loc = OnlineScanMatchLocalizer([(0.0, 0.0, 10.0, 0.0)], scan_offset_x=0.0)
+    assert loc._icp._a.shape[0] == 1                    # one perimeter segment
+    assert loc._icp.scan_offset_x == 0.0                # kwargs passed through
+
+
+def test_online_localizer_rebuilds_when_interior_grows_and_caches():
+    loc = OnlineScanMatchLocalizer([(0.0, 0.0, 10.0, 0.0)])
+    icp0 = loc._icp
+    loc.correct((0.0, 0.0, 0.0), *_NOSCAN, [])          # empty interior -> no rebuild
+    assert loc._icp is icp0
+    loc.correct((0.0, 0.0, 0.0), *_NOSCAN, [(1.0, 1.0, 1.0, 3.0)])   # new wall -> rebuild
+    assert loc._icp is not icp0
+    assert loc._icp._a.shape[0] == 2                    # perimeter + 1 interior
+    icp1 = loc._icp
+    loc.correct((0.0, 0.0, 0.0), *_NOSCAN, [(1.0, 1.0, 1.0, 3.0)])   # same set -> cached
+    assert loc._icp is icp1
+
+
+def test_online_localizer_correct_returns_pose_and_info():
+    loc = OnlineScanMatchLocalizer([(0.0, 0.0, 10.0, 0.0)])
+    pose, info = loc.correct((0.5, 0.5, 0.1), *_NOSCAN, [])
+    assert len(pose) == 3 and isinstance(info, dict)    # delegates to the ICP contract
+    assert info['rejected'] is True                     # no inliers from all-inf beams

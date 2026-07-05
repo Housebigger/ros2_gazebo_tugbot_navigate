@@ -44,3 +44,26 @@ def confirmed_wall_segments(brain, committed_cells: Iterable[Cell]) -> List[Segm
             if brain.is_wall(cell, d):
                 seen.add(_canonical(_edge_segment(cell, d)))
     return [tuple(s) for s in seen]
+
+
+class OnlineScanMatchLocalizer:
+    """Scan-match against `perimeter + confirmed-interior-walls`, rebuilding the inner
+    ScanMatchLocalizer only when the interior set changes. The ICP itself is reused
+    unchanged; only the segment source is dynamic."""
+
+    def __init__(self, perimeter_segments, **icp_kwargs):
+        self._perimeter = [tuple(s) for s in perimeter_segments]
+        self._icp_kwargs = dict(icp_kwargs)
+        self._sig = frozenset()
+        self._rebuild([])
+
+    def _rebuild(self, interior_segments) -> None:
+        segs = self._perimeter + [tuple(s) for s in interior_segments]
+        self._icp = ScanMatchLocalizer(segs, **self._icp_kwargs)
+
+    def correct(self, prior_pose, ranges, angle_min, angle_inc, interior_segments):
+        sig = frozenset(tuple(s) for s in interior_segments)
+        if sig != self._sig:
+            self._rebuild(interior_segments)
+            self._sig = sig
+        return self._icp.correct(prior_pose, ranges, angle_min, angle_inc)
