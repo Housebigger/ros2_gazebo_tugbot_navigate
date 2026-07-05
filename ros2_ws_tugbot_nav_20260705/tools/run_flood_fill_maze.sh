@@ -4,7 +4,9 @@
 # and must reach the exit on its own. Same process/SHM hygiene as run_solver_maze.sh.
 #
 # Usage: tools/run_flood_fill_maze.sh [MAX_SECONDS] [HEADLESS] [USE_RVIZ] [POSE_SOURCE] [SENSE_DEBUG]
-#   POSE_SOURCE: scan_match (default; ICP to known wall map) | odom_locked | slam
+#   POSE_SOURCE: scan_match (fed the full known map; A/B upper bound) | online_slam
+#                (self-built map: perimeter + committed/local-sensed walls, no prior interior map)
+#                | odom_locked | slam
 #   SENSE_DEBUG: false (default) | true  (log per-cell sensed walls + min LIDAR ranges)
 set +u
 WS="$(cd "$(dirname "$0")/.." && pwd)"
