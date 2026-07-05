@@ -25,7 +25,7 @@ from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw, odom_prior
 from tugbot_maze.scan_match_localizer import ScanMatchLocalizer
 from tugbot_maze.maze_sim import load_segments, outer_segments
 from tugbot_maze.online_scan_match_localizer import (
-    OnlineScanMatchLocalizer, confirmed_wall_segments)
+    OnlineScanMatchLocalizer, confirmed_wall_segments, local_reference_cells)
 from tugbot_maze.wall_follow_control import entering_done
 
 
@@ -154,7 +154,8 @@ class FloodFillSolver(Node):
         s = self.scan_msg
         try:
             if self.pose_source == 'online_slam':
-                interior = confirmed_wall_segments(self.brain, self.motion.committed)
+                ref_cells = local_reference_cells(self.motion.committed, self.motion.cell, self.motion.sensed)
+                interior = confirmed_wall_segments(self.brain, ref_cells)
                 est, info = self.localizer.correct(
                     prior, s.ranges, s.angle_min, s.angle_increment, interior)
             else:

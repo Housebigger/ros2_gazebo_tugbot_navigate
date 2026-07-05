@@ -12,7 +12,7 @@ from tugbot_maze.maze_sim import MazeSim, load_segments, outer_segments
 from tugbot_maze.flood_fill_brain import ENTRANCE_CELL, EXIT_CELL, cell_center
 from tugbot_maze.pose_tracking import odom_prior
 from tugbot_maze.online_scan_match_localizer import (
-    OnlineScanMatchLocalizer, confirmed_wall_segments)
+    OnlineScanMatchLocalizer, confirmed_wall_segments, local_reference_cells)
 
 
 def _run_online_slam(drift, latency=0, dt=0.1, max_steps=30000):
@@ -30,7 +30,8 @@ def _run_online_slam(drift, latency=0, dt=0.1, max_steps=30000):
         scan = sim.scan(n_beams=360, fov_rad=2 * math.pi)
         cur_odom = sim.reported_pose
         prior = odom_prior(corrected, last_odom, cur_odom)
-        interior = confirmed_wall_segments(m.brain, m.committed)
+        ref_cells = local_reference_cells(m.committed, m.cell, m.sensed)
+        interior = confirmed_wall_segments(m.brain, ref_cells)
         corrected, _info = loc.correct(prior, scan[0], scan[1], scan[2], interior)
         last_odom = cur_odom
         max_loc_err = max(max_loc_err, math.hypot(corrected[0] - sim.x, corrected[1] - sim.y))
@@ -52,5 +53,6 @@ def test_online_slam_reaches_exit_with_map_withheld():
 
 
 def test_online_slam_under_moderate_drift():
-    reached, collided, _ = _run_online_slam(drift=0.03)
+    reached, collided, max_loc_err = _run_online_slam(drift=0.03)
     assert reached and not collided
+    assert max_loc_err < 0.5, f"drift=0.03 localization error {max_loc_err:.2f} m (want < 0.5)"

@@ -61,3 +61,19 @@ def test_online_localizer_correct_returns_pose_and_info():
     pose, info = loc.correct((0.5, 0.5, 0.1), *_NOSCAN, [])
     assert len(pose) == 3 and isinstance(info, dict)    # delegates to the ICP contract
     assert info['rejected'] is True                     # no inliers from all-inf beams
+
+
+from tugbot_maze.online_scan_match_localizer import local_reference_cells
+
+
+def test_local_reference_cells_adds_current_and_sensed_neighbours():
+    committed = {(1, 0)}
+    current = (3, 4)
+    sensed = {(3, 4), (3, 5), (2, 4)}       # current + N + W sensed; (4,4)/(3,3) not sensed
+    cells = local_reference_cells(committed, current, sensed)
+    assert cells == {(1, 0), (3, 4), (3, 5), (2, 4)}
+
+
+def test_local_reference_cells_requires_current_sensed():
+    assert local_reference_cells(set(), (3, 4), set()) == set()          # nothing sensed -> nothing local
+    assert local_reference_cells({(1, 0)}, (3, 4), set()) == {(1, 0)}    # committed anchor still kept

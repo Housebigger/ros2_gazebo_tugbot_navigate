@@ -65,6 +65,18 @@ def _canonical(seg: Segment) -> Segment:
     return (a[0], a[1], b[0], b[1]) if a <= b else (b[0], b[1], a[0], a[1])
 
 
+def local_reference_cells(committed_cells, current_cell, sensed_cells):
+    """Reference cells for online localization: the committed cells (global drift-free
+    anchors) PLUS the current cell and its already-sensed neighbours -- the immediate local
+    reference that keeps ICP drift-free during first-pass exploration, not just on revisits.
+    Only sensed cells contribute (an unsensed cell has no known walls)."""
+    sensed = set(sensed_cells)
+    local = {current_cell}
+    for dx, dy in DIRS.values():
+        local.add((current_cell[0] + dx, current_cell[1] + dy))
+    return set(committed_cells) | (local & sensed)
+
+
 def confirmed_wall_segments(brain, committed_cells: Iterable[Cell]) -> List[Segment]:
     """Segments for every WALL edge of a committed cell, de-duplicated (a wall is shared by
     two cells). Only committed cells contribute, so a poorly-sensed wall never enters the
