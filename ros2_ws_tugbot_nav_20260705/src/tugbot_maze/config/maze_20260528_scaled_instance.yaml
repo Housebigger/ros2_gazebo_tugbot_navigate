@@ -1,0 +1,168 @@
+schema_version: 1
+source_image: package://tugbot_maze/assets/maze_20260528.png
+source_image_path: src/tugbot_maze/assets/maze_20260528.png
+source_image_kind: clean_2d_binary_maze
+base_world: src/tugbot_gazebo/worlds/tugbot_maze_world_20260528_clean.sdf
+base_wall_segments: src/tugbot_maze/config/maze_wall_segments_20260528.yaml
+output_world: src/tugbot_gazebo/worlds/tugbot_maze_world_20260528_clean_scaled2x.sdf
+artifact_dir: log/phase32b_scaled_clean_maze_world
+scale_factor: 2.0
+original_bounds_m:
+  xmin: -6.0
+  xmax: 6.0
+  ymin: -6.0
+  ymax: 6.0
+scaled_bounds_m:
+  xmin: -12.0
+  xmax: 12.0
+  ymin: -12.0
+  ymax: 12.0
+coordinate_convention:
+  phase41_selected_convention: A_map_frame_follows_slam_startup_pose
+  runtime_truth_frame: map
+  gazebo_marker_frame: world
+  rationale: >-
+    Phase40 showed active SDF/world spawn and marker coordinates are in Gazebo
+    world coordinates while ROS online SLAM initializes map/odom/base_link near
+    the robot startup pose at map origin. Phase41 therefore keeps Gazebo world
+    coordinates for SDF and markers, and supplies maze_explorer / maze_goal_monitor
+    truth in ROS map coordinates offset by the accepted world entrance.
+world_frame_truth:
+  entrance:
+    x_m: -11.011281
+    y_m: -9.02507
+    yaw_rad: 0.0
+  exit:
+    x_m: 10.061281
+    y_m: 9.058496
+    radius_m: 1.2
+map_frame_truth:
+  entrance:
+    x_m: 0.0
+    y_m: 0.0
+    yaw_rad: 0.0
+  exit:
+    x_m: 21.072562
+    y_m: 18.083566
+    radius_m: 1.2
+wall_thickness_policy:
+  mode: keep_original_thickness
+  wall_thickness_m: 0.24
+  rationale: user requested scale-up for passability; preserving wall thickness increases
+    corridor clearance and avoids unnecessary wall-thickness inflation
+wall_height_policy:
+  mode: keep_original_height
+  wall_height_m: 1.2
+  rationale: visual maze height remains adequate after XY scale-up
+entrance:
+  status: candidate_aligned_to_detected_boundary_opening
+  original_x_m: -6.0
+  original_y_m: -1.0
+  x_m: -11.011281
+  y_m: -9.02507
+  yaw_rad: 0.0
+  opening_side: left
+  opening_center_x_m: -10.061281
+  opening_center_y_m: -9.02507
+  opening_width_m: 2.072423
+  inward_direction: +X
+  marker_x_m: -10.661281
+  marker_y_m: -9.02507
+  ingress_waypoint_map:
+    x_m: 1.0
+    y_m: 0.0
+    yaw_rad: 0.0
+  ingress_waypoint_world:
+    x_m: -10.011281
+    y_m: -9.02507
+    yaw_rad: 0.0
+  phase53_selected_original_ingress_waypoint_map:
+    x_m: 1.0
+    y_m: 0.0
+    yaw_rad: 0.0
+  phase65_inner_ingress_waypoint_map:
+    x_m: 2.0
+    y_m: 0.0
+    yaw_rad: 0.0
+  phase65_inner_ingress_depth_adjustment_m: 1.0
+  phase65_inner_ingress_waypoint_world:
+    x_m: -9.011281
+    y_m: -9.02507
+    yaw_rad: 0.0
+  entry_staging_hypothesis: ENTRY_STAGING_TOO_SHALLOW
+  phase65_policy_note: >-
+    Preserve the Phase53/old ingress waypoint evidence at map (1.0, 0.0), but
+    Phase65 bounded runtime smoke sends the entrance guide one additional meter
+    inward to map (2.0, 0.0) before starting maze_explorer max_goals=1.
+exit:
+  status: candidate_aligned_to_detected_boundary_opening
+  original_x_m: 0.0
+  original_y_m: 6.0
+  x_m: 10.061281
+  y_m: 9.058496
+  radius_m: 1.2
+  opening_side: right
+  opening_center_x_m: 10.061281
+  opening_center_y_m: 9.058496
+  opening_width_m: 2.005571
+  inward_direction: -X
+  ambiguity_note: selected right-side upper opening from detected boundary openings;
+    requires human confirmation
+markers:
+  visual_only: true
+  collision: none
+  z_m: 0.005
+  entrance_arrow:
+    name: maze_entrance_arrow_visual
+    x_m: -10.661281
+    y_m: -9.02507
+    yaw_rad: 3.141593
+    color: green
+    points_toward_maze_interior: true
+    style: green_isosceles_triangle_arrow
+    geometry: three_thin_visual_boxes_triangle_outline
+  exit_finish_band:
+    name: maze_exit_finish_band_visual
+    x_m: 10.061281
+    y_m: 9.058496
+    yaw_rad: -3.141389
+    style: rotated_black_white_checker_band
+    spans_exit_opening_width_m: 2.005571
+  alignment_source: phase33b_detected_boundary_openings_from_maze_wall_segments_20260528
+  exit_marker:
+    name: maze_exit_marker
+    semantic_only: true
+    visible_ground_disk: false
+    style: hidden_semantic_marker
+    x_m: 10.061281
+    y_m: 9.058496
+  phase33d_style_refinement:
+    status: visual_marker_style_refined_not_promoted
+    wall_geometry_modified: false
+    scale_factor_modified: false
+    coordinates_modified: false
+  phase33e_orientation_correction:
+    status: orientation_corrected_not_promoted
+    coordinates_modified: false
+    tugbot_pose_modified: false
+    wall_geometry_modified: false
+    scale_factor_modified: false
+    collision_policy_modified: false
+    entrance_arrow:
+      yaw_before: 0.0
+      yaw_delta: 3.141593
+      yaw_after: 3.141593
+      normalization: '[-pi, pi]'
+    exit_finish_band:
+      yaw_before: 1.571
+      yaw_delta: 1.570796
+      yaw_after: -3.141389
+      normalization: '[-pi, pi]'
+runtime_policy:
+  autonomous_navigation_allowed_in_phase32b: false
+  visual_smoke_allowed: true
+  image_allowed_for_runtime_path_planning: false
+baseline_preservation:
+  scaffold_world: src/tugbot_gazebo/worlds/tugbot_maze_world.sdf
+  clean_candidate_world: src/tugbot_gazebo/worlds/tugbot_maze_world_20260528_clean.sdf
+  phase29_candidate_world: src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf
