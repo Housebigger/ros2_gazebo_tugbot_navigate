@@ -77,12 +77,14 @@ def local_reference_cells(committed_cells, current_cell, sensed_cells):
     return set(committed_cells) | (local & sensed)
 
 
-def confirmed_wall_segments(brain, committed_cells: Iterable[Cell]) -> List[Segment]:
-    """Segments for every WALL edge of a committed cell, de-duplicated (a wall is shared by
-    two cells). Only committed cells contribute, so a poorly-sensed wall never enters the
-    localization reference."""
+def confirmed_wall_segments(brain, cells: Iterable[Cell]) -> List[Segment]:
+    """Grid-snapped segments for every WALL edge of the given cells, de-duplicated (a wall is
+    shared by two cells). The CALLER chooses which cells (see local_reference_cells: committed
+    anchors + the current cell and its sensed neighbours); passing only committed cells keeps a
+    poorly-sensed wall out of the reference, while the local window trades a little of that
+    safety for a drift-free anchor during first-pass exploration."""
     seen = set()
-    for cell in committed_cells:
+    for cell in cells:
         for d in DIRS:
             if brain.is_wall(cell, d):
                 seen.add(_canonical(_edge_segment(cell, d)))
