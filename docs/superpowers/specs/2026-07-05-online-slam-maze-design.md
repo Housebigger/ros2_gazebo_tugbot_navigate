@@ -90,3 +90,15 @@ The known-map `scan_match_localizer` and its `load_segments()` remain in the tre
 ## 8. Success criteria (restated)
 
 `ros2_ws_tugbot_nav_20260705` seeded clean and building green; an online localizer that scan-matches against the brain's confirmed walls (perimeter-seeded, committed-only, observability-gated, odom fallback); offline `maze_sim` completes the maze **without the map fed** with bounded localization error and low collisions; controlled Gazebo **≥ 14/16 EXIT_REACHED** with collisions comparable to the fed-map baseline. Iterate/abandon honestly on regression; bank to `main` only after the Gazebo gate passes.
+
+## 9. Implementation outcome & what actually worked (2026-07-05)
+
+**Result: gate exceeded.** Controlled Gazebo, no interior map fed — **16/16 EXIT_REACHED** (100%, ~545–555 s, matching the fed-map baseline), **0/1769 = 0.000 % true-footprint collisions**, 0 stuck/unstick/escape events; offline `maze_sim` (map withheld) completes at drift=0.0 and drift=0.03, peak localization error ~0.40 m. Merged to `main`.
+
+**Two things the spec's "committed-only + observability gate" underspecified — discovered during TDD (Tasks 6, 6b):**
+
+1. **Committed-only reference LAGS exploration.** On first-pass discovery the cells ahead aren't committed yet, so there's no local reference and the pose falls to pure odom (re-locking only on revisit). Offline this gave a 1.10 m peak error under drift=0.03 (the maze still completed, carried by MazeMotion's local sensing). **Fix (`local_reference_cells`): the reference is `committed ∪ current-cell ∪ sensed neighbours`** — the current cell's freshly-sensed, grid-snapped walls are an *immediate* anchor during exploration. Grid-snapping keeps this safe under <1 m error (a sensed wall still snaps to the correct edge, so ICP pulls toward truth, not into the drift). This cut drift=0.03 peak error 1.10 → 0.40 m and is what made Gazebo solid (16/16 vs the "marginal" the committed-only version would have given).
+
+2. **Three defensive gates were needed** (not just the single observability gate), each fixing a diagnosed ICP failure mode, in order: **sparse-interior** (skip ICP when the interior reference is empty — else iteration-0 matches interior-hitting beams to far perimeter walls → false minimum), **locality** (skip when no reference segment is within ~1 m of the prior — pure odom in genuinely unmapped territory), and **beam-premask** (∞-out beams whose prior-projected endpoints are far from any reference before iteration 0). The observability gate + odom fallback remain underneath.
+
+**Known debt (non-blocking, for a future pass):** `_mask_far_beams` reaches into `ScanMatchLocalizer` internals (`_a`, `_e`, `_len2`) — fragile to an ICP refactor; a small accessor would be cleaner. The perimeter (`outer_segments()`) is 4 closed walls with no entrance/exit gaps — did not cause trouble in the gate, but is a candidate refinement if opening-region localization is ever stressed.

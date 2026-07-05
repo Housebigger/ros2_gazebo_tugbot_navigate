@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Reactive wall-following autonomous maze run (explorer_type:=wall_follower):
+# the robot drives a ROS-free left/right-hand wall-follower (no Nav2 in the loop)
+# and must reach the exit on its own. Same process/SHM hygiene as run_solver_maze.sh.
+#
+# Usage: tools/run_wall_follower_maze.sh [MAX_SECONDS] [HEADLESS] [USE_RVIZ] [FOLLOW_SIDE]
+set +u
+WS="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$WS"
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+MAX_SECONDS="${1:-1500}"
+HEADLESS="${2:-true}"
+USE_RVIZ="${3:-false}"
+FOLLOW_SIDE="${4:-left}"
+STAMP="$(date +%Y%m%d_%H%M%S)"
+ART="log/wall_follower_run_${STAMP}"
+mkdir -p "$ART"
+
+kill_all_sim() {
+    for pat in tugbot_maze_explore "ros2 launch" "gz sim" "ruby.*gz" parameter_bridge \
+               bridge_node slam_toolbox controller_server planner_server bt_navigator \
+               behavior_server smoother_server route_server waypoint_follower \
+               velocity_smoother collision_monitor lifecycle_manager map_server amcl \
+               maze_explorer maze_solver wall_follow_solver frontier_explorer maze_goal_monitor \
+               robot_state_publisher static_transform_publisher component_container rviz; do
+        pkill -9 -f "$pat" 2>/dev/null
+    done
+}
+
+kill_all_sim
+sleep 2
+rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* 2>/dev/null
+export ROS_DOMAIN_ID=$(( ($(date +%s) % 90) + 1 ))
+echo "[WALLFOLLOW] artifact dir: $ART max=${MAX_SECONDS}s headless=${HEADLESS} rviz=${USE_RVIZ} side=${FOLLOW_SIDE} DOMAIN=$ROS_DOMAIN_ID"
+
+ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
+    headless:="${HEADLESS}" \
+    use_rviz:="${USE_RVIZ}" \
+    explorer_type:=wall_follower \
+    follow_side:="${FOLLOW_SIDE}" \
+    entry_direct_distance_m:=2.0 \
+    > "$ART/launch.log" 2>&1 &
+LAUNCH_PID=$!
+echo "[WALLFOLLOW] launch PID=$LAUNCH_PID DOMAIN=$ROS_DOMAIN_ID" | tee "$ART/run_meta.txt"
+
+END=$(( $(date +%s) + MAX_SECONDS ))
+RESULT="TIMEOUT"
+while [ "$(date +%s)" -lt "$END" ]; do
+    sleep 10
+    if grep -qa "EXIT_REACHED" "$ART/launch.log" 2>/dev/null; then RESULT="EXIT_REACHED"; break; fi
+    if grep -qa "open_and_lock_file failed" "$ART/launch.log" 2>/dev/null; then RESULT="DDS_SHM_FAIL"; break; fi
+    if ! kill -0 "$LAUNCH_PID" 2>/dev/null; then RESULT="LAUNCH_DIED"; break; fi
+done
+
+echo "[WALLFOLLOW] result=$RESULT" | tee -a "$ART/run_meta.txt"
+echo "$RESULT" > "$ART/result.txt"
+grep -aE "EXIT_REACHED|ENTRY_DIRECT|engaging wall-follower|STALL_BACKUP|DIAG" "$ART/launch.log" | tail -60 > "$ART/wall_follower_tail.txt" 2>/dev/null
+
+kill -INT "$LAUNCH_PID" 2>/dev/null
+sleep 5
+kill_all_sim
+sleep 2
+rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* 2>/dev/null
+echo "[WALLFOLLOW] done result=$RESULT artifact=$ART"
+echo "ARTIFACT_DIR=$ART"
