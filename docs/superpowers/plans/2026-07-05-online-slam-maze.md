@@ -49,8 +49,13 @@ cp -r ros2_ws_tugbot_nav_20260614 ros2_ws_tugbot_nav_20260705
 cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260705
 rm -rf build install log
 rm -rf archive doc/archive src/tugbot_maze/tugbot_maze/__pycache__
-# one-shot phaseNN visual-overlay diagnostics (dead code from the long bring-up):
-find src -name 'phase[0-9]*_*.py' -delete
+# ALL historical Nav2 bring-up cruft (not just the *_*.py overlays -- also the ~173
+# one-shot test_phase* diagnostics and the phaseNN launch files):
+git ls-files src | grep -E 'phase[0-9]' | xargs -r rm -f
+# The stale test_contract.py (pre-failing 6/17 in 20260614) is the ONLY thing that
+# references the phaseNN map-replay launch files -- remove it too, plus the 2 dead
+# phase entry_points in src/tugbot_maze/setup.py.
+rm -f src/tugbot_bringup/test/test_contract.py
 ```
 
 - [ ] **Step 3: Build the seeded workspace (must be green)**
