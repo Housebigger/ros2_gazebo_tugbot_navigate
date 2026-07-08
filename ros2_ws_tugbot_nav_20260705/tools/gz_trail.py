@@ -21,6 +21,9 @@ Point = Tuple[float, float, float]
 
 # One bracketed numeric triple; separators are whitespace and/or a pipe (both styles
 # of `gz model -p` output exist across gz versions).
+# NOTE: the regex cannot distinguish a 2-element bracket [A | B] from a 3-element
+# one -- it backtracks and splits B into two tokens. Harmless in practice because
+# gz never emits 2-element brackets.
 _TRIPLE_RE = re.compile(
     r"\[\s*([-+\d.eE]+)\s*(?:\|\s*)?([-+\d.eE]+)\s*(?:\|\s*)?([-+\d.eE]+)\s*\]")
 

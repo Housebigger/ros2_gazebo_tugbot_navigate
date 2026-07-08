@@ -53,3 +53,6 @@ def test_should_record_min_distance():
     assert gz_trail.should_record((1.20, 2.0, 0.0), last, 0.10) is True    # 0.20 >= 0.10
     # xy-plane distance only (z ignored)
     assert gz_trail.should_record((1.0, 2.0, 9.9), last, 0.10) is False
+    # boundary: exactly min_dist away counts as recorded (>=, not >).
+    # Zero-origin so dx*dx and min_dist*min_dist are the identical float computation.
+    assert gz_trail.should_record((0.10, 0.0, 0.0), (0.0, 0.0, 0.0), 0.10) is True
