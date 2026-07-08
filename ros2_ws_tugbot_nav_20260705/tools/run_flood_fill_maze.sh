@@ -4,6 +4,7 @@
 # and must reach the exit on its own. Same process/SHM hygiene as run_solver_maze.sh.
 #
 # Usage: tools/run_flood_fill_maze.sh [MAX_SECONDS] [HEADLESS] [USE_RVIZ] [POSE_SOURCE] [SENSE_DEBUG]
+#   HEADLESS=false also auto-starts tools/gz_trail.py (red ground-truth trail in the Gazebo scene).
 #   POSE_SOURCE: scan_match (fed the full known map; A/B upper bound) | online_slam
 #                (self-built map: perimeter + committed/local-sensed walls, no prior interior map)
 #                | odom_locked | slam
@@ -29,7 +30,7 @@ kill_all_sim() {
                behavior_server smoother_server route_server waypoint_follower \
                velocity_smoother collision_monitor lifecycle_manager map_server amcl \
                maze_explorer maze_solver wall_follow_solver frontier_explorer maze_goal_monitor \
-               flood_fill_solver \
+               flood_fill_solver gz_trail \
                robot_state_publisher static_transform_publisher component_container rviz; do
         pkill -9 -f "$pat" 2>/dev/null
     done
@@ -49,6 +50,13 @@ ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     > "$ART/launch.log" 2>&1 &
 LAUNCH_PID=$!
 echo "[FLOODFILL] launch PID=$LAUNCH_PID DOMAIN=$ROS_DOMAIN_ID" | tee "$ART/run_meta.txt"
+TRAIL_PID=""
+if [ "$HEADLESS" = "false" ]; then
+    # Ground-truth red trail in the Gazebo scene (GUI runs only; read-only wrt navigation).
+    python3 "$WS/tools/gz_trail.py" > "$ART/gz_trail.log" 2>&1 &
+    TRAIL_PID=$!
+    echo "[FLOODFILL] gz_trail PID=$TRAIL_PID (red ground-truth trail)" | tee -a "$ART/run_meta.txt"
+fi
 
 END=$(( $(date +%s) + MAX_SECONDS ))
 RESULT="TIMEOUT"
@@ -63,6 +71,7 @@ echo "[FLOODFILL] result=$RESULT" | tee -a "$ART/run_meta.txt"
 echo "$RESULT" > "$ART/result.txt"
 grep -aE "EXIT_REACHED|HOP_BACKUP|JUNCTION|DIAG|SENSE|flood_fill_solver" "$ART/launch.log" | tail -80 > "$ART/flood_fill_tail.txt" 2>/dev/null
 
+[ -n "$TRAIL_PID" ] && kill "$TRAIL_PID" 2>/dev/null
 kill -INT "$LAUNCH_PID" 2>/dev/null
 sleep 5
 kill_all_sim
