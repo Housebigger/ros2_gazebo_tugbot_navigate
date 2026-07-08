@@ -56,7 +56,8 @@ def should_record(new_point: Point, last_point: Optional[Point], min_dist: float
 def marker_request(points: List[Point], ns: str = 'tugbot_trail', marker_id: int = 1,
                    z: float = 0.05) -> str:
     """Protobuf-text gz.msgs.Marker request: a red LINE_STRIP through the points.
-    Re-sending with the same ns/id replaces the marker, so the line grows."""
+    Each input point's own z is IGNORED and replaced by the z parameter (lifted off
+    the floor). Re-sending with the same ns/id replaces the marker, so the line grows."""
     parts = [
         'ns: "%s"' % ns,
         'id: %d' % marker_id,
@@ -67,3 +68,69 @@ def marker_request(points: List[Point], ns: str = 'tugbot_trail', marker_id: int
     for p in points:
         parts.append('point { x: %.3f y: %.3f z: %.3f }' % (p[0], p[1], z))
     return ', '.join(parts)
+
+
+def _poll_pose(model: str) -> Optional[Point]:
+    """One ground-truth pose sample via the gz CLI; None while the sim isn't up."""
+    try:
+        r = subprocess.run(['gz', 'model', '-m', model, '-p'],
+                           capture_output=True, text=True, timeout=5)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if r.returncode != 0:
+        return None
+    return parse_model_pose(r.stdout)
+
+
+def _redraw(points: List[Point], ns: str, marker_id: int,
+            timeout_ms: int = 2000) -> bool:
+    """Replace the trail marker with the full point list. False on failure."""
+    req = marker_request(points, ns, marker_id)
+    try:
+        r = subprocess.run(
+            ['gz', 'service', '-s', '/marker',
+             '--reqtype', 'gz.msgs.Marker', '--reptype', 'gz.msgs.Boolean',
+             '--timeout', str(timeout_ms), '--req', req],
+            capture_output=True, text=True, timeout=timeout_ms / 1000.0 + 3.0)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return r.returncode == 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        description='Red ground-truth trail in the Gazebo scene (poll + /marker).')
+    ap.add_argument('--model', default='tugbot', help='Gazebo model name')
+    ap.add_argument('--period', type=float, default=0.5, help='poll period, seconds')
+    ap.add_argument('--min-dist', type=float, default=0.10,
+                    help='min xy motion (m) before a new trail point is recorded')
+    args = ap.parse_args(argv)
+
+    stop = {'flag': False}
+
+    def _sig(_signum, _frame):
+        stop['flag'] = True
+
+    signal.signal(signal.SIGINT, _sig)
+    signal.signal(signal.SIGTERM, _sig)
+
+    points: List[Point] = []
+    fails = 0
+    while not stop['flag']:
+        p = _poll_pose(args.model)
+        if p is not None and should_record(p, points[-1] if points else None,
+                                           args.min_dist):
+            points.append(p)
+            if len(points) >= 2:                       # a strip needs 2+ points
+                if _redraw(points, 'tugbot_trail', 1):
+                    fails = 0
+                else:
+                    fails += 1
+                    print('gz_trail: marker redraw failed (n=%d, consecutive=%d)'
+                          % (len(points), fails), file=sys.stderr, flush=True)
+        time.sleep(args.period)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
