@@ -2,13 +2,14 @@
 """Draw the tugbot's ground-truth path as a red trail in the Gazebo scene.
 
 Polls the model pose via the gz CLI (~2 Hz), min-distance filters the samples, and
-sends /marker requests: by default a chain of small red SPHERE beads (one constant
--size request per point; the LINE_STRIP renders ~1px in the Harmonic GUI, too thin),
-or --style line for the original growing LINE_STRIP. Pure gz-side: no ROS, no extra
-dependencies. Started automatically by tools/run_flood_fill_maze.sh when
-HEADLESS=false; also standalone-runnable:
+sends /marker requests: by default a growing red LINE_STRIP (thin ~1px in the
+Harmonic GUI, but continuous -- user-preferred over the sparse look of the bead
+alternative), or --style spheres for a chain of small red SPHERE beads (one
+constant-size request per point). Pure gz-side: no ROS, no extra dependencies.
+Started automatically by tools/run_flood_fill_maze.sh when HEADLESS=false; also
+standalone-runnable:
   python3 tools/gz_trail.py [--model tugbot] [--period 0.5] [--min-dist 0.10]
-                            [--style spheres|line]
+                            [--style line|spheres]
 See docs/superpowers/specs/2026-07-08-gazebo-truth-trail-design.md.
 """
 from __future__ import annotations
@@ -132,9 +133,9 @@ def main(argv=None) -> int:
     ap.add_argument('--period', type=float, default=0.5, help='poll period, seconds')
     ap.add_argument('--min-dist', type=float, default=0.10,
                     help='min xy motion (m) before a new trail point is recorded')
-    ap.add_argument('--style', choices=('spheres', 'line'), default='spheres',
-                    help='trail style: beaded spheres (default; clearly visible) or '
-                         'a 1px LINE_STRIP (kept for comparison)')
+    ap.add_argument('--style', choices=('line', 'spheres'), default='line',
+                    help='trail style: continuous LINE_STRIP (default; thin but '
+                         'user-preferred over the sparse bead look) or beaded spheres')
     args = ap.parse_args(argv)
 
     stop = {'flag': False}
