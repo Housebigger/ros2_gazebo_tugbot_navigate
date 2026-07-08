@@ -24,7 +24,7 @@ from tugbot_maze.map_memory import MapMemory
 from tugbot_maze.maze_motion import MazeMotion
 from tugbot_maze.junction_log import JunctionLog, update_junctions
 from tugbot_maze.pose_tracking import (
-    compose_2d, quat_to_yaw, odom_prior, inverse_2d, yaw_to_quat, map_to_odom)
+    compose_2d, quat_to_yaw, odom_prior, yaw_to_quat, map_to_odom)
 from tugbot_maze.flood_fill_viz import self_built_wall_markerarray
 from tugbot_maze.scan_match_localizer import ScanMatchLocalizer
 from tugbot_maze.maze_sim import load_segments, outer_segments
@@ -83,10 +83,13 @@ class FloodFillSolver(Node):
         self._sm_last_odom = None
         self._sm_seq = -1
         self._sm_info = None
+        # perimeter walls (online_slam only): the localizer's fixed reference AND the base of
+        # the self-built-walls marker -- read once here, reused for both.
+        self._perimeter_segments = outer_segments() if self.pose_source == 'online_slam' else []
         if self.pose_source == 'scan_match':
             self.localizer = ScanMatchLocalizer(load_segments())          # fed the full map (baseline)
         elif self.pose_source == 'online_slam':
-            self.localizer = OnlineScanMatchLocalizer(outer_segments())   # perimeter only; interior grows online
+            self.localizer = OnlineScanMatchLocalizer(self._perimeter_segments)  # perimeter only; interior grows online
         else:
             self.localizer = None
         self._prev_motion_cell = None
@@ -100,7 +103,6 @@ class FloodFillSolver(Node):
         _walls_qos = QoSProfile(depth=1)
         _walls_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL   # latch for late RViz joins
         self.walls_pub = self.create_publisher(MarkerArray, '/maze/self_built_walls', _walls_qos)
-        self._perimeter_segments = outer_segments() if self.pose_source == 'online_slam' else []
         self._walls_key = None
 
         self.phase = 'startup'        # startup | entering | driving | done
@@ -224,6 +226,9 @@ class FloodFillSolver(Node):
         grows (cheap change-key), and never allowed to kill the node."""
         if self.pose_source != 'online_slam':
             return
+        # Cheap growth trigger: republish when a cell is newly sensed/committed. Can lag by
+        # <=1 cell if `committed` shrinks or a wall is refined within an already-sensed cell --
+        # viz-only, self-heals on the next new cell.
         key = (len(self.motion.sensed), len(self.motion.committed))
         if key == self._walls_key:
             return
