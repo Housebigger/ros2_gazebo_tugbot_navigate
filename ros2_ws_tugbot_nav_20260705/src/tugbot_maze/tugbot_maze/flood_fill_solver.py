@@ -218,6 +218,25 @@ class FloodFillSolver(Node):
         tmsg.transform.rotation.w = qw
         self.tf_broadcaster.sendTransform(tmsg)
 
+    def _publish_self_built_walls(self):
+        """online_slam: publish perimeter + all confirmed interior walls as a MarkerArray so
+        RViz shows the map the robot built. Republished only when the sensed/committed set
+        grows (cheap change-key), and never allowed to kill the node."""
+        if self.pose_source != 'online_slam':
+            return
+        key = (len(self.motion.sensed), len(self.motion.committed))
+        if key == self._walls_key:
+            return
+        try:
+            cells = self.motion.sensed | self.motion.committed
+            segs = list(self._perimeter_segments) + confirmed_wall_segments(self.brain, cells)
+            arr = self_built_wall_markerarray(
+                segs, frame_id=self.map_frame, stamp=self.get_clock().now().to_msg())
+            self.walls_pub.publish(arr)
+            self._walls_key = key    # advance only on success -> retry on transient failure
+        except Exception as e:                       # viz must never crash the solver
+            self.get_logger().warning('self-built walls marker publish failed: %r' % e)
+
     def _flush_junctions(self):
         try:
             self.junctions.flush(self.junction_log_path)
@@ -269,6 +288,7 @@ class FloodFillSolver(Node):
                 self.get_logger().info('JUNCTION cell=%s exits=%s order=%d visits=%d'
                                        % (tuple(j['cell']), j['exits'],
                                           j['discovery_index'], j['visits']))
+            self._publish_self_built_walls()
             if done and self.phase != 'done':
                 self.phase = 'done'
                 self.get_logger().info('EXIT_REACHED (flood_fill_solver)')
