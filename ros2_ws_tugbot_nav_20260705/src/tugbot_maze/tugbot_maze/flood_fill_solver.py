@@ -11,17 +11,21 @@ from typing import Optional
 
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, TransformStamped
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
+from visualization_msgs.msg import MarkerArray
 import tf2_ros
+from rclpy.qos import QoSProfile, DurabilityPolicy
 
 from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, pose_to_cell)
 from tugbot_maze.map_memory import MapMemory
 from tugbot_maze.maze_motion import MazeMotion
 from tugbot_maze.junction_log import JunctionLog, update_junctions
-from tugbot_maze.pose_tracking import compose_2d, quat_to_yaw, odom_prior
+from tugbot_maze.pose_tracking import (
+    compose_2d, quat_to_yaw, odom_prior, inverse_2d, yaw_to_quat, map_to_odom)
+from tugbot_maze.flood_fill_viz import self_built_wall_markerarray
 from tugbot_maze.scan_match_localizer import ScanMatchLocalizer
 from tugbot_maze.maze_sim import load_segments, outer_segments
 from tugbot_maze.online_scan_match_localizer import (
@@ -49,6 +53,10 @@ class FloodFillSolver(Node):
         self.exit_radius = float(self.declare_parameter('exit_radius', 1.2).value)
         self.entry_direct_distance_m = float(self.declare_parameter('entry_direct_distance_m', 2.0).value)
         self.startup_delay_sec = float(self.declare_parameter('startup_delay_sec', 3.0).value)
+        self.entrance_x = float(self.declare_parameter('entrance_x', 0.0).value)
+        self.entrance_y = float(self.declare_parameter('entrance_y', 0.0).value)
+        self.entrance_yaw = float(self.declare_parameter('entrance_yaw', 0.0).value)
+        self._entrance_anchor = (self.entrance_x, self.entrance_y, self.entrance_yaw)
         self.hop_timeout_s = float(self.declare_parameter('hop_timeout_s', 25.0).value)
         self.cruise_v = float(self.declare_parameter('cruise_v', 0.3).value)
         # Sense a cell only when centered within this radius and settled (clean geometry).
@@ -88,6 +96,12 @@ class FloodFillSolver(Node):
         self.goal_events_pub = self.create_publisher(String, self.goal_events_topic, 10)
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
+        _walls_qos = QoSProfile(depth=1)
+        _walls_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL   # latch for late RViz joins
+        self.walls_pub = self.create_publisher(MarkerArray, '/maze/self_built_walls', _walls_qos)
+        self._perimeter_segments = outer_segments() if self.pose_source == 'online_slam' else []
+        self._walls_key = None
 
         self.phase = 'startup'        # startup | entering | driving | done
         self.start_xy = None
@@ -174,6 +188,28 @@ class FloodFillSolver(Node):
     def _publish_cmd(self, v, w):
         m = Twist(); m.linear.x = float(v); m.angular.z = float(w); self.cmd_vel_pub.publish(m)
 
+    def _publish_map_to_odom(self):
+        """online_slam: own the map->odom transform from the ICP pose so RViz + the exit
+        monitor see the pose the robot actually uses (slam_toolbox is silenced on this TF)."""
+        if self.pose_source != 'online_slam':
+            return
+        if self._sm_corrected is None or self._sm_last_odom is None:
+            return
+        ox, oy, oyaw = map_to_odom(self._sm_corrected, self._sm_last_odom)
+        tmsg = TransformStamped()
+        tmsg.header.stamp = self.get_clock().now().to_msg()
+        tmsg.header.frame_id = self.map_frame
+        tmsg.child_frame_id = self.odom_frame
+        tmsg.transform.translation.x = float(ox)
+        tmsg.transform.translation.y = float(oy)
+        tmsg.transform.translation.z = 0.0
+        qx, qy, qz, qw = yaw_to_quat(oyaw)
+        tmsg.transform.rotation.x = qx
+        tmsg.transform.rotation.y = qy
+        tmsg.transform.rotation.z = qz
+        tmsg.transform.rotation.w = qw
+        self.tf_broadcaster.sendTransform(tmsg)
+
     def _flush_junctions(self):
         try:
             self.junctions.flush(self.junction_log_path)
@@ -183,6 +219,7 @@ class FloodFillSolver(Node):
     def _control_tick(self):
         now = self.get_clock().now(); t = now.nanoseconds / 1e9
         pose = self._lookup_pose()
+        self._publish_map_to_odom()
         if self.phase == 'done':
             return
         elapsed = (now - self.start_time).nanoseconds / 1e9
