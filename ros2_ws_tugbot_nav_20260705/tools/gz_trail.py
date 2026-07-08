@@ -121,6 +121,9 @@ def main(argv=None) -> int:
         if p is not None and should_record(p, points[-1] if points else None,
                                            args.min_dist):
             points.append(p)
+            # Each redraw resends the FULL list (same ns/id replaces the marker).
+            # Growth is intentional and bounded by run length: a maze run is a few
+            # hundred 0.10m-filtered points -> a few KB per request. Keep it simple.
             if len(points) >= 2:                       # a strip needs 2+ points
                 if _redraw(points, 'tugbot_trail', 1):
                     fails = 0
