@@ -1,6 +1,8 @@
 import math
 
-from tugbot_maze.pose_tracking import compose_2d, inverse_2d, odom_prior, quat_to_yaw
+from tugbot_maze.pose_tracking import (
+    compose_2d, inverse_2d, odom_prior, quat_to_yaw,
+    yaw_to_quat, map_to_odom)
 
 
 def test_compose_identity_parent_returns_child():
@@ -73,3 +75,24 @@ def test_odom_prior_applies_odom_delta_in_body_frame():
     prior = odom_prior(corrected, last_odom, cur_odom)
     # forward in body frame (yaw=pi/2) maps to +y in map
     assert _close(prior, (0.0, 1.0, math.pi / 2), tol=1e-9)
+
+
+def test_yaw_to_quat_known_angles():
+    for yaw, (ez, ew) in [(0.0, (0.0, 1.0)),
+                          (math.pi / 2, (math.sqrt(0.5), math.sqrt(0.5))),
+                          (math.pi, (1.0, 0.0)),
+                          (-math.pi / 2, (-math.sqrt(0.5), math.sqrt(0.5)))]:
+        x, y, z, w = yaw_to_quat(yaw)
+        assert (x, y) == (0.0, 0.0)
+        assert math.isclose(z, ez, abs_tol=1e-9)
+        assert math.isclose(w, ew, abs_tol=1e-9)
+
+
+def test_map_to_odom_roundtrip():
+    # For any map->base and odom->base, compose(map_to_odom, odom->base) == map->base
+    map_base = (3.0, -2.0, 1.1)
+    odom_base = (0.7, 0.4, 0.3)
+    m2o = map_to_odom(map_base, odom_base)
+    back = compose_2d(m2o, odom_base)
+    for a, b in zip(back, map_base):
+        assert math.isclose(a, b, abs_tol=1e-9)
