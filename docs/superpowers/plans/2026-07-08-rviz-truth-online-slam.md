@@ -15,7 +15,7 @@
 cd ros2_ws_tugbot_nav_20260705
 source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ```
-Note: the package is symlink-installed, so Python edits under `src/tugbot_maze/tugbot_maze/` take effect on re-run without rebuild; new files, `package.xml`, launch, and config changes require `colcon build --packages-select tugbot_maze tugbot_bringup tugbot_navigation`.
+Note: the package is symlink-installed, so Python edits under `src/tugbot_maze/tugbot_maze/` take effect on re-run without rebuild; new files, `package.xml`, launch, and config changes require a rebuild. **Always rebuild with `--symlink-install`**: `colcon build --symlink-install --packages-select tugbot_maze tugbot_bringup tugbot_navigation`. A plain `colcon build` (no `--symlink-install`) converts the package to a copy-install, which breaks `maze_sim.default_segments_path()` — it resolves the maze data via `os.path.dirname(__file__)/../config/`, valid only when `__file__` points into `src/`. If the offline sim suddenly `FileNotFoundError`s on `maze_wall_segments_20260528.yaml`, rebuild with `--symlink-install` (do `rm -rf build/tugbot_maze install/tugbot_maze` first if switching install modes).
 
 ---
 
@@ -516,7 +516,7 @@ to:
 
 Run:
 ```bash
-colcon build --packages-select tugbot_maze tugbot_bringup tugbot_navigation >/dev/null 2>&1 && echo BUILD_OK
+colcon build --symlink-install --packages-select tugbot_maze tugbot_bringup tugbot_navigation >/dev/null 2>&1 && echo BUILD_OK
 source install/setup.bash
 python -c "import yaml; yaml.safe_load(open('src/tugbot_navigation/config/slam_toolbox_params_online_slam.yaml')); print('YAML_OK')"
 ros2 launch tugbot_bringup tugbot_maze_explore.launch.py --show-args >/dev/null 2>&1 && echo LAUNCH_ARGS_OK
@@ -606,7 +606,7 @@ EOF
 
 Run:
 ```bash
-colcon build --packages-select tugbot_maze tugbot_bringup tugbot_navigation >/dev/null 2>&1 && echo BUILD_OK
+colcon build --symlink-install --packages-select tugbot_maze tugbot_bringup tugbot_navigation >/dev/null 2>&1 && echo BUILD_OK
 source install/setup.bash
 python -m pytest src/tugbot_maze/test/test_online_slam_sim.py src/tugbot_maze/test/test_pose_tracking.py src/tugbot_maze/test/test_flood_fill_viz.py -q
 python -m pytest src/tugbot_maze/test/ -q
