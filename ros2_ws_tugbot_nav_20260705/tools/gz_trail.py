@@ -70,6 +70,23 @@ def marker_request(points: List[Point], ns: str = 'tugbot_trail', marker_id: int
     return ', '.join(parts)
 
 
+def sphere_request(point: Point, marker_id: int, ns: str = 'tugbot_trail',
+                   z: float = 0.05, diameter: float = 0.08) -> str:
+    """One small red sphere at the point (beaded trail -- the LINE_STRIP renders
+    ~1px in the Harmonic GUI, too thin to see well). Unique marker_id per point
+    keeps every request constant-size instead of resending the whole line.
+    The input point's own z is IGNORED and replaced by the z parameter."""
+    return ', '.join([
+        'ns: "%s"' % ns,
+        'id: %d' % marker_id,
+        'action: ADD_MODIFY',
+        'type: SPHERE',
+        'material { ambient { r: 1 a: 1 } diffuse { r: 1 a: 1 } emissive { r: 1 a: 1 } }',
+        'scale { x: %.3f y: %.3f z: %.3f }' % (diameter, diameter, diameter),
+        'pose { position { x: %.3f y: %.3f z: %.3f } }' % (point[0], point[1], z),
+    ])
+
+
 def _poll_pose(model: str) -> Optional[Point]:
     """One ground-truth pose sample via the gz CLI; None while the sim isn't up."""
     try:
@@ -82,10 +99,8 @@ def _poll_pose(model: str) -> Optional[Point]:
     return parse_model_pose(r.stdout)
 
 
-def _redraw(points: List[Point], ns: str, marker_id: int,
-            timeout_ms: int = 2000) -> bool:
-    """Replace the trail marker with the full point list. False on failure."""
-    req = marker_request(points, ns, marker_id)
+def _send_marker(req: str, timeout_ms: int = 2000) -> bool:
+    """Send one /marker request. False on failure."""
     try:
         # NOTE: /marker's advertised reply type is gz.msgs.Empty (verified via
         # gz service -i on Harmonic 8.11). A mismatched reptype (e.g. the Boolean
@@ -101,6 +116,12 @@ def _redraw(points: List[Point], ns: str, marker_id: int,
     return r.returncode == 0
 
 
+def _redraw(points: List[Point], ns: str, marker_id: int,
+            timeout_ms: int = 2000) -> bool:
+    """Replace the full-line trail marker with the whole point list. False on failure."""
+    return _send_marker(marker_request(points, ns, marker_id), timeout_ms)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description='Red ground-truth trail in the Gazebo scene (poll + /marker).')
@@ -108,6 +129,9 @@ def main(argv=None) -> int:
     ap.add_argument('--period', type=float, default=0.5, help='poll period, seconds')
     ap.add_argument('--min-dist', type=float, default=0.10,
                     help='min xy motion (m) before a new trail point is recorded')
+    ap.add_argument('--style', choices=('spheres', 'line'), default='spheres',
+                    help='trail style: beaded spheres (default; clearly visible) or '
+                         'a 1px LINE_STRIP (kept for comparison)')
     args = ap.parse_args(argv)
 
     stop = {'flag': False}
@@ -125,16 +149,21 @@ def main(argv=None) -> int:
         if p is not None and should_record(p, points[-1] if points else None,
                                            args.min_dist):
             points.append(p)
-            # Each redraw resends the FULL list (same ns/id replaces the marker).
-            # Growth is intentional and bounded by run length: a maze run is a few
-            # hundred 0.10m-filtered points -> a few KB per request. Keep it simple.
-            if len(points) >= 2:                       # a strip needs 2+ points
-                if _redraw(points, 'tugbot_trail', 1):
-                    fails = 0
-                else:
-                    fails += 1
-                    print('gz_trail: marker redraw failed (n=%d, consecutive=%d)'
-                          % (len(points), fails), file=sys.stderr, flush=True)
+            if args.style == 'spheres':
+                ok = _send_marker(sphere_request(p, len(points)))
+            elif len(points) >= 2:                     # a strip needs 2+ points
+                # Each redraw resends the FULL list (same ns/id replaces the marker).
+                # Growth is intentional and bounded by run length: a maze run is a few
+                # hundred 0.10m-filtered points -> a few KB per request. Keep it simple.
+                ok = _redraw(points, 'tugbot_trail', 1)
+            else:
+                ok = True                              # first line point: nothing to draw yet
+            if ok:
+                fails = 0
+            else:
+                fails += 1
+                print('gz_trail: marker send failed (n=%d, consecutive=%d)'
+                      % (len(points), fails), file=sys.stderr, flush=True)
         time.sleep(args.period)
     return 0
 

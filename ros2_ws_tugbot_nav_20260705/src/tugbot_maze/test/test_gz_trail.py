@@ -76,3 +76,15 @@ def test_marker_request_line_strip_red():
 def test_marker_request_point_coordinates():
     req = gz_trail.marker_request([(1.5, -2.25, 0.0)])
     assert 'point { x: 1.500 y: -2.250 z: 0.050 }' in req
+
+
+def test_sphere_request_red_bead():
+    req = gz_trail.sphere_request((1.5, -2.25, 9.9), 42)
+    assert 'type: SPHERE' in req
+    assert 'action: ADD_MODIFY' in req
+    assert 'ns: "tugbot_trail"' in req
+    assert 'id: 42' in req
+    assert 'scale { x: 0.080 y: 0.080 z: 0.080 }' in req
+    # bead sits at the trail height regardless of the input point's z
+    assert 'pose { position { x: 1.500 y: -2.250 z: 0.050 } }' in req
+    assert 'diffuse { r: 1 a: 1 }' in req and 'emissive { r: 1 a: 1 }' in req
