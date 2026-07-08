@@ -87,9 +87,13 @@ def _redraw(points: List[Point], ns: str, marker_id: int,
     """Replace the trail marker with the full point list. False on failure."""
     req = marker_request(points, ns, marker_id)
     try:
+        # NOTE: /marker's advertised reply type is gz.msgs.Empty (verified via
+        # gz service -i on Harmonic 8.11). A mismatched reptype (e.g. the Boolean
+        # from older docs) makes every call time out silently -- and the gz CLI
+        # exits 0 even on service timeout, so returncode alone cannot catch it.
         r = subprocess.run(
             ['gz', 'service', '-s', '/marker',
-             '--reqtype', 'gz.msgs.Marker', '--reptype', 'gz.msgs.Boolean',
+             '--reqtype', 'gz.msgs.Marker', '--reptype', 'gz.msgs.Empty',
              '--timeout', str(timeout_ms), '--req', req],
             capture_output=True, text=True, timeout=timeout_ms / 1000.0 + 3.0)
     except (subprocess.TimeoutExpired, OSError):

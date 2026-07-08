@@ -293,7 +293,7 @@ def _redraw(points: List[Point], ns: str, marker_id: int,
     try:
         r = subprocess.run(
             ['gz', 'service', '-s', '/marker',
-             '--reqtype', 'gz.msgs.Marker', '--reptype', 'gz.msgs.Boolean',
+             '--reqtype', 'gz.msgs.Marker', '--reptype', 'gz.msgs.Empty',
              '--timeout', str(timeout_ms), '--req', req],
             capture_output=True, text=True, timeout=timeout_ms / 1000.0 + 3.0)
     except (subprocess.TimeoutExpired, OSError):
@@ -483,12 +483,12 @@ While the sim is up, in a second sourced shell:
 # capture a REAL pose output sample to confirm the parser's format assumption
 gz model -m tugbot -p
 # hand-send a big red test sphere near the entrance; expect "data: true" reply
-gz service -s /marker --reqtype gz.msgs.Marker --reptype gz.msgs.Boolean --timeout 2000 \
+gz service -s /marker --reqtype gz.msgs.Marker --reptype gz.msgs.Empty --timeout 2000 \
   --req 'ns: "probe", id: 99, action: ADD_MODIFY, type: SPHERE, scale: {x: 0.3, y: 0.3, z: 0.3}, material: {ambient: {r: 1, a: 1}, diffuse: {r: 1, a: 1}}, pose: {position: {x: 2, y: 0, z: 0.3}}'
 ```
 User confirms a red ball appears in the Gazebo GUI near the entrance. Then remove it:
 ```bash
-gz service -s /marker --reqtype gz.msgs.Marker --reptype gz.msgs.Boolean --timeout 2000 \
+gz service -s /marker --reqtype gz.msgs.Marker --reptype gz.msgs.Empty --timeout 2000 \
   --req 'ns: "probe", id: 99, action: DELETE_MARKER'
 ```
 If the real `gz model -p` output format differs from both parser styles: update `_TRIPLE_RE` + add the real sample to the unit test (tools script — no build, instant effect).
@@ -524,7 +524,7 @@ And in `main()`, replace the `if len(points) >= 2: ... _redraw(points, 'tugbot_t
             try:
                 r = subprocess.run(
                     ['gz', 'service', '-s', '/marker',
-                     '--reqtype', 'gz.msgs.Marker', '--reptype', 'gz.msgs.Boolean',
+                     '--reqtype', 'gz.msgs.Marker', '--reptype', 'gz.msgs.Empty',
                      '--timeout', '2000', '--req', req],
                     capture_output=True, text=True, timeout=5.0)
                 ok = r.returncode == 0
