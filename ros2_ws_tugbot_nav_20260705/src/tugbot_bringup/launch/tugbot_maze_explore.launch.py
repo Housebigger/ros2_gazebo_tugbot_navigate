@@ -67,11 +67,16 @@ def generate_launch_description():
         "'",
     ])
 
+    online_slam_slam_params = os.path.join(navigation_share, 'config', 'slam_toolbox_params_online_slam.yaml')
+    slam_params_selected = PythonExpression([
+        "'", online_slam_slam_params, "' if '", LaunchConfiguration('pose_source'),
+        "' == 'online_slam' else '", LaunchConfiguration('slam_params_file'), "'"])
+
     maze_slam_nav_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup_share, 'launch', 'tugbot_maze_slam_nav.launch.py')),
         launch_arguments={
             'world_sdf': LaunchConfiguration('world_sdf'),
-            'slam_params_file': LaunchConfiguration('slam_params_file'),
+            'slam_params_file': slam_params_selected,
             'params_file': nav2_params_file,
             'rviz_config': LaunchConfiguration('rviz_config'),
             'use_sim_time': LaunchConfiguration('use_sim_time'),
@@ -208,7 +213,10 @@ def generate_launch_description():
         parameters=[{'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
                      'pose_source': LaunchConfiguration('pose_source'),
                      'sense_debug': ParameterValue(LaunchConfiguration('sense_debug'), value_type=bool),
-                     'junction_log_dir': LaunchConfiguration('junction_log_dir')}],
+                     'junction_log_dir': LaunchConfiguration('junction_log_dir'),
+                     'entrance_x': ParameterValue(LaunchConfiguration('entrance_x'), value_type=float),
+                     'entrance_y': ParameterValue(LaunchConfiguration('entrance_y'), value_type=float),
+                     'entrance_yaw': ParameterValue(LaunchConfiguration('entrance_yaw'), value_type=float)}],
         condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'flood_fill'"])),
     )
 
@@ -274,7 +282,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_respawn', default_value='False', description='Respawn Nav2 nodes if they crash.'),
         DeclareLaunchArgument('log_level', default_value='info', description='Nav2 log level.'),
         DeclareLaunchArgument('explorer_type', default_value='maze_dfs', description='Explorer implementation: maze_dfs, frontier, tremaux, wall_follower, or flood_fill.'),
-        DeclareLaunchArgument('pose_source', default_value='scan_match', description="flood_fill localization source: 'scan_match' (DEFAULT; ICP-match live LIDAR to the known wall map for an absolute pose -- reliably completes the maze, 8/8 Gazebo), 'odom_locked' (freeze map->odom at startup, then wheel odometry only), or 'slam' (live map->base_link)."),
+        DeclareLaunchArgument('pose_source', default_value='scan_match', description="flood_fill localization source: 'scan_match' (DEFAULT; ICP-match live LIDAR to the known wall map for an absolute pose -- reliably completes the maze, 8/8 Gazebo), 'online_slam' (ICP-match against a self-built reference -- perimeter + confirmed/local-sensed walls, no prior interior map; solver owns map->odom so RViz shows the true pose), 'odom_locked' (freeze map->odom at startup, then wheel odometry only), or 'slam' (live map->base_link)."),
         DeclareLaunchArgument('sense_debug', default_value='false', description='flood_fill: log per-cell sensed walls + min LIDAR ranges (diagnostics).'),
         DeclareLaunchArgument('junction_log_dir', default_value='', description='flood_fill: directory for the per-run junctions.json artifact (empty -> <cwd>/log).'),
         DeclareLaunchArgument('follow_side', default_value='left', description='Wall-follower hand for explorer_type:=wall_follower: left or right. The maze_sim guarantee proof selected left as faster and robust.'),

@@ -42,3 +42,17 @@ def odom_prior(last_corrected: Pose2D, last_odom: Pose2D, cur_odom: Pose2D) -> P
     """
     delta = compose_2d(inverse_2d(last_odom), cur_odom)
     return compose_2d(last_corrected, delta)
+
+
+def yaw_to_quat(yaw: float) -> Tuple[float, float, float, float]:
+    """(x, y, z, w) quaternion for a planar yaw (rad)."""
+    return (0.0, 0.0, math.sin(yaw / 2.0), math.cos(yaw / 2.0))
+
+
+def map_to_odom(map_to_base: Pose2D, odom_to_base: Pose2D) -> Pose2D:
+    """map->odom offset such that compose_2d(result, odom_to_base) == map_to_base.
+
+    The solver holds map->base (its ICP pose) and reads odom->base from TF; publishing
+    this offset as the map->odom transform makes the full TF tree resolve to the ICP pose.
+    """
+    return compose_2d(map_to_base, inverse_2d(odom_to_base))
