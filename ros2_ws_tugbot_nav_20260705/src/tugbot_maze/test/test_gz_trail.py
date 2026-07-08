@@ -56,3 +56,23 @@ def test_should_record_min_distance():
     # boundary: exactly min_dist away counts as recorded (>=, not >).
     # Zero-origin so dx*dx and min_dist*min_dist are the identical float computation.
     assert gz_trail.should_record((0.10, 0.0, 0.0), (0.0, 0.0, 0.0), 0.10) is True
+
+
+def test_marker_request_line_strip_red():
+    pts = [(1.0, 2.0, 0.0), (3.0, 4.0, 0.0)]
+    req = gz_trail.marker_request(pts)
+    assert 'type: LINE_STRIP' in req
+    assert 'action: ADD_MODIFY' in req
+    assert 'ns: "tugbot_trail"' in req
+    assert 'id: 1' in req
+    assert req.count('point {') == 2
+    # red material, both diffuse and emissive so it reads bright regardless of lighting
+    assert 'diffuse { r: 1 a: 1 }' in req
+    assert 'emissive { r: 1 a: 1 }' in req
+    # z lifted off the floor to avoid z-fighting
+    assert 'z: 0.050' in req
+
+
+def test_marker_request_point_coordinates():
+    req = gz_trail.marker_request([(1.5, -2.25, 0.0)])
+    assert 'point { x: 1.500 y: -2.250 z: 0.050 }' in req

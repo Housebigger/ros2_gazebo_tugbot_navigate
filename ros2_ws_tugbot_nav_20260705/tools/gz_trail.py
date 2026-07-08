@@ -51,3 +51,19 @@ def should_record(new_point: Point, last_point: Optional[Point], min_dist: float
     dx = new_point[0] - last_point[0]
     dy = new_point[1] - last_point[1]
     return (dx * dx + dy * dy) >= min_dist * min_dist
+
+
+def marker_request(points: List[Point], ns: str = 'tugbot_trail', marker_id: int = 1,
+                   z: float = 0.05) -> str:
+    """Protobuf-text gz.msgs.Marker request: a red LINE_STRIP through the points.
+    Re-sending with the same ns/id replaces the marker, so the line grows."""
+    parts = [
+        'ns: "%s"' % ns,
+        'id: %d' % marker_id,
+        'action: ADD_MODIFY',
+        'type: LINE_STRIP',
+        'material { ambient { r: 1 a: 1 } diffuse { r: 1 a: 1 } emissive { r: 1 a: 1 } }',
+    ]
+    for p in points:
+        parts.append('point { x: %.3f y: %.3f z: %.3f }' % (p[0], p[1], z))
+    return ', '.join(parts)
