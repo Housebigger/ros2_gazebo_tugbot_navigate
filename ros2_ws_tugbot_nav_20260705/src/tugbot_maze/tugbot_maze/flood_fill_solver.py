@@ -152,7 +152,15 @@ class FloodFillSolver(Node):
         map_base = self._lookup_tf(self.map_frame, self.base_frame)
         # Bootstrap: track live SLAM TF and seed anchors until driving with a scan in hand.
         if self.phase in ('startup', 'entering') or self.scan_msg is None or odom_base is None:
-            if map_base is not None:
+            if self.pose_source == 'online_slam':
+                # No slam_toolbox map->base (its TF is silenced); anchor on the known entrance
+                # and let wheel odometry carry the pose until ICP corrections begin (driving).
+                if odom_base is not None:
+                    self._sm_corrected = compose_2d(self._entrance_anchor, odom_base)
+                    self._sm_last_odom = odom_base
+                    self._sm_seq = self._scan_seq
+                return self._sm_corrected
+            if map_base is not None:                       # scan_match: unchanged
                 self._sm_corrected = map_base
                 self._sm_last_odom = odom_base
                 self._sm_seq = self._scan_seq
