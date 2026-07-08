@@ -67,11 +67,16 @@ def generate_launch_description():
         "'",
     ])
 
+    online_slam_slam_params = os.path.join(navigation_share, 'config', 'slam_toolbox_params_online_slam.yaml')
+    slam_params_selected = PythonExpression([
+        "'", online_slam_slam_params, "' if '", LaunchConfiguration('pose_source'),
+        "' == 'online_slam' else '", LaunchConfiguration('slam_params_file'), "'"])
+
     maze_slam_nav_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup_share, 'launch', 'tugbot_maze_slam_nav.launch.py')),
         launch_arguments={
             'world_sdf': LaunchConfiguration('world_sdf'),
-            'slam_params_file': LaunchConfiguration('slam_params_file'),
+            'slam_params_file': slam_params_selected,
             'params_file': nav2_params_file,
             'rviz_config': LaunchConfiguration('rviz_config'),
             'use_sim_time': LaunchConfiguration('use_sim_time'),
@@ -208,7 +213,10 @@ def generate_launch_description():
         parameters=[{'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
                      'pose_source': LaunchConfiguration('pose_source'),
                      'sense_debug': ParameterValue(LaunchConfiguration('sense_debug'), value_type=bool),
-                     'junction_log_dir': LaunchConfiguration('junction_log_dir')}],
+                     'junction_log_dir': LaunchConfiguration('junction_log_dir'),
+                     'entrance_x': ParameterValue(LaunchConfiguration('entrance_x'), value_type=float),
+                     'entrance_y': ParameterValue(LaunchConfiguration('entrance_y'), value_type=float),
+                     'entrance_yaw': ParameterValue(LaunchConfiguration('entrance_yaw'), value_type=float)}],
         condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'flood_fill'"])),
     )
 
