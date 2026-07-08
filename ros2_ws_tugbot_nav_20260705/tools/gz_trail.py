@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Draw the tugbot's ground-truth path as a red LINE_STRIP marker in the Gazebo scene.
+"""Draw the tugbot's ground-truth path as a red trail in the Gazebo scene.
 
 Polls the model pose via the gz CLI (~2 Hz), min-distance filters the samples, and
-redraws a growing /marker LINE_STRIP. Pure gz-side: no ROS, no extra dependencies.
-Started automatically by tools/run_flood_fill_maze.sh when HEADLESS=false; also
-standalone-runnable:  python3 tools/gz_trail.py [--model tugbot] [--period 0.5]
-[--min-dist 0.10].
+sends /marker requests: by default a chain of small red SPHERE beads (one constant
+-size request per point; the LINE_STRIP renders ~1px in the Harmonic GUI, too thin),
+or --style line for the original growing LINE_STRIP. Pure gz-side: no ROS, no extra
+dependencies. Started automatically by tools/run_flood_fill_maze.sh when
+HEADLESS=false; also standalone-runnable:
+  python3 tools/gz_trail.py [--model tugbot] [--period 0.5] [--min-dist 0.10]
+                            [--style spheres|line]
 See docs/superpowers/specs/2026-07-08-gazebo-truth-trail-design.md.
 """
 from __future__ import annotations
