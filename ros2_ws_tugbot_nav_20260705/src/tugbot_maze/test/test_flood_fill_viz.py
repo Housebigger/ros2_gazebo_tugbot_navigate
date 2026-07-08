@@ -14,6 +14,7 @@ def test_markerarray_is_line_list_two_points_per_segment():
     assert (m.points[0].x, m.points[0].y) == (0.0, 0.0)
     assert (m.points[1].x, m.points[1].y) == (2.0, 0.0)
     assert m.scale.x > 0.0 and m.color.a > 0.0
+    assert m.pose.orientation.w == 1.0             # valid quaternion (else RViz rejects the marker)
 
 
 def test_markerarray_empty_segments_is_valid():

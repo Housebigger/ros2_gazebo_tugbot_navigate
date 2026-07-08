@@ -2,7 +2,7 @@
 MarkerArray so RViz shows the map the robot actually built (perimeter + confirmed interior
 walls), rather than slam_toolbox's occupancy grid. Pure builder — no ROS node state."""
 from __future__ import annotations
-from typing import Iterable, Optional, Tuple
+from typing import Iterable, Tuple
 
 from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker, MarkerArray
