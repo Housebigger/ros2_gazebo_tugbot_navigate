@@ -45,6 +45,7 @@ def self_built_occupancy_grid(sensed_cells, wall_segments, perimeter_segments,
     exactly at each grid cell's CENTER (within wall_half_thickness_m of a wall
     centerline -> occupied); the free-fill uses floor-index slices, exact to
     within one grid cell at interior boundaries (masked by the wall band)."""
+    perimeter_segments = list(perimeter_segments)   # iterated 3x; guard one-shot iterables
     xs = [s[i] for s in perimeter_segments for i in (0, 2)]
     ys = [s[i] for s in perimeter_segments for i in (1, 3)]
     x0, y0 = min(xs) - margin_m, min(ys) - margin_m
