@@ -41,9 +41,10 @@ def self_built_occupancy_grid(sensed_cells, wall_segments, perimeter_segments,
     """Render the self-built map as a classic-SLAM-semantics OccupancyGrid:
     unknown (-1) everywhere, sensed cells' 2x2m interiors free (0), and wall
     bands (perimeter + confirmed interior walls) occupied (100, overwrites free).
-    Bounds come from the perimeter bbox + margin. Occupancy is decided at each
-    grid cell's CENTER (inside a cell interior -> free; within
-    wall_half_thickness_m of a wall centerline -> occupied)."""
+    Bounds come from the perimeter bbox + margin. Wall occupancy is decided
+    exactly at each grid cell's CENTER (within wall_half_thickness_m of a wall
+    centerline -> occupied); the free-fill uses floor-index slices, exact to
+    within one grid cell at interior boundaries (masked by the wall band)."""
     xs = [s[i] for s in perimeter_segments for i in (0, 2)]
     ys = [s[i] for s in perimeter_segments for i in (1, 3)]
     x0, y0 = min(xs) - margin_m, min(ys) - margin_m
@@ -94,5 +95,5 @@ def self_built_occupancy_grid(sensed_cells, wall_segments, perimeter_segments,
     msg.info.origin.position.x = float(x0)
     msg.info.origin.position.y = float(y0)
     msg.info.origin.orientation.w = 1.0
-    msg.data = grid.flatten().tolist()          # row-major, row 0 at origin.y
+    msg.data = grid.ravel().tolist()          # row-major, row 0 at origin.y
     return msg
