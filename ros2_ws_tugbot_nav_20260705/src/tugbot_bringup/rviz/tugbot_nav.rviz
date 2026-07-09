@@ -219,7 +219,7 @@ Visualization Manager:
       Color Scheme: map
       Draw Behind: false
       Enabled: true
-      Name: Map
+      Name: SelfBuiltMap
       Topic:
         Depth: 5
         Durability Policy: Transient Local
