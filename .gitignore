@@ -3,6 +3,14 @@ ros2_ws_*/build/
 ros2_ws_*/install/
 ros2_ws_*/log/
 
+# Stray colcon artifacts if ever run from the repo root
+/build/
+/install/
+/log/
+
+# codegraph MCP index cache (regenerated on demand)
+.codegraph/
+
 # Test caches
 **/.pytest_cache/
 **/__pycache__/
