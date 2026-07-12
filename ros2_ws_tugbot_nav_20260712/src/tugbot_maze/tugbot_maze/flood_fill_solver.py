@@ -271,6 +271,10 @@ class FloodFillSolver(Node):
             s = self.scan_msg
             added = self._scatter.add_scan(
                 self._sm_corrected, s.ranges, s.angle_min, s.angle_increment)
+            # Publish the first frame, then at most every scatter_period_s AND only when the
+            # cloud actually grew. Intentional: on a content-static stretch we skip redundant
+            # republishes of an unchanged cloud; the next growth publishes the full set, so
+            # nothing is ever lost (cadence just lags past the nominal period until growth).
             due = (self._scatter_last_pub is None or
                    (now - self._scatter_last_pub).nanoseconds / 1e9 >= self.scatter_period_s)
             if due and (added > 0 or self._scatter_last_pub is None):
