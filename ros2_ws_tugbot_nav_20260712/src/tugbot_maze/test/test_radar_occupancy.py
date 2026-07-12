@@ -71,6 +71,17 @@ def test_invalid_beams_produce_no_update():
     assert set(r.to_occupancy_grid().data) == {-1}
 
 
+def test_oblique_hit_marks_endpoint_occupied_in_one_scan():
+    # An oblique beam must mark its endpoint occupied in a single scan -- the free
+    # ray-march must not decrement the endpoint's own cell.
+    r = RadarOccupancyGrid(_PERIM, resolution=0.1)
+    ang = 0.6
+    r.integrate_scan((4.0, 4.0, 0.0), [3.0], angle_min=ang, angle_inc=0.1)
+    ex = 4.0 + SCAN_OFFSET_X + 3.0 * math.cos(ang)
+    ey = 4.0 + 3.0 * math.sin(ang)
+    assert _cell_at(r.to_occupancy_grid(), ex, ey) == 100
+
+
 def test_occupancy_values_are_three_valued():
     r = RadarOccupancyGrid(_PERIM, resolution=0.1)
     r.integrate_scan((4.0, 4.0, 0.0), [2.0, 3.0], angle_min=-0.2, angle_inc=0.2)

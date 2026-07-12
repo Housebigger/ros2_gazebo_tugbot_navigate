@@ -56,8 +56,11 @@ class RadarOccupancyGrid:
         by = r * np.sin(ang)
         px = x + c * bx - s * by                           # endpoint in map
         py = y + s * bx + c * by
-        # Free-path samples: for each beam, step from the sensor toward the endpoint at one
-        # cell per step, keeping t < r (the endpoint cell itself is handled as occupied).
+        ex = np.floor((px - self.x0) / self.resolution).astype(np.int64)   # endpoint cells
+        ey = np.floor((py - self.y0) / self.resolution).astype(np.int64)
+        # Free-path samples: step from the sensor toward the endpoint at one cell per step,
+        # keeping t < r AND excluding any sample that lands in the beam's own endpoint cell
+        # (so an oblique beam can't decrement the cell it is about to mark occupied).
         step = self.resolution
         max_n = int(math.ceil(float(r.max()) / step))
         t = np.arange(max_n, dtype=float) * step                       # (max_n,)
@@ -65,13 +68,11 @@ class RadarOccupancyGrid:
         diry = np.sin(th + ang)
         fx = sx + t[None, :] * dirx[:, None]                          # (B, max_n)
         fy = sy + t[None, :] * diry[:, None]
-        keep = t[None, :] < r[:, None]                               # exclude endpoint sample
         ix = np.floor((fx - self.x0) / self.resolution).astype(np.int64)
         iy = np.floor((fy - self.y0) / self.resolution).astype(np.int64)
+        keep = (t[None, :] < r[:, None]) & ~((ix == ex[:, None]) & (iy == ey[:, None]))
         inb = keep & (ix >= 0) & (ix < self.width) & (iy >= 0) & (iy < self.height)
         np.add.at(self._logodds, (iy[inb], ix[inb]), -self.l_free)
-        ex = np.floor((px - self.x0) / self.resolution).astype(np.int64)
-        ey = np.floor((py - self.y0) / self.resolution).astype(np.int64)
         einb = (ex >= 0) & (ex < self.width) & (ey >= 0) & (ey < self.height)
         np.add.at(self._logodds, (ey[einb], ex[einb]), self.l_occ)
         np.clip(self._logodds, -self.l_clamp, self.l_clamp, out=self._logodds)
