@@ -12,7 +12,7 @@ from typing import Optional
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, TransformStamped
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, PointCloud2
 from std_msgs.msg import String
 from nav_msgs.msg import OccupancyGrid
 from visualization_msgs.msg import MarkerArray
@@ -28,6 +28,7 @@ from tugbot_maze.pose_tracking import (
     compose_2d, quat_to_yaw, odom_prior, yaw_to_quat, map_to_odom)
 from tugbot_maze.flood_fill_viz import (
     self_built_wall_markerarray, self_built_occupancy_grid)
+from tugbot_maze.scatter_cloud import ScatterCloud
 from tugbot_maze.scan_match_localizer import ScanMatchLocalizer
 from tugbot_maze.maze_sim import load_segments, outer_segments
 from tugbot_maze.online_scan_match_localizer import (
@@ -106,6 +107,12 @@ class FloodFillSolver(Node):
         _walls_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL   # latch for late RViz joins
         self.walls_pub = self.create_publisher(MarkerArray, '/maze/self_built_walls', _walls_qos)
         self.map_pub = self.create_publisher(OccupancyGrid, '/maze/self_built_map', _walls_qos)
+        # Radar-scatter overlay (online_slam only): accumulate live scan returns into a
+        # map-frame scatter cloud and republish (throttled) on top of the self-built map.
+        self.scatter_pub = self.create_publisher(PointCloud2, '/maze/scatter_cloud', _walls_qos)
+        self.scatter_period_s = float(self.declare_parameter('scatter_period_s', 0.5).value)
+        self._scatter = ScatterCloud(voxel_m=0.05)
+        self._scatter_last_pub = None
         self._walls_key = None
 
         self.phase = 'startup'        # startup | entering | driving | done
@@ -252,6 +259,28 @@ class FloodFillSolver(Node):
         except Exception as e:                       # viz must never crash the solver
             self.get_logger().warning('self-built map/walls publish failed: %r' % e)
 
+    def _publish_scatter_cloud(self, now):
+        """online_slam: accumulate the live scan into a map-frame scatter cloud (same ICP
+        pose + projection the localizer uses) and republish (throttled) as a PointCloud2.
+        Pure viz -- read-only on _sm_corrected/scan_msg, never allowed to kill the node."""
+        if self.pose_source != 'online_slam':
+            return
+        if self._sm_corrected is None or self.scan_msg is None:
+            return
+        try:
+            s = self.scan_msg
+            added = self._scatter.add_scan(
+                self._sm_corrected, s.ranges, s.angle_min, s.angle_increment)
+            due = (self._scatter_last_pub is None or
+                   (now - self._scatter_last_pub).nanoseconds / 1e9 >= self.scatter_period_s)
+            if due and (added > 0 or self._scatter_last_pub is None):
+                self.scatter_pub.publish(
+                    self._scatter.to_pointcloud2(frame_id=self.map_frame,
+                                                 stamp=now.to_msg()))
+                self._scatter_last_pub = now
+        except Exception as e:                       # viz must never crash the solver
+            self.get_logger().warning('scatter cloud publish failed: %r' % e)
+
     def _flush_junctions(self):
         try:
             self.junctions.flush(self.junction_log_path)
@@ -304,6 +333,7 @@ class FloodFillSolver(Node):
                                        % (tuple(j['cell']), j['exits'],
                                           j['discovery_index'], j['visits']))
             self._publish_self_built_walls()
+            self._publish_scatter_cloud(now)
             if done and self.phase != 'done':
                 self.phase = 'done'
                 self.get_logger().info('EXIT_REACHED (flood_fill_solver)')
