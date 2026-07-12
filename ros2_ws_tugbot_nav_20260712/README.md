@@ -77,15 +77,11 @@ tools/run_flood_fill_maze.sh 1000 false true online_slam
 #                            ^MAX_S ^HEADLESS=false(GUI) ^USE_RVIZ=true ^POSE_SOURCE
 ```
 
-The wrapper does four things a bare `ros2 launch` does **not**:
-- **Auto-starts the red ground-truth trail** (`tools/gz_trail.py`) whenever `HEADLESS=false` — the
-  tugbot's true path is drawn in the Gazebo scene (default `--style line`; `--style spheres` for a
-  bead chain). Headless batches don't start it.
+The wrapper does three things a bare `ros2 launch` does **not**:
 - **Process + Fast-DDS SHM cleanup and a unique `ROS_DOMAIN_ID` per run**, so back-to-back runs are
   safe (see the caveat under Method B).
-- **`EXIT_REACHED` watchdog + automatic teardown** (kills the launch, the trail drawer, and strays).
-- Writes artifacts to `log/flood_fill_run_<stamp>/` (`result.txt`, `run_meta.txt`, `launch.log`,
-  `gz_trail.log`).
+- **`EXIT_REACHED` watchdog + automatic teardown** (kills the launch and strays).
+- Writes artifacts to `log/flood_fill_run_<stamp>/` (`result.txt`, `run_meta.txt`, `launch.log`).
 
 **Method B — native `ros2 launch`.** Full manual control. Note `explorer_type` defaults to
 `maze_dfs`, so `explorer_type:=flood_fill` is **mandatory** or the flood-fill node never starts:
@@ -100,28 +96,16 @@ ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
 ```
 
 Caveats vs. the wrapper (you must handle these yourself):
-1. **No red trail.** `gz_trail.py` is a separate process the wrapper launches — the launch file does
-   not start it. To get the trail, run it in a second terminal once Gazebo is up (it retries quietly
-   until the model spawns):
-   ```bash
-   source /opt/ros/jazzy/setup.bash && source install/setup.bash
-   python3 tools/gz_trail.py            # add --style spheres for the bead chain
-   ```
-2. **No SHM/domain cleanup.** The first run is usually fine, but a repeat run often fails with
+1. **No SHM/domain cleanup.** The first run is usually fine, but a repeat run often fails with
    `RTPS_TRANSPORT_SHM ... open_and_lock_file failed` (leaked Fast-DDS shared-memory port locks →
    Nav2 never activates; looks like a nav failure but is pure cleanup contamination). Before
    re-running:
    ```bash
-   pkill -9 -f "gz sim|ros2 launch|parameter_bridge|slam_toolbox|flood_fill_solver|gz_trail" 2>/dev/null
+   pkill -9 -f "gz sim|ros2 launch|parameter_bridge|slam_toolbox|flood_fill_solver" 2>/dev/null
    rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* 2>/dev/null
    ```
-3. **No auto-teardown.** Stop with `Ctrl-C`, then run the cleanup one-liner above to avoid orphan
+2. **No auto-teardown.** Stop with `Ctrl-C`, then run the cleanup one-liner above to avoid orphan
    processes.
-
-> **Gazebo `/marker` note (Harmonic 8.11):** the `/marker` service reply type is `gz.msgs.Empty`
-> (not the `gz.msgs.Boolean` seen in older docs). A wrong `--reptype` makes every call time out
-> **silently** and the `gz` CLI still exits 0 — `gz_trail.py` uses the correct type; only relevant if
-> you script markers by hand.
 
 ## How online localization works
 
