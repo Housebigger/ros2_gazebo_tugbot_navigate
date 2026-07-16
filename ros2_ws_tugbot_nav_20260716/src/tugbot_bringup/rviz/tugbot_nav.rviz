@@ -83,11 +83,6 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        camera_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         imu_link:
           Alpha: 1
           Show Axes: false
@@ -193,8 +188,6 @@ Visualization Manager:
             base_footprint:
               base_link:
                 base_scan:
-                  {}
-                camera_link:
                   {}
                 imu_link:
                   {}
