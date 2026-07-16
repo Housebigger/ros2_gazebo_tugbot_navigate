@@ -313,14 +313,15 @@
       <pose>0.2999 0.104 0 2.61799 -0 0</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.056661 -0.015294 -0.008298 0 -0 0</pose>
+        <mass>2.781</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.00329553</ixx>
+          <ixy>-1.03882e-05</ixy>
+          <ixz>0.000107062</ixz>
+          <iyy>0.00504435</iyy>
+          <iyz>-0.000319492</iyz>
+          <izz>0.0057269</izz>
         </inertia>
       </inertial>
       <visual name="LF_HIP_fixed_joint_lump__LF_hip_fixed_visual">
@@ -366,14 +367,15 @@
       <pose>0.3598 0.18781 0 0 -0 1.5708</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.030815 4.6e-05 -0.245696 0 -0 0</pose>
+        <mass>3.071</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.0295638</ixx>
+          <ixy>4.42919e-05</ixy>
+          <ixz>0.00414243</ixz>
+          <iyy>0.029904</iyy>
+          <iyz>9.448e-05</iyz>
+          <izz>0.00486108</izz>
         </inertia>
       </inertial>
       <visual name="LF_THIGH_fixed_joint_lump__LF_thigh_fixed_visual">
@@ -419,14 +421,15 @@
       <pose>0.3598 0.28811 -0.285 0 -0 1.5708</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.005462 -0.061253 -0.08066 0 -0 0</pose>
+        <mass>0.58842</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.0101611</ixx>
+          <ixy>-5.35713e-05</ixy>
+          <ixz>-2.26604e-05</ixz>
+          <iyy>0.00881038</iyy>
+          <iyz>-0.00181935</iyz>
+          <izz>0.00154978</izz>
         </inertia>
       </inertial>
       <visual name="LF_SHANK_fixed_joint_lump__LF_shank_fixed_visual">
@@ -472,14 +475,15 @@
       <pose>-0.2999 0.104 0 -2.61799 -0 3.14159</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.056763 0.015294 -0.008298 0 -0 0</pose>
+        <mass>2.781</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.00329553</ixx>
+          <ixy>-1.10053e-05</ixy>
+          <ixz>-0.000109121</ixz>
+          <iyy>0.00504617</iyy>
+          <iyz>0.000319492</iyz>
+          <izz>0.00572872</izz>
         </inertia>
       </inertial>
       <visual name="LH_HIP_fixed_joint_lump__LH_hip_fixed_visual">
@@ -525,14 +529,15 @@
       <pose>-0.3598 0.18781 0 0 0 1.5708</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.030815 4.6e-05 -0.245696 0 -0 0</pose>
+        <mass>3.071</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.0295638</ixx>
+          <ixy>4.43959e-05</ixy>
+          <ixz>0.00414243</ixz>
+          <iyy>0.029904</iyy>
+          <iyz>0.000114794</iyz>
+          <izz>0.00486108</izz>
         </inertia>
       </inertial>
       <visual name="LH_THIGH_fixed_joint_lump__LH_thigh_fixed_visual">
@@ -578,14 +583,15 @@
       <pose>-0.3598 0.28811 -0.285 0 0 1.5708</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.005462 0.061253 -0.08066 0 -0 0</pose>
+        <mass>0.58842</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.0101611</ixx>
+          <ixy>5.35713e-05</ixy>
+          <ixz>-2.26604e-05</ixz>
+          <iyy>0.00881038</iyy>
+          <iyz>0.00181935</iyz>
+          <izz>0.00154978</izz>
         </inertia>
       </inertial>
       <visual name="LH_SHANK_fixed_joint_lump__LH_shank_fixed_visual">
@@ -631,14 +637,15 @@
       <pose>0.2999 -0.104 0 -2.61799 0 0</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.056763 0.015294 -0.008298 0 -0 0</pose>
+        <mass>2.781</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.00329553</ixx>
+          <ixy>-1.10053e-05</ixy>
+          <ixz>-0.000109121</ixz>
+          <iyy>0.00504617</iyy>
+          <iyz>0.000319492</iyz>
+          <izz>0.00572872</izz>
         </inertia>
       </inertial>
       <visual name="RF_HIP_fixed_joint_lump__RF_hip_fixed_visual">
@@ -684,14 +691,15 @@
       <pose>0.3598 -0.18781 0 0 0 -1.5708</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.030815 4.6e-05 -0.245696 0 -0 0</pose>
+        <mass>3.071</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.0295638</ixx>
+          <ixy>4.43959e-05</ixy>
+          <ixz>0.00414243</ixz>
+          <iyy>0.029904</iyy>
+          <iyz>0.000114794</iyz>
+          <izz>0.00486108</izz>
         </inertia>
       </inertial>
       <visual name="RF_THIGH_fixed_joint_lump__RF_thigh_fixed_visual">
@@ -737,14 +745,15 @@
       <pose>0.3598 -0.28811 -0.285 0 0 -1.5708</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.005462 0.061253 -0.08066 0 -0 0</pose>
+        <mass>0.58842</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.0101611</ixx>
+          <ixy>5.35713e-05</ixy>
+          <ixz>-2.26604e-05</ixz>
+          <iyy>0.00881038</iyy>
+          <iyz>0.00181935</iyz>
+          <izz>0.00154978</izz>
         </inertia>
       </inertial>
       <visual name="RF_SHANK_fixed_joint_lump__RF_shank_fixed_visual">
@@ -790,14 +799,15 @@
       <pose>-0.2999 -0.104 0 2.61799 0 3.14159</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.056661 -0.015294 -0.008298 0 -0 0</pose>
+        <mass>2.781</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.00329553</ixx>
+          <ixy>-1.03882e-05</ixy>
+          <ixz>0.000107062</ixz>
+          <iyy>0.00504435</iyy>
+          <iyz>-0.000319492</iyz>
+          <izz>0.0057269</izz>
         </inertia>
       </inertial>
       <visual name="RH_HIP_fixed_joint_lump__RH_hip_fixed_visual">
@@ -843,14 +853,15 @@
       <pose>-0.3598 -0.18781 -0 0 -0 -1.5708</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.030815 4.6e-05 -0.245696 0 -0 0</pose>
+        <mass>3.071</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.0295638</ixx>
+          <ixy>4.42919e-05</ixy>
+          <ixz>0.00414243</ixz>
+          <iyy>0.029904</iyy>
+          <iyz>9.448e-05</iyz>
+          <izz>0.00486108</izz>
         </inertia>
       </inertial>
       <visual name="RH_THIGH_fixed_joint_lump__RH_thigh_fixed_visual">
@@ -896,14 +907,15 @@
       <pose>-0.3598 -0.28811 -0.285 0 -0 -1.5708</pose>
       <gravity>false</gravity>
       <inertial>
-        <mass>0.001</mass>
+        <pose>0.005462 -0.061253 -0.08066 0 -0 0</pose>
+        <mass>0.58842</mass>
         <inertia>
-          <ixx>1e-05</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>1e-05</iyy>
-          <iyz>0</iyz>
-          <izz>1e-05</izz>
+          <ixx>0.0101611</ixx>
+          <ixy>-5.35713e-05</ixy>
+          <ixz>-2.26604e-05</ixz>
+          <iyy>0.00881038</iyy>
+          <iyz>-0.00181935</iyz>
+          <izz>0.00154978</izz>
         </inertia>
       </inertial>
       <visual name="RH_SHANK_fixed_joint_lump__RH_shank_fixed_visual">
@@ -960,11 +972,6 @@
       <odom_topic>/odom</odom_topic>
       <tf_topic>/tf</tf_topic>
       <odom_publish_frequency>30</odom_publish_frequency>
-      <!-- Cancel the maze-world spawn (-11.011, -9.025) so /odom starts at
-           zero like tugbot's wheel-integrated DiffDrive odom did: gz
-           OdometryPublisher is world-anchored, and the online_slam entrance
-           anchor + ICP prior assume a spawn-zeroed odom frame. -->
-      <xyz_offset>11.011 9.025 0</xyz_offset>
       <dimensions>2</dimensions>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">

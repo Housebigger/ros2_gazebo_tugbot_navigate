@@ -303,9 +303,16 @@ def generate_launch_description():
         # Phase41 Convention A: maze_explorer and maze_goal_monitor consume ROS
         # map-frame truth. Gazebo SDF spawn and visual markers remain in world
         # coordinates documented in the active metadata world_frame_truth block.
-        DeclareLaunchArgument('entrance_x', default_value='0.0', description='Phase41 map_frame_truth entrance x coordinate.'),
-        DeclareLaunchArgument('entrance_y', default_value='0.0', description='Phase41 map_frame_truth entrance y coordinate.'),
-        DeclareLaunchArgument('entrance_yaw', default_value='0.0', description='Phase41 map_frame_truth entrance yaw.'),
+        # entrance_* is the MAP-frame pose of the ODOM ORIGIN at bootstrap
+        # (_sm_corrected = entrance_anchor o odom). Tugbot's DiffDrive odom
+        # zeroed at the spawn (= map origin), so 0/0/0 was right. The anymal_c
+        # OdometryPublisher is WORLD-anchored (odom == world pose; its
+        # xyz_offset param composes in the BODY frame and rotates with yaw --
+        # unusable), and the maze world spawns at world (-11.011, -9.025), so
+        # the world/odom origin sits at map (11.011, 9.025).
+        DeclareLaunchArgument('entrance_x', default_value='11.011', description='Map-frame x of the odom origin (world origin for anymal_c).'),
+        DeclareLaunchArgument('entrance_y', default_value='9.025', description='Map-frame y of the odom origin (world origin for anymal_c).'),
+        DeclareLaunchArgument('entrance_yaw', default_value='0.0', description='Map-frame yaw of the odom origin.'),
         DeclareLaunchArgument('exit_x', default_value='21.072562', description='Phase41 map_frame_truth exit x coordinate = world exit x - world entrance x.'),
         DeclareLaunchArgument('exit_y', default_value='18.083566', description='Phase41 map_frame_truth exit y coordinate = world exit y - world entrance y.'),
         DeclareLaunchArgument('exit_radius', default_value='1.2', description='Phase41 map_frame_truth exit radius; unchanged from world_frame_truth.'),
