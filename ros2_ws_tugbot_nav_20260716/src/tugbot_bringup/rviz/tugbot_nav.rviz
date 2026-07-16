@@ -10,8 +10,6 @@ Panels:
         - /TF1/Tree1
         - /Map1
         - /Path1
-        - /Image1
-        - /Image1/Topic1
       Splitter Ratio: 0.5
     Tree Height: 311
   - Class: rviz_common/Selection
@@ -170,8 +168,6 @@ Visualization Manager:
           Value: true
         base_scan:
           Value: true
-        camera_link:
-          Value: true
         imu_link:
           Value: true
         map:
@@ -262,20 +258,6 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /plan
-      Value: true
-    - Class: rviz_default_plugins/Image
-      Enabled: true
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: Image
-      Normalize Range: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /camera/image_raw
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true

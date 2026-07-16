@@ -74,35 +74,9 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='scan_omni_static_tf',
         arguments=[
-            '--x', '-0.1855', '--y', '0.0', '--z', '0.5318',
+            '--x', '0.0', '--y', '0.0', '--z', '0.35',
             '--roll', '0.0', '--pitch', '0.0', '--yaw', '0.0',
-            '--frame-id', 'base_link', '--child-frame-id', 'tugbot/scan_omni/scan_omni',
-        ],
-        parameters=[{'use_sim_time': use_sim_time}],
-        output='screen',
-    )
-
-    camera_link_tf = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='camera_link_static_tf',
-        arguments=[
-            '--x', '0.30', '--y', '0.0', '--z', '0.55',
-            '--roll', '0.0', '--pitch', '0.0', '--yaw', '0.0',
-            '--frame-id', 'base_link', '--child-frame-id', 'camera_link',
-        ],
-        parameters=[{'use_sim_time': use_sim_time}],
-        output='screen',
-    )
-
-    camera_optical_tf = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='camera_optical_frame_static_tf',
-        arguments=[
-            '--x', '0.0', '--y', '0.0', '--z', '0.0',
-            '--roll', '-1.57079632679', '--pitch', '0.0', '--yaw', '-1.57079632679',
-            '--frame-id', 'camera_link', '--child-frame-id', 'camera_optical_frame',
+            '--frame-id', 'base_link', '--child-frame-id', 'anymal_c/base/scan_omni',
         ],
         parameters=[{'use_sim_time': use_sim_time}],
         output='screen',
@@ -117,6 +91,4 @@ def generate_launch_description():
         gazebo_gui,
         bridge,
         scan_tf,
-        camera_link_tf,
-        camera_optical_tf,
     ])

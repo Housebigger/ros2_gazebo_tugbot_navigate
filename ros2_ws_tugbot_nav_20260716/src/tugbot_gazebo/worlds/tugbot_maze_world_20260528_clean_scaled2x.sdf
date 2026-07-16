@@ -1402,9 +1402,9 @@
       <direction>-0.5 0.1 -0.9</direction>
     </light>
     <include>
-      <uri>model://tugbot</uri>
-      <name>tugbot</name>
-      <pose>-11.011 -9.025 0.000 0.000 0.000 0.000</pose>
+      <uri>model://anymal_c</uri>
+      <name>anymal_c</name>
+      <pose>-11.011 -9.025 0.580 0.000 0.000 0.000</pose>
     </include>
     <model name="maze_entrance_arrow_visual" phase33d_style="triangle_arrow">
       <static>true</static>
