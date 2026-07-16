@@ -20,10 +20,11 @@ class GaitAnimator(Node):
         super().__init__('gait_animator')
         rate_hz = self.declare_parameter('rate_hz', 30.0).value
         model = self.declare_parameter('model_name', 'anymal_c').value
-        # Real gz JointPositionController topic layout includes the joint
-        # index segment: /model/<model>/joint/<J>/0/cmd_pos (verified).
+        # ROS 2 rejects digit-leading name tokens, so the ROS-side topic has
+        # no /0 joint-index segment; the ros_gz bridge maps each one onto the
+        # real gz JointPositionController topic /model/<model>/joint/<J>/0/cmd_pos.
         self._pubs = {
-            j: self.create_publisher(Float64, f'/model/{model}/joint/{j}/0/cmd_pos', 10)
+            j: self.create_publisher(Float64, f'/model/{model}/joint/{j}/cmd_pos', 10)
             for j in JOINTS
         }
         self._v = 0.0
