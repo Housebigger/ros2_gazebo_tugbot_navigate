@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <sdf version="1.6">
-  <model name="cerberus_anymal_c_sensor_config_1">
+  <model name="anymal_c">
     <link name="base">
       <pose>0 0 0 0 -0 0</pose>
       <gravity>false</gravity>
@@ -397,6 +397,28 @@
         </geometry>
       </visual>
       <!-- Sensors -->
+      <sensor name="scan_omni" type="gpu_lidar">
+        <pose>0 0 0.35 0 0 0</pose>
+        <topic>/scan</topic>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+        <update_rate>10</update_rate>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>900</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.141592654</min_angle>
+              <max_angle>3.141592654</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.2</min>
+            <max>100.0</max>
+            <resolution>0.01</resolution>
+          </range>
+        </lidar>
+      </sensor>
       <!-- Lights -->
       <light name="light_up" type="spot">
         <pose frame="">-0.332 0.0 0.28 0.0 3.141 0.0</pose>
@@ -466,28 +488,6 @@
         </spot>
         <direction>0 0 1</direction>
       </light>
-      <sensor name="scan_omni" type="gpu_lidar">
-        <pose>0 0 0.35 0 0 0</pose>
-        <topic>/scan</topic>
-        <always_on>1</always_on>
-        <visualize>true</visualize>
-        <update_rate>10</update_rate>
-        <lidar>
-          <scan>
-            <horizontal>
-              <samples>900</samples>
-              <resolution>1</resolution>
-              <min_angle>-3.141592654</min_angle>
-              <max_angle>3.141592654</max_angle>
-            </horizontal>
-          </scan>
-          <range>
-            <min>0.2</min>
-            <max>100.0</max>
-            <resolution>0.01</resolution>
-          </range>
-        </lidar>
-      </sensor>
     </link>
     <link name="LF_HIP">
       <pose>0.2999 0.104 0 2.61799 -0 0</pose>
@@ -1140,6 +1140,12 @@
     <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
       <topic>/cmd_vel</topic>
     </plugin>
+    <!-- robot_base_frame=base_link is a TF child-frame LABEL only (no link named
+         base_link exists; the actual link is 'base'). It is kept as base_link on
+         purpose to preserve the tugbot DiffDrive odom->base_link output contract
+         for the nav stack; a launch-provided static TF
+         base_link -> anymal_c/base/scan_omni bridges the scan frame. Do not
+         "fix" it to base. -->
     <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
       <odom_frame>odom</odom_frame>
       <robot_base_frame>base_link</robot_base_frame>
@@ -1150,63 +1156,63 @@
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LF_HAA</joint_name>
-      <topic>/model/anymal_c/joint/LF_HAA/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>0.0</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LF_HFE</joint_name>
-      <topic>/model/anymal_c/joint/LF_HFE/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>0.4</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LF_KFE</joint_name>
-      <topic>/model/anymal_c/joint/LF_KFE/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>-0.8</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RF_HAA</joint_name>
-      <topic>/model/anymal_c/joint/RF_HAA/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>0.0</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RF_HFE</joint_name>
-      <topic>/model/anymal_c/joint/RF_HFE/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>0.4</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RF_KFE</joint_name>
-      <topic>/model/anymal_c/joint/RF_KFE/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>-0.8</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LH_HAA</joint_name>
-      <topic>/model/anymal_c/joint/LH_HAA/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>0.0</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LH_HFE</joint_name>
-      <topic>/model/anymal_c/joint/LH_HFE/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>-0.4</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LH_KFE</joint_name>
-      <topic>/model/anymal_c/joint/LH_KFE/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>0.8</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RH_HAA</joint_name>
-      <topic>/model/anymal_c/joint/RH_HAA/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>0.0</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RH_HFE</joint_name>
-      <topic>/model/anymal_c/joint/RH_HFE/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>-0.4</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RH_KFE</joint_name>
-      <topic>/model/anymal_c/joint/RH_KFE/cmd_pos</topic>
       <use_velocity_commands>true</use_velocity_commands>
+      <initial_position>0.8</initial_position>
     </plugin>
   </model>
 </sdf>
