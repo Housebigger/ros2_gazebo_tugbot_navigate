@@ -972,6 +972,11 @@
       <odom_topic>/odom</odom_topic>
       <tf_topic>/tf</tf_topic>
       <odom_publish_frequency>30</odom_publish_frequency>
+      <!-- Cancel the maze-world spawn (-11.011, -9.025) so /odom starts at
+           zero like tugbot's wheel-integrated DiffDrive odom did: gz
+           OdometryPublisher is world-anchored, and the online_slam entrance
+           anchor + ICP prior assume a spawn-zeroed odom frame. -->
+      <xyz_offset>11.011 9.025 0</xyz_offset>
       <dimensions>2</dimensions>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
