@@ -18,9 +18,8 @@ from tugbot_maze.gait import JOINTS, stride_frequency, trot_pose
 class GaitAnimator(Node):
     def __init__(self):
         super().__init__('gait_animator')
-        self.declare_parameter('rate_hz', 30.0)
-        self.declare_parameter('model_name', 'anymal_c')
-        model = self.get_parameter('model_name').value
+        rate_hz = self.declare_parameter('rate_hz', 30.0).value
+        model = self.declare_parameter('model_name', 'anymal_c').value
         # Real gz JointPositionController topic layout includes the joint
         # index segment: /model/<model>/joint/<J>/0/cmd_pos (verified).
         self._pubs = {
@@ -30,9 +29,10 @@ class GaitAnimator(Node):
         self._v = 0.0
         self._omega = 0.0
         self._phase = 0.0
-        self._dt = 1.0 / float(self.get_parameter('rate_hz').value)
+        self._dt = 1.0 / max(float(rate_hz), 0.1)
         self.create_subscription(Odometry, '/odom', self._on_odom, 10)
         self.create_timer(self._dt, self._tick)
+        self.get_logger().info(f'gait_animator started (model={model}, rate_hz={1.0 / self._dt:.1f}).')
 
     def _on_odom(self, msg):
         self._v = msg.twist.twist.linear.x
@@ -50,8 +50,8 @@ class GaitAnimator(Node):
             self.get_logger().warning(f'gait tick failed: {exc}')
 
 
-def main():
-    rclpy.init()
+def main(args=None):
+    rclpy.init(args=args)
     node = GaitAnimator()
     try:
         rclpy.spin(node)
