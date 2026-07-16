@@ -205,3 +205,17 @@ JointPositionController 带 `<initial_position>`=X 站姿,狗出生即站立,标
    (rms 0.021–0.061、n≈600–740、eigmin 71–337)、0 ESCAPE/UNSTICK、0 瞬移、
    **oracle 0/105 = 0.000% 碰撞**、步态全程开启、开局 (0,0) 契约恢复。
    碰撞率判定工具:`tools/replay_collision_oracle.py <run_dir>`(验收时用它出官方数字)。
+
+## 已知折损与默认值变更(2026-07-17)
+
+- **`scan_match`(喂全图 A/B 基线模式)在 anymal_c 上已知损坏**:实测 TIMEOUT、
+  MATCH 0/197、oracle 100%。根因与 online_slam 曾经的帧断裂同源——scan_match 的
+  bootstrap 直接采用 slam_toolbox 的 `map->base`,而 slam_toolbox 在 mapping 模式下
+  初始 `map->odom`=单位阵(map≡odom);tugbot 的 odom 零起算使其恰好等于 map 系,
+  狗的世界系 odom 则让 bootstrap 带上 (-11,-9) 整体位移,ICP 先验永远打不中喂入的
+  参考墙。修复需动 solver 的 scan_match bootstrap(冻结区)或让 slam 锚定起点
+  (mapping 模式无此配置),**递延为后续任务**;spec 成功标准 #4 的
+  "scan_match 不受影响"在狗上不成立,如实记录。
+- **默认 pose_source 由 scan_match 改为 online_slam**(launch + run wrapper):
+  验收模式=已验证模式,误用未验证默认的风险归零。`odom_locked`/`slam` 两个
+  遗留模式未在狗上验证。
