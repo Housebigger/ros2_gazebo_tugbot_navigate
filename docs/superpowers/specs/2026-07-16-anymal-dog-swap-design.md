@@ -177,3 +177,31 @@ front/rear_gap 安全门、真足迹 oracle、ICP 投影、散点云、雷达建
 另:实测钉死的两个拓扑事实——gz 关节命令话题带索引段 `/model/anymal_c/joint/<J>/0/cmd_pos`
 (JointPositionController 无 `<topic>` 键,由模型名自动推导;SDF 内部模型名已改 anymal_c);
 JointPositionController 带 `<initial_position>`=X 站姿,狗出生即站立,标定 spawn z=0.58。
+
+## Task 8 冒烟调试战役(2026-07-17,最终定案)
+
+首次冒烟暴露三层真 bug,全部根因确认后修复;两个中间误判已回滚并在此更正:
+
+1. **ROS 话题命名**(`3661da4`):gz JointPositionController 真实话题带索引段
+   `/model/anymal_c/joint/<J>/0/cmd_pos`,但 ROS 2 禁止数字开头的 token——gait_animator
+   建 publisher 即崩,ros_gz_bridge 解析 yaml 直接 SIGABRT 连带全部桥接(/clock /odom
+   /scan /tf)死亡。修复:bridge 两侧异名(ROS 侧无 `/0`,gz 侧有),节点发 ROS 侧名。
+2. **姿态爆炸**(`70f5b31`):gravity off 的机身 z/roll/pitch 是位置级自由且无回复力,
+   斜向/旋转蹭墙的碰撞冲量**累积**(实测 25–57° 倾斜 + 升空 7–24m),激光环随之翻转,
+   854/900 可用束坍缩到 ~20。修复:base 剩余 5 个碰撞体也删除,模型完全无碰撞
+   (导航避墙本就靠 /scan 安全门 + collision_monitor;true-footprint oracle 照常裁决)。
+3. **odom 帧契约破裂 + xyz_offset 陷阱**(`c58799c`,真·根因):tugbot 的 DiffDrive odom
+   从出生点零起算,gz OdometryPublisher 则发布**世界系绝对位姿**——ICP 先验整体平移
+   14.4m,预掩膜杀光所有波束(MATCH n=0 全程拒绝)。第一次尝试用插件的 `<xyz_offset>`
+   抵消出生点,结果发现该参数是**后乘(机体系)**的:14.2m 的偏移臂随航向旋转,odom
+   绕真实位置公转,增量式 odom_prior 每次转向注入数米跳变(单次运行最多 119 次瞬移,
+   oracle 碰撞率 31–53%,若干次 EXIT_REACHED 是位姿瞬移穿过出口圈的伪迹)。最终修复:
+   撤销 xyz_offset(odom=原始世界位姿,平滑、增量安全),把出生点配准放进**为此而生**的
+   求解器入口锚(`_sm_corrected = entrance_anchor ∘ odom`,前乘=世界系常量):launch 的
+   `entrance_x/y` 默认值改为世界原点的 map 坐标 (11.011, 9.025)。
+   ⚠️ 更正:中间一度把腿 link 改为近零质量(基于被瞬移污染的 A/B 误判步态反作用为元凶),
+   已回滚为原始惯量——调试代理实测原质量步态反作用仅 0.05°,无辜。
+4. **修复后冒烟(全部指标基线级)**:EXIT_REACHED 510s(基线 571s)、ICP 32 次健康接受
+   (rms 0.021–0.061、n≈600–740、eigmin 71–337)、0 ESCAPE/UNSTICK、0 瞬移、
+   **oracle 0/105 = 0.000% 碰撞**、步态全程开启、开局 (0,0) 契约恢复。
+   碰撞率判定工具:`tools/replay_collision_oracle.py <run_dir>`(验收时用它出官方数字)。
