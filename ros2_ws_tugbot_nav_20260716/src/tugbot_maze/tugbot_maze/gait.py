@@ -2,15 +2,16 @@
 
 Pure module (no ROS imports). The kinematic base is moved by the Gazebo
 VelocityControl plugin; these joint targets exist so the dog visibly walks.
-Diagonal pairs LF+RH and RF+LH swing in anti-phase (classic trot). Amplitude
+Diagonal pairs LF+RH and RF+LH swing in anti-phase (classic trot); amplitude
 and stride frequency scale with commanded speed and vanish at standstill, so
 the dog settles into STAND_POSE when the solver stops.
 
-Sign conventions come from the model SDF (left/right joint axes are already
-mirrored: left `+1 0 0`, right `-1 0 0`), so the SAME value commanded to a
-left and right joint produces mirror-symmetric motion. Front and hind stand
-angles are opposite (X-stance, knees pointing inward). Signs are eyeballed in
-the Gazebo GUI during acceptance; the tests here pin structure, not looks.
+Sign conventions come from the model SDF: the HFE/KFE joint axes are mirrored
+left/right (left `+1 0 0`, right `-1 0 0`), so the SAME value commanded to a
+left and right HFE/KFE joint produces mirror-symmetric motion. HAA axes are
+instead mirrored front/hind (LF_HAA=RF_HAA=`1 0 0`, LH_HAA=RH_HAA=`-1 0 0`),
+which matters if HAA sway is ever animated. Signs are eyeballed in the Gazebo
+GUI during acceptance; the tests here pin structure, not looks.
 """
 from __future__ import annotations
 
@@ -33,7 +34,7 @@ HAA_LIMITS = {
 }
 
 V_REF = 0.4        # m/s at which swing amplitude saturates
-OMEGA_WEIGHT = 0.5  # rad/s contribution of |omega| toward amplitude
+OMEGA_WEIGHT = 0.5  # unitless: converts |omega| [rad/s] into an equivalent linear-speed contribution
 HFE_SWING = 0.25   # rad fore-aft hip swing at full amplitude
 KFE_LIFT = 0.35    # rad extra knee flex during swing at full amplitude
 F_MIN, F_MAX = 0.8, 2.2  # Hz stride frequency range while moving
@@ -54,6 +55,13 @@ def stride_frequency(v: float, omega: float) -> float:
     return F_MIN + (F_MAX - F_MIN) * s
 
 
+def clamp_haa(pose: dict[str, float]) -> dict[str, float]:
+    """Clamp HAA joints to hardware limits in place; returns the same dict."""
+    for j, (lo, hi) in HAA_LIMITS.items():
+        pose[j] = min(hi, max(lo, pose[j]))
+    return pose
+
+
 def trot_pose(phase: float, v: float, omega: float) -> dict[str, float]:
     """12 joint targets for gait phase [rad] at speed (v, omega).
 
@@ -72,6 +80,4 @@ def trot_pose(phase: float, v: float, omega: float) -> dict[str, float]:
         pose[f'{leg}_HAA'] = STAND_POSE[f'{leg}_HAA']
         pose[f'{leg}_HFE'] = STAND_POSE[f'{leg}_HFE'] + swing_sign * HFE_SWING * s * math.sin(lp)
         pose[f'{leg}_KFE'] = kfe0 + math.copysign(1.0, kfe0) * KFE_LIFT * s * lift
-    for j, (lo, hi) in HAA_LIMITS.items():
-        pose[j] = min(hi, max(lo, pose[j]))
-    return pose
+    return clamp_haa(pose)

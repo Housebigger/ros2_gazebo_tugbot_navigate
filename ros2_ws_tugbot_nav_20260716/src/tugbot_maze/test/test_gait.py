@@ -3,6 +3,7 @@ import math
 
 from tugbot_maze.gait import (
     JOINTS, STAND_POSE, HAA_LIMITS, trot_pose, amplitude_scale, stride_frequency,
+    clamp_haa,
 )
 
 
@@ -60,6 +61,42 @@ def test_rotation_only_also_animates():
     pose = trot_pose(math.pi / 2, 0.0, 0.8)
     assert _lift(pose, 'LF') > 1e-3
     assert stride_frequency(0.0, 0.8) > 0.0
+
+
+def test_negative_speed_animates_same_as_forward():
+    for p in (0.3, math.pi / 2, 2.5, 5.0):
+        fwd = trot_pose(p, 0.4, 0.0)
+        rev = trot_pose(p, -0.4, 0.0)
+        for j in JOINTS:
+            assert abs(fwd[j] - rev[j]) < 1e-9
+        ccw = trot_pose(p, 0.0, 0.8)
+        cw = trot_pose(p, 0.0, -0.8)
+        for j in JOINTS:
+            assert abs(ccw[j] - cw[j]) < 1e-9
+
+
+def test_signed_swing_directions():
+    # LF mid-swing at phase pi/2, v=0.4 (full amplitude). No abs() here.
+    pose = trot_pose(math.pi / 2, 0.4, 0.0)
+    # Knee flexes FURTHER from zero: deviation carries the sign of kfe0.
+    lf_kfe_dev = pose['LF_KFE'] - STAND_POSE['LF_KFE']
+    rh_kfe_dev = pose['RH_KFE'] - STAND_POSE['RH_KFE']
+    assert lf_kfe_dev * STAND_POSE['LF_KFE'] > 0  # kfe0 < 0 -> deviation < 0
+    assert rh_kfe_dev * STAND_POSE['RH_KFE'] > 0  # kfe0 > 0 -> deviation > 0
+    # Hip swing splits front/hind: front positive, hind negative, equal size.
+    lf_hfe_dev = pose['LF_HFE'] - STAND_POSE['LF_HFE']
+    rh_hfe_dev = pose['RH_HFE'] - STAND_POSE['RH_HFE']
+    assert lf_hfe_dev > 1e-3
+    assert rh_hfe_dev < -1e-3
+    assert abs(lf_hfe_dev + rh_hfe_dev) < 1e-9
+
+
+def test_clamp_haa_direct():
+    pose = clamp_haa({'LF_HAA': -2.0, 'RF_HAA': 2.0, 'LH_HAA': 0.1, 'RH_HAA': 0.0})
+    assert pose['LF_HAA'] == -0.72
+    assert pose['RF_HAA'] == 0.72
+    assert pose['LH_HAA'] == 0.1
+    assert pose['RH_HAA'] == 0.0
 
 
 def test_haa_within_hardware_limits():
