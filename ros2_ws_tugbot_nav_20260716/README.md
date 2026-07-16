@@ -1,6 +1,8 @@
-# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260705`
+# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260716`
 
-ROS 2 (Jazzy) + Gazebo Harmonic stack that drives the Tugbot from the maze entrance
+ROS 2 (Jazzy) + Gazebo Harmonic stack that drives an **ANYmal C quadruped** (kinematic
+base via VelocityControl + open-loop trot animation; swapped in for the Tugbot in the
+20260716 iteration) from the maze entrance
 (map `(0, 0)`, cell `(1,0)`) to the exit (map `(21.07, 18.08)`, cell `(10,9)`) of a
 ~10×10-cell *perfect maze* (a tree: 2 m cells, ~1.76 m corridors). This workspace solves
 the **same `20260528` maze** as `ros2_ws_tugbot_nav_20260614`, but with one additional constraint:
@@ -36,7 +38,7 @@ yet — this README will be updated after a batch completes.
 ## How to run
 
 ```bash
-cd ros2_ws_tugbot_nav_20260705
+cd ros2_ws_tugbot_nav_20260716
 source /opt/ros/jazzy/setup.bash && colcon build --symlink-install && source install/setup.bash
 
 # New: online_slam — no interior map fed, self-builds the reference while driving:
@@ -87,7 +89,7 @@ The wrapper does three things a bare `ros2 launch` does **not**:
 `maze_dfs`, so `explorer_type:=flood_fill` is **mandatory** or the flood-fill node never starts:
 
 ```bash
-cd ros2_ws_tugbot_nav_20260705
+cd ros2_ws_tugbot_nav_20260716
 source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     headless:=false use_rviz:=true \
@@ -164,8 +166,8 @@ core, validated offline by a ROS-free maze simulator *before* any Gazebo run:
 | **`online_scan_match_localizer.py`** | **Point-to-line ICP scan-to-growing-reference → absolute pose** (the new component); `confirmed_wall_segments()` + `local_reference_cells()` helpers build the per-tick reference from perimeter + committed + current-cell sensed walls | yes |
 | `scan_match_localizer.py` | Same ICP core against the **static full known map** — kept as the A/B upper-bound baseline (`pose_source=scan_match`) | yes |
 | `pose_tracking.py` | SE(2) helpers (`compose_2d`, `inverse_2d`, `odom_prior`) for the per-tick odom prior | yes |
-| `maze_sim.py` | **Test-only** raycaster + unicycle integrator over the real `20260528` wall segments, with the **true asymmetric-footprint collision oracle** (rear gripper at −0.468 m; the honest collision truth) | yes |
-| `footprint.py` | Robot geometry constants (`FOOT_X_FRONT/REAR`, `FOOT_HALF_W`, LIDAR `SCAN_OFFSET_X=-0.1855`) | yes |
+| `maze_sim.py` | **Test-only** raycaster + unicycle integrator over the real `20260528` wall segments, with the **true-footprint collision oracle** (symmetric ANYmal C foot-stance rectangle ±0.39 × ±0.32 m; the honest collision truth) | yes |
+| `footprint.py` | Robot geometry constants (`FOOT_X_FRONT/REAR=±0.39`, `FOOT_HALF_W=0.32`, LIDAR `SCAN_OFFSET_X=0.0` — body-centre omni lidar) | yes |
 | `map_memory.py` / `wall_localize.py` / `hop_controller.py` | Map-integrity guard / perimeter & cell-center offsets / low-level motion commands | yes |
 | `flood_fill_solver.py` | Thin node — `/scan` + TF → `_lookup_pose` (`online_slam`/`scan_match`/`odom_locked`/`slam`) → `MazeMotion` → `/cmd_vel_nav` at 10 Hz; DIAG + MATCH logging | no |
 
