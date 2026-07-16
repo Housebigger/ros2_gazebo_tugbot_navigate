@@ -16,11 +16,15 @@ def test_beam_endpoint_applies_offset():
 
 
 def test_inside_footprint():
-    assert inside_footprint(0.2, 0.0) is True       # mid-body
-    assert inside_footprint(-0.45, 0.0) is True      # rear gripper region
-    assert inside_footprint(0.5, 0.0) is False       # beyond front
-    assert inside_footprint(0.0, 0.4) is False       # beyond side
-    assert inside_footprint(0.5, 0.0, margin=0.3) is True   # inflated
+    assert inside_footprint(0.2, 0.0) is True        # mid-body
+    assert inside_footprint(-0.2, 0.0) is True        # rear region (symmetric stance, no gripper any more)
+    # exactly on the rear face (FOOT_X_REAR = -0.39): inside_footprint's rectangle test uses <= on
+    # both bounds, so a boundary point is inclusive (True) -- assert that documented behavior
+    # explicitly.
+    assert inside_footprint(FOOT_X_REAR, 0.0) is True
+    assert inside_footprint(0.5, 0.0) is False       # beyond front (front face 0.39)
+    assert inside_footprint(0.0, 0.4) is False       # beyond side (half-width 0.32)
+    assert inside_footprint(0.5, 0.0, margin=0.3) is True   # inflated: front+margin = 0.39+0.3 = 0.69 >= 0.5
 
 
 def test_front_gap_detects_wall_ahead():

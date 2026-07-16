@@ -1,13 +1,18 @@
-"""Tugbot collision footprint + sensor placement, from tugbot_description/models/tugbot/model.sdf.
-All in the base_link frame, +x=forward, +y=left. Replaces the fictitious 0.35 m circle used across
-the solver/oracle with the true asymmetric body (base mesh bbox UNION the rear gripper)."""
+"""ANYmal C dog collision footprint + sensor placement (see
+tugbot_description/models/anymal_c/model.sdf). All in the base_link frame,
++x=forward, +y=left. Symmetric rectangle = the TRUE foot-stance envelope with
+NO padding, matching the tugbot-era convention that safety margins live in the
+gates/thresholds (side_pad, wall_half_thickness, ...), not in the footprint:
+feet at x=+-0.36 / y=+-0.288 plus the 0.03 foot ball; the core body collision
+volume (|x|<=0.29, |y|<=0.16) sits inside it. No rear-gripper asymmetry any
+more. The 2D omni lidar sits at the body centre."""
 from __future__ import annotations
 import math
 
-FOOT_X_FRONT = 0.262     # body front (base mesh)
-FOOT_X_REAR  = -0.468    # rear gripper hand
-FOOT_HALF_W  = 0.292     # half-width (base mesh / wheels at 0.257)
-SCAN_OFFSET_X = -0.1855  # /scan (scan_omni) origin X in base_link (sensor is BEHIND base_link)
+FOOT_X_FRONT = 0.39      # foot stance extremity: hip 0.30 + foot 0.06 ahead + ball 0.03
+FOOT_X_REAR  = -0.39     # symmetric
+FOOT_HALF_W  = 0.32      # foot lateral stance 0.288 + foot ball radius 0.03
+SCAN_OFFSET_X = 0.0      # /scan (scan_omni) at body centre
 
 
 def beam_endpoint(r, bearing, scan_offset_x: float = SCAN_OFFSET_X):
