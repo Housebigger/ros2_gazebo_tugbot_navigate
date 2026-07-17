@@ -12,8 +12,8 @@
       <ambient>0.55 0.55 0.55 1</ambient>
       <background>0.70 0.72 0.74 1</background>
     </scene>
-    <physics name="3ms" type="ode">
-      <max_step_size>0.003</max_step_size>
+    <physics name="1ms" type="ode">
+      <max_step_size>0.001</max_step_size>
       <real_time_factor>1</real_time_factor>
       <real_time_update_rate>1000</real_time_update_rate>
     </physics>
@@ -1404,7 +1404,7 @@
     <include>
       <uri>model://anymal_c</uri>
       <name>anymal_c</name>
-      <pose>-11.011 -9.025 0.580 0.000 0.000 0.000</pose>
+      <pose>-11.011 -9.025 0.62 0 0 0</pose>
     </include>
     <model name="maze_entrance_arrow_visual" phase33d_style="triangle_arrow">
       <static>true</static>

@@ -29,7 +29,7 @@
     <include>
       <uri>model://anymal_c</uri>
       <name>anymal_c</name>
-      <pose>0 0 0.58 0 0 0</pose>
+      <pose>0 0 0.62 0 0 0</pose>
     </include>
   </world>
 </sdf>
