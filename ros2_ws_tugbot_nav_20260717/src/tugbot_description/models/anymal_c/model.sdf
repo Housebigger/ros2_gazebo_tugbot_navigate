@@ -1424,108 +1424,108 @@
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LF_HAA</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>0.0</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LF_HFE</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>0.705</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LF_KFE</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>-0.9608</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RF_HAA</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>0.0</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RF_HFE</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>0.705</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RF_KFE</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>-0.9608</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LH_HAA</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>0.0</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LH_HFE</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>-0.705</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>LH_KFE</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>0.9608</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RH_HAA</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>0.0</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RH_HFE</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>-0.705</initial_position>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RH_KFE</joint_name>
-      <p_gain>250.0</p_gain>
+      <p_gain>320.0</p_gain>
       <i_gain>0.0</i_gain>
-      <d_gain>5.0</d_gain>
+      <d_gain>8.0</d_gain>
       <cmd_max>80.0</cmd_max>
       <cmd_min>-80.0</cmd_min>
       <initial_position>0.9608</initial_position>

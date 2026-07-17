@@ -26,7 +26,7 @@ class LeggedParams:
     stand_height: float = -NEUTRAL_FOOT['LF'][2]   # derived: |neutral foot z|; standing base height = this + ball
     f_trot: float = 2.0            # stride cycle Hz
     duty: float = 0.5              # stance fraction of the cycle
-    swing_lift: float = 0.07       # swing apex height (m)
+    swing_lift: float = 0.09       # swing apex height (m)
     vx_max: float = 0.4            # cmd clamp (m/s) — solver hop v_max aligned to this
     wz_max: float = 0.5            # cmd clamp (rad/s) — matches solver w_max default
     ax_max: float = 0.8            # cmd slew limit (m/s^2)
