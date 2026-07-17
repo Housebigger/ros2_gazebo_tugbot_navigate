@@ -26,17 +26,21 @@ Peak localization error is ~0.40 m (at drift=0.03; reduced from ~1.10 m by the i
 of local-cell freshly-sensed walls in the reference set). All assertions pass: exit reached,
 no collision, peak error < 0.50 m.
 
-**Gazebo acceptance: pending.** The controlled Gazebo batch (target ≥ 14/16
-`EXIT_REACHED`, no interior map fed) has **not yet been run**. The fed-map baseline
-(`pose_source=scan_match`, which delivered 16/16 in `ros2_ws_tugbot_nav_20260614`) is the
-A/B **upper-bound reference** here. No `ros2_ws_tugbot_nav_20260705` Gazebo results exist
-yet — this README will be updated after a batch completes.
+**Gazebo acceptance: complete (this phase, legged walking).** The 20260717 physically-walking
+dog reached the exit in both headless verification runs: **2/2 `EXIT_REACHED`** (~677 s and
+~696 s sim-time), collision oracle **0.000%** on both runs, **0 falls**
+(`FALL_DETECTED=0`), no interior map fed (`pose_source=online_slam`) — see the spec addendum
+item 12 for full detail (ICP `MATCH` rms median 0.026, n median 686/688.5). The fed-map
+baseline (`pose_source=scan_match`, which delivered 16/16 in `ros2_ws_tugbot_nav_20260614`)
+remains the A/B **upper-bound reference**. `ros2_ws_tugbot_nav_20260705` onward each completed
+their own Gazebo acceptance batches for the *localization* layer in their respective phases;
+this iteration's acceptance is the *legged-locomotion* result above.
 
 ## Explorer modes
 
 | `explorer_type` (+ args) | Strategy | Status |
 |---|---|---|
-| **`flood_fill`** + `pose_source:=online_slam` | Cell-grid flood-fill routing + `MazeMotion`, localized by ICP against a **growing reference**: known perimeter + committed interior walls + current-cell freshly-sensed walls. **No interior map fed.** | ✅ **Offline green** (exit reached, no collision, peak loc-err ~0.40 m) — Gazebo batch **pending** |
+| **`flood_fill`** + `pose_source:=online_slam` | Cell-grid flood-fill routing + `MazeMotion`, localized by ICP against a **growing reference**: known perimeter + committed interior walls + current-cell freshly-sensed walls. **No interior map fed.** | ✅ **Offline green** (exit reached, no collision, peak loc-err ~0.40 m) — ✅ **Gazebo: 2/2 `EXIT_REACHED`** (legged walk, 20260717; oracle 0.000%, 0 falls) |
 | `flood_fill` + `pose_source:=scan_match` | Same solver, but fed the **full known wall map** — ICP against all walls from t=0 | A/B upper-bound baseline (16/16 in 20260614; use to bracket `online_slam`) |
 | `flood_fill` + `pose_source:=odom_locked` / `slam` | Same solver on wheel-odometry / live-SLAM pose | ⚠️ A/B only — desyncs in the open interior (0/8 in 20260614); the reason scan-match was built |
 | `guided_corridor_mode:=true` (GCN, in `…_20260522`) | Follow a pre-computed BFS corridor sequence | ✅ Reliable, but *guided* (not autonomous discovery) — the original reliable route |
@@ -46,7 +50,7 @@ yet — this README will be updated after a batch completes.
 ## How to run
 
 ```bash
-cd ros2_ws_tugbot_nav_20260716
+cd ros2_ws_tugbot_nav_20260717
 source /opt/ros/jazzy/setup.bash && colcon build --symlink-install && source install/setup.bash
 
 # New: online_slam — no interior map fed, self-builds the reference while driving:
@@ -97,7 +101,7 @@ The wrapper does three things a bare `ros2 launch` does **not**:
 `maze_dfs`, so `explorer_type:=flood_fill` is **mandatory** or the flood-fill node never starts:
 
 ```bash
-cd ros2_ws_tugbot_nav_20260716
+cd ros2_ws_tugbot_nav_20260717
 source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     headless:=false use_rviz:=true \
@@ -178,7 +182,7 @@ core, validated offline by a ROS-free maze simulator *before* any Gazebo run:
 | `footprint.py` | Robot geometry constants (`FOOT_X_FRONT/REAR=±0.49`, `FOOT_HALF_W=0.37` — the dynamic trot envelope, dominates `legged/params.foot_envelope()`; locked by `test_footprint_covers_gait_envelope`), LIDAR `SCAN_OFFSET_X=0.0` — body-centre omni lidar | yes |
 | `map_memory.py` / `wall_localize.py` / `hop_controller.py` | Map-integrity guard / perimeter & cell-center offsets / low-level motion commands (`hop_command` `v_max=0.4` aligned to the gait's `vx_max`) | yes |
 | `flood_fill_solver.py` | Thin node — `/scan` + TF → `_lookup_pose` (`online_slam`/`scan_match`/`odom_locked`/`slam`) → `MazeMotion` → `/cmd_vel_nav` at 10 Hz; DIAG + MATCH logging | no |
-| **`legged/kinematics.py` / `trajectory.py` / `trot.py` / `stabilizer.py` / `params.py`** | **New in 20260717** — pure functions, no ROS: per-leg analytic FK/IK, cycloid swing + stance foot trajectory, the diagonal-pair `LocomotionFSM` (INIT→STAND→TROT, phase-boundary-aligned mode switches), roll/pitch→foot-height stabilizer, and the single home for every gait constant | yes |
+| **`legged/kinematics.py` / `trajectory.py` / `trot.py` / `stabilizer.py` / `params.py`** | **New in 20260717** — pure functions, no ROS: per-leg SDF-anchored FK + numeric (damped Gauss-Newton) IK, sinusoidal-lift swing + stance foot trajectory, the diagonal-pair `LocomotionFSM` (INIT→STAND→TROT, phase-boundary-aligned mode switches), roll/pitch→foot-height stabilizer, and the single home for every gait constant | yes |
 | **`locomotion_controller.py`** | **New in 20260717**, 100 Hz — `/cmd_vel` + `/odom` attitude → `LocomotionFSM` → 12× `/model/anymal_c/joint/<J>/cmd_pos`; also owns fall detection (`FALL_DETECTED`, terminal). Replaces the retired `gait_animator.py` open-loop animation node | no |
 
 `slam_toolbox` runs only to bootstrap the initial `map→base_link` pose; once driving,

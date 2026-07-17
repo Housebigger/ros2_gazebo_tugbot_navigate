@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# HISTORICAL (20260716 kinematic-ghost model only): items 4 (VelocityControl
+# body-frame) and 6 (X-stance calibration) FAIL against the 20260717 physical
+# model. Superseded by tools/verify_legged_walk.sh + tools/smoke_stand.sh.
+#
 # Headless verification & calibration of the anymal_c model (Task 4).
 #
 # Starts `gz sim -s -r` on anymal_test_world.sdf and checks, in order:
