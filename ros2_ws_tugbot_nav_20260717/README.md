@@ -1,8 +1,16 @@
-# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260716`
+# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260717`
 
-ROS 2 (Jazzy) + Gazebo Harmonic stack that drives an **ANYmal C quadruped** (kinematic
-base via VelocityControl + open-loop trot animation; swapped in for the Tugbot in the
-20260716 iteration) from the maze entrance
+ROS 2 (Jazzy) + Gazebo Harmonic stack that drives an **ANYmal C quadruped** — as of this
+20260717 iteration the dog **physically walks**: gravity is on, all 54 CERBERUS collision
+bodies are restored, the `VelocityControl` "magic thruster" plugin is deleted, and all
+12 joints run gz `JointPositionController` in **torque-PID mode** (`p_gain=320 / d_gain=8`,
+`cmd_max=80` N·m), driven by a self-built trot controller (`tugbot_maze/legged/` — pure
+`kinematics`/`trajectory`/`trot`/`stabilizer`/`params` modules, no ROS deps — plus the
+`locomotion_controller` node running at 100 Hz: `/cmd_vel` → phase-aligned trot FSM → 12×
+`/model/anymal_c/joint/<J>/cmd_pos`). `/odom` still comes from the gz `OdometryPublisher`
+world-truth plugin, now at `dimensions=3` (was 2 — the stabilizer and fall detector both
+need roll/pitch/z, which `dimensions=2` zeroes). The base moves **only** from leg-ground
+contact forces now — from the maze entrance
 (map `(0, 0)`, cell `(1,0)`) to the exit (map `(21.07, 18.08)`, cell `(10,9)`) of a
 ~10×10-cell *perfect maze* (a tree: 2 m cells, ~1.76 m corridors). This workspace solves
 the **same `20260528` maze** as `ros2_ws_tugbot_nav_20260614`, but with one additional constraint:
@@ -166,16 +174,55 @@ core, validated offline by a ROS-free maze simulator *before* any Gazebo run:
 | **`online_scan_match_localizer.py`** | **Point-to-line ICP scan-to-growing-reference → absolute pose** (the new component); `confirmed_wall_segments()` + `local_reference_cells()` helpers build the per-tick reference from perimeter + committed + current-cell sensed walls | yes |
 | `scan_match_localizer.py` | Same ICP core against the **static full known map** — kept as the A/B upper-bound baseline (`pose_source=scan_match`) | yes |
 | `pose_tracking.py` | SE(2) helpers (`compose_2d`, `inverse_2d`, `odom_prior`) for the per-tick odom prior | yes |
-| `maze_sim.py` | **Test-only** raycaster + unicycle integrator over the real `20260528` wall segments, with the **true-footprint collision oracle** (symmetric ANYmal C foot-stance rectangle ±0.39 × ±0.32 m; the honest collision truth) | yes |
-| `footprint.py` | Robot geometry constants (`FOOT_X_FRONT/REAR=±0.39`, `FOOT_HALF_W=0.32`, LIDAR `SCAN_OFFSET_X=0.0` — body-centre omni lidar) | yes |
-| `map_memory.py` / `wall_localize.py` / `hop_controller.py` | Map-integrity guard / perimeter & cell-center offsets / low-level motion commands | yes |
+| `maze_sim.py` | **Test-only** raycaster + unicycle integrator over the real `20260528` wall segments, with the **true-footprint collision oracle** (dynamic ANYmal C trot-gait envelope rectangle ±0.49 × ±0.37 m; the honest collision truth) | yes |
+| `footprint.py` | Robot geometry constants (`FOOT_X_FRONT/REAR=±0.49`, `FOOT_HALF_W=0.37` — the dynamic trot envelope, dominates `legged/params.foot_envelope()`; locked by `test_footprint_covers_gait_envelope`), LIDAR `SCAN_OFFSET_X=0.0` — body-centre omni lidar | yes |
+| `map_memory.py` / `wall_localize.py` / `hop_controller.py` | Map-integrity guard / perimeter & cell-center offsets / low-level motion commands (`hop_command` `v_max=0.4` aligned to the gait's `vx_max`) | yes |
 | `flood_fill_solver.py` | Thin node — `/scan` + TF → `_lookup_pose` (`online_slam`/`scan_match`/`odom_locked`/`slam`) → `MazeMotion` → `/cmd_vel_nav` at 10 Hz; DIAG + MATCH logging | no |
+| **`legged/kinematics.py` / `trajectory.py` / `trot.py` / `stabilizer.py` / `params.py`** | **New in 20260717** — pure functions, no ROS: per-leg analytic FK/IK, cycloid swing + stance foot trajectory, the diagonal-pair `LocomotionFSM` (INIT→STAND→TROT, phase-boundary-aligned mode switches), roll/pitch→foot-height stabilizer, and the single home for every gait constant | yes |
+| **`locomotion_controller.py`** | **New in 20260717**, 100 Hz — `/cmd_vel` + `/odom` attitude → `LocomotionFSM` → 12× `/model/anymal_c/joint/<J>/cmd_pos`; also owns fall detection (`FALL_DETECTED`, terminal). Replaces the retired `gait_animator.py` open-loop animation node | no |
 
 `slam_toolbox` runs only to bootstrap the initial `map→base_link` pose; once driving,
 `online_scan_match_localizer` owns the pose. **Nav2 / costmaps are not in the flood-fill
-control loop.**
+control loop.** The nav/localization chain is unchanged by the 20260717 legged work — it
+still ends at `/cmd_vel_nav`; downstream of that, `/cmd_vel` now drives `locomotion_controller`
+(12 torque-PID joints) instead of the retired `VelocityControl` kinematic thruster.
 
-Design spec: `docs/superpowers/specs/2026-07-05-online-slam-maze-design.md`.
+Design spec: `docs/superpowers/specs/2026-07-05-online-slam-maze-design.md` (localization layer);
+`docs/superpowers/specs/2026-07-17-legged-locomotion-design.md` (physical walking layer).
+
+## Legged locomotion layer (20260717)
+
+The 20260716 iteration gave the ANYmal C a kinematic base (`VelocityControl` + an open-loop
+`gait_animator.py` trot animation, purely cosmetic). 20260717 replaces that with **real
+physics**: gravity on, all 54 collision bodies restored, `VelocityControl` deleted, and the
+12 joints driven in torque-PID mode by the `legged/` trot controller above — the base now
+moves only because the legs push against the ground.
+
+- **Model**: `tugbot_description/models/anymal_c/model.sdf` — 12× `JointPositionController`
+  at `p_gain=320 / d_gain=8 / cmd_max=80`; foot collisions get explicit `mu=1.0` friction;
+  `<initial_position>` matches the neutral stand pose (`legged/params.STAND_POSE`); spawn
+  `z=0.62`; both maze and test worlds run `max_step_size=0.001` (1 ms) physics.
+- **Footprint**: the dynamic trot envelope grew from the old static-stance rectangle
+  (±0.39 × ±0.32) to **±0.49 × ±0.37** — swing legs reach outside neutral stance, and the
+  old "half-width doesn't change" assumption missed the turning-stride lateral component.
+  `test_footprint_covers_gait_envelope` locks `footprint.py` to `legged/params.foot_envelope()`
+  so the two can't drift apart again.
+- **Verification ladder** (`bash tools/verify_legged_walk.sh`, 4 rungs: stand → forced
+  in-place trot → straight walk → in-place turn, each gating the next):
+  ```bash
+  bash tools/smoke_stand.sh          # quick single-rung stand-up-and-settle smoke test
+  bash tools/verify_legged_walk.sh   # full 4-rung ladder (stand/step/walk/turn)
+  ```
+  Straight-line tracking measured at **~77% of commanded speed** (effective ~0.23 m/s off a
+  0.3 m/s command) — an open-loop-stride-vs-PD-lag steady-state shortfall, insensitive to PID
+  gains; documented rather than chased further because the solver is position-closed-loop, so
+  the only consequence is a slower run (see the spec addendum, item 8).
+- **Maze run** (budget raised for walking speed): `bash tools/run_flood_fill_maze.sh 3600 true
+  false online_slam` (`MAX_SECONDS=3600 HEADLESS=true USE_RVIZ=false POSE_SOURCE=online_slam`).
+- **Fall detection**: `locomotion_controller` watches `/odom` attitude/z; `|roll|` or `|pitch|`
+  `> 0.6 rad`, or base `z < 0.25 m`, sustained 1 s → logs `FALL_DETECTED` and the run wrapper
+  treats it as a **terminal failure result** (no auto-recovery, by design — see the spec's
+  non-goals).
 
 ## Relationship to `ros2_ws_tugbot_nav_20260614`
 
