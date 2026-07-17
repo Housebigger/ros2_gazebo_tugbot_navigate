@@ -79,10 +79,7 @@ def _run(drift, latency=0, dt=0.1, max_steps=30000):
         0.05, 3,
         marks=pytest.mark.xfail(
             strict=False,
-            reason='ANYmal C corner sweep 0.504 (vs tugbot 0.392) grazes one convex corner '
-                   'by 0.7mm under the harshest drift+latency stress; offline cornering was '
-                   'tuned for tugbot. Motion-layer margin adaptation is a tracked follow-up; '
-                   'the Gazebo true-footprint oracle (same constants) is the live gate.'),
+            reason='legged footprint 0.49/0.37: ~120mm sustained envelope-wall overlap (~1458/8739 steps) under uncorrected 5%/m drift (no ICP in offline sim); real-run gate = Gazebo oracle 0.000%. Controller-authorized 2026-07-17; supersedes the 2026-06-26 reason (0.7mm corner graze, measured at footprint 0.39) which no longer describes this case.'),
     ),
 ])
 def test_reaches_exit_without_collision_or_desync(drift, latency):
