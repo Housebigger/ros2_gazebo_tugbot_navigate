@@ -11,6 +11,17 @@
 # camera_front sensor, hence no /camera/front/image at all.
 set +u
 WS="$(cd "$(dirname "$0")/.." && pwd)"; cd "$WS"
+
+# On this machine EVERY camera-equipped sim run (headless included) must render
+# on the RTX 4070: the AMD 610M iGPU copes with gpu_lidar alone, but
+# lidar+camera overloads it stochastically -> ICP nan streaks -> oracle false
+# collisions / livelock (A/B 2026-07-18: plain headless oracle 4.2% then a
+# TIMEOUT livelock; with PRIME 2/2 EXIT_REACHED oracle 0.000%). Pure EGL vendor
+# pinning does NOT move gz off the iGPU; the GLX PRIME path needs a DISPLAY.
+export DISPLAY="${DISPLAY:-:1}"
+export __NV_PRIME_RENDER_OFFLOAD="${__NV_PRIME_RENDER_OFFLOAD:-1}"
+export __GLX_VENDOR_LIBRARY_NAME="${__GLX_VENDOR_LIBRARY_NAME:-nvidia}"
+
 source /opt/ros/jazzy/setup.bash; source install/setup.bash
 export ROS_DOMAIN_ID=$((RANDOM % 100))
 echo "DOMAIN=$ROS_DOMAIN_ID"
