@@ -220,8 +220,8 @@ def generate_launch_description():
         condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'flood_fill'"])),
     )
 
-    gait_animator = Node(
-        package='tugbot_maze', executable='gait_animator', name='gait_animator',
+    locomotion_controller = Node(
+        package='tugbot_maze', executable='locomotion_controller', name='locomotion_controller',
         parameters=[{
             'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
             'model_name': 'anymal_c',
@@ -364,5 +364,5 @@ def generate_launch_description():
         maze_slam_nav_launch,
         TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node, flood_fill_solver_node]),
         TimerAction(period=14.0, actions=[maze_goal_monitor]),
-        gait_animator,
+        locomotion_controller,
     ])

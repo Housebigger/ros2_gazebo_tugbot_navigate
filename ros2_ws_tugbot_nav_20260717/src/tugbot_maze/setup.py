@@ -31,7 +31,7 @@ setup(
             'maze_solver = tugbot_maze.maze_solver:main',
             'wall_follow_solver = tugbot_maze.wall_follow_solver:main',
             'flood_fill_solver = tugbot_maze.flood_fill_solver:main',
-            'gait_animator = tugbot_maze.gait_animator:main',
+            'locomotion_controller = tugbot_maze.locomotion_controller:main',
         ],
     },
 )
