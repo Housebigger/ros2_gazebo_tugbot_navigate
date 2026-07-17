@@ -238,6 +238,42 @@
           </range>
         </lidar>
       </sensor>
+      <sensor name="camera_front" type="camera">
+        <always_on>1</always_on>
+        <update_rate>20</update_rate>
+        <!-- Faces +x = the actual travel direction (stance feet push -x).
+             The 7 original CERBERUS cameras all face -x; none of their
+             poses may be copied here. -->
+        <pose>0.45 0 0.20 0 0 0</pose>
+        <topic>/camera/front/image</topic>
+        <camera name="camera_front">
+          <horizontal_fov>2.19911</horizontal_fov>
+          <camera_info_topic>/camera/front/camera_info</camera_info_topic>
+          <lens>
+            <intrinsics>
+              <!-- fx = fy = width / ( 2 * tan (hfov / 2 ) ) -->
+              <fx>183.43</fx>
+              <fy>183.43</fy>
+              <cx>360.5</cx>
+              <cy>270.5</cy>
+              <s>0</s>
+            </intrinsics>
+          </lens>
+          <image>
+            <width>720</width>
+            <height>540</height>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>100</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+      </sensor>
       <!-- Lights -->
       <light name="light_up" type="spot">
         <pose frame="">-0.332 0.0 0.28 0.0 3.141 0.0</pose>
