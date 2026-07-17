@@ -1,4 +1,4 @@
-# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260717`
+# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260718`
 
 ROS 2 (Jazzy) + Gazebo Harmonic stack that drives an **ANYmal C quadruped** — as of this
 20260717 iteration the dog **physically walks**: gravity is on, all 54 CERBERUS collision
@@ -17,6 +17,27 @@ the **same `20260528` maze** as `ros2_ws_tugbot_nav_20260614`, but with one addi
 **the interior wall map is withheld** — the robot must build it online while navigating.
 Grid geometry, entrance/exit, and the outer perimeter are known from the start; every
 interior wall is discovered at runtime. The new localization mode is `pose_source:=online_slam`.
+
+## Front camera
+
+The ANYmal C carries one forward-facing RGB camera, `camera_front`, mounted on the base
+link (`720×540 @ 20 Hz`, `126°` hfov). It faces **+x — the actual travel direction**
+(stance feet push -x): none of the 7 original CERBERUS camera poses could be reused, since
+that convention treats **-x** as "front". Pure observation — no vision feeds the
+nav/localization chain (still LIDAR-only ICP, `pose_source=online_slam`).
+
+| ROS topic | Type |
+|---|---|
+| `/camera/front/image` | `sensor_msgs/msg/Image` |
+| `/camera/front/camera_info` | `sensor_msgs/msg/CameraInfo` |
+
+Both publish `frame_id=anymal_c/base/camera_front`, anchored to `base_link` by a static
+TF. RViz's default config has a `FrontCamera` Image panel subscribed to
+`/camera/front/image`, alongside the existing SelfBuiltMap view.
+
+**Live gate**: `bash tools/verify_front_camera.sh` boots the maze world headless (the dog
+just stands) and asserts real frames publish — resolution, ~20 Hz rate, correct
+`frame_id`, non-constant content.
 
 ## Headline result
 
@@ -50,7 +71,7 @@ this iteration's acceptance is the *legged-locomotion* result above.
 ## How to run
 
 ```bash
-cd ros2_ws_tugbot_nav_20260717
+cd ros2_ws_tugbot_nav_20260718
 source /opt/ros/jazzy/setup.bash && colcon build --symlink-install && source install/setup.bash
 
 # New: online_slam — no interior map fed, self-builds the reference while driving:
@@ -101,7 +122,7 @@ The wrapper does three things a bare `ros2 launch` does **not**:
 `maze_dfs`, so `explorer_type:=flood_fill` is **mandatory** or the flood-fill node never starts:
 
 ```bash
-cd ros2_ws_tugbot_nav_20260717
+cd ros2_ws_tugbot_nav_20260718
 source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     headless:=false use_rviz:=true \
@@ -222,8 +243,13 @@ moves only because the legs push against the ground.
   gains; documented rather than chased further because the solver is position-closed-loop, so
   the only consequence is a slower run (see the spec addendum, item 8).
 - **Maze run** (budget raised for walking speed): `bash tools/run_flood_fill_maze.sh 3600 true
-- **GUI/RViz runs on this machine REQUIRE NVIDIA PRIME offload** (the physical display runs on a weak AMD iGPU; without offload the gpu_lidar render starves and ICP degrades — see spec addendum item 15): `export DISPLAY=:1 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia && bash tools/run_flood_fill_maze.sh 3600 false true online_slam`
   false online_slam` (`MAX_SECONDS=3600 HEADLESS=true USE_RVIZ=false POSE_SOURCE=online_slam`).
+- **GUI/RViz runs on this machine REQUIRE NVIDIA PRIME offload** (the physical display runs on a weak AMD iGPU; without offload the gpu_lidar render starves and ICP degrades — see spec addendum item 15): `export DISPLAY=:1 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia && bash tools/run_flood_fill_maze.sh 3600 false true online_slam`
+- **With the front camera, headless runs need PRIME offload too, not just GUI/RViz** — the
+  AMD iGPU copes with `gpu_lidar` alone but collapses under lidar+camera load, degrading ICP
+  into oracle false-positives/livelock. `run_flood_fill_maze.sh` and `verify_front_camera.sh`
+  now default `DISPLAY`/`__NV_PRIME_RENDER_OFFLOAD`/`__GLX_VENDOR_LIBRARY_NAME` internally
+  (see the comment block at the top of each script); a manual `export` still works and wins.
 - **Fall detection**: `locomotion_controller` watches `/odom` attitude/z; `|roll|` or `|pitch|`
   `> 0.6 rad`, or base `z < 0.25 m`, sustained 1 s → logs `FALL_DETECTED` and the run wrapper
   treats it as a **terminal failure result** (no auto-recovery, by design — see the spec's
