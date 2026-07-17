@@ -255,6 +255,7 @@
           <falloff>1</falloff>
         </spot>
         <direction>0 0 1</direction>
+        <cast_shadows>true</cast_shadows>
       </light>
       <light name="light_forward" type="spot">
         <pose frame="">-0.41 0.0 0.265 0.0 1.57 0.0</pose>
@@ -272,6 +273,7 @@
           <falloff>1</falloff>
         </spot>
         <direction>0 0 1</direction>
+        <cast_shadows>true</cast_shadows>
       </light>
       <light name="light_left" type="spot">
         <pose frame="">-0.348 -0.077 0.273 1.743 0.004 3.138</pose>
@@ -289,6 +291,7 @@
           <falloff>1</falloff>
         </spot>
         <direction>0 0 1</direction>
+        <cast_shadows>true</cast_shadows>
       </light>
       <light name="light_right" type="spot">
         <pose frame="">-0.347 0.076 0.272 1.742 -0.011 -0.003</pose>
@@ -306,6 +309,7 @@
           <falloff>1</falloff>
         </spot>
         <direction>0 0 1</direction>
+        <cast_shadows>true</cast_shadows>
       </light>
       <collision name="base_collision">
         <pose>0 0 0 0 -0 0</pose>

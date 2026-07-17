@@ -8,7 +8,7 @@
     </plugin>
     <plugin name="gz::sim::systems::Imu" filename="gz-sim-imu-system" />
     <scene>
-      <shadows>false</shadows>
+      <shadows>true</shadows>
       <ambient>0.55 0.55 0.55 1</ambient>
       <background>0.70 0.72 0.74 1</background>
     </scene>
