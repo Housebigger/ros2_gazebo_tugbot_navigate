@@ -13,7 +13,8 @@ cleanup() {
   pkill -9 -f locomotion_controller 2>/dev/null
   rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* 2>/dev/null
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT TERM
 cleanup; sleep 1
 
 LOG="$(mktemp -d /tmp/legged_ladder.XXXXXX)"

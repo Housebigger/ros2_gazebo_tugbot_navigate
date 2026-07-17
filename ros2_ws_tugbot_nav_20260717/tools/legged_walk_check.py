@@ -92,8 +92,12 @@ def main():
 
     elif args.rung == 'step':
         n.set_force_trot(True)
-        n.drive(0.0, 0.0, 10.0)
-        n.set_force_trot(False)
+        try:
+            n.drive(0.0, 0.0, 10.0)
+        finally:
+            # always un-latch, so a failed drive cannot poison a later manual
+            # rung invocation against the same still-running node
+            n.set_force_trot(False)
         zs = [s[3] for s in n.samples]
         x0, y0 = n.samples[0][1], n.samples[0][2]
         drift = max(math.hypot(s[1] - x0, s[2] - y0) for s in n.samples)
