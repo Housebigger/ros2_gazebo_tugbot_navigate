@@ -82,6 +82,19 @@ def generate_launch_description():
         output='screen',
     )
 
+    camera_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='camera_front_static_tf',
+        arguments=[
+            '--x', '0.45', '--y', '0.0', '--z', '0.20',
+            '--roll', '0.0', '--pitch', '0.0', '--yaw', '0.0',
+            '--frame-id', 'base_link', '--child-frame-id', 'anymal_c/base/camera_front',
+        ],
+        parameters=[{'use_sim_time': use_sim_time}],
+        output='screen',
+    )
+
     return LaunchDescription([
         world_arg,
         use_sim_time_arg,
@@ -91,4 +104,5 @@ def generate_launch_description():
         gazebo_gui,
         bridge,
         scan_tf,
+        camera_tf,
     ])
