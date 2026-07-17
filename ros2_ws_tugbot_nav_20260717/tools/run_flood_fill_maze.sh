@@ -8,6 +8,7 @@
 #                (self-built map: perimeter + committed/local-sensed walls, no prior interior map)
 #                | odom_locked | slam
 #   SENSE_DEBUG: false (default) | true  (log per-cell sensed walls + min LIDAR ranges)
+# Legged (20260717): walking ~0.23 m/s effective -> budget 3600 wall-s; FALL_DETECTED is a terminal failure result.
 set +u
 WS="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$WS"
@@ -55,13 +56,14 @@ RESULT="TIMEOUT"
 while [ "$(date +%s)" -lt "$END" ]; do
     sleep 10
     if grep -qa "EXIT_REACHED" "$ART/launch.log" 2>/dev/null; then RESULT="EXIT_REACHED"; break; fi
+    if grep -qa "FALL_DETECTED" "$ART/launch.log" 2>/dev/null; then RESULT="FALL_DETECTED"; break; fi
     if grep -qa "open_and_lock_file failed" "$ART/launch.log" 2>/dev/null; then RESULT="DDS_SHM_FAIL"; break; fi
     if ! kill -0 "$LAUNCH_PID" 2>/dev/null; then RESULT="LAUNCH_DIED"; break; fi
 done
 
 echo "[FLOODFILL] result=$RESULT" | tee -a "$ART/run_meta.txt"
 echo "$RESULT" > "$ART/result.txt"
-grep -aE "EXIT_REACHED|HOP_BACKUP|JUNCTION|DIAG|SENSE|flood_fill_solver" "$ART/launch.log" | tail -80 > "$ART/flood_fill_tail.txt" 2>/dev/null
+grep -aE "EXIT_REACHED|HOP_BACKUP|JUNCTION|DIAG|SENSE|flood_fill_solver|LOCO|FALL_DETECTED" "$ART/launch.log" | tail -80 > "$ART/flood_fill_tail.txt" 2>/dev/null
 
 kill -INT "$LAUNCH_PID" 2>/dev/null
 sleep 5
