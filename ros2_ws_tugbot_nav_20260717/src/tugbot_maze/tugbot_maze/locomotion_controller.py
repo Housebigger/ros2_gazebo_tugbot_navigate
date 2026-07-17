@@ -70,6 +70,13 @@ class LocomotionController(Node):
     def _check_fall(self):
         if self._fallen or self._odom_t is None:
             return
+        if self._fsm.mode == LocomotionFSM.INIT:
+            # INIT is the drop-in settle: transient attitude/z violations are
+            # expected there and must not latch toward FALL_DETECTED (a false
+            # trip would freeze the run before it starts and be
+            # indistinguishable from a real fall to the wrapper).
+            self._viol_since = None
+            return
         roll, pitch = self._att
         bad = abs(roll) > self._fall_att or abs(pitch) > self._fall_att or self._z < self._fall_z
         if not bad:
