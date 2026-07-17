@@ -11,9 +11,13 @@ START_YAW = 0.0               # facing +x (east), into the maze
 # Entrance: 2.072 m gap in the west outer wall, centered map (0.95, 0).
 ENTRANCE_SEAL = entrance_seal_segment((0.95, 0.0), 2.072423, 'left')
 # Threshold separating a legitimate interior solve from exterior cheating: sealed
-# runs stay ~0.5 m INSIDE the box (outside==0 for any tol>0), while the unsealed
-# cheat runs ~1 m OUTSIDE it -- so any tol in ~(0, 1.0) works; 0.4 sits in the gap.
-# Coupled to MazeSim robot_radius_m=0.35 / wall_half_thickness_m=0.12: revisit if those change.
+# runs stay ~0.5 m INSIDE the box (outside==0 for any tol>0), while the historical
+# unsealed cheat ran ~1 m OUTSIDE it -- so any tol in ~(0, 1.0) works; 0.4 sits in the gap.
+# (Since the legged 0.49/0.37 footprint, the unsealed cheat is geometrically closed --
+# see test_unsealed_left_hand_exterior_cheat_closed_by_legged_footprint below.)
+# Coupled to MazeSim wall_half_thickness_m=0.12 AND the footprint constants
+# (FOOT_X_FRONT/FOOT_X_REAR +-0.49, FOOT_HALF_W 0.37, which set the collision envelope;
+# robot_radius_m=0.35 is unused by the oracle): revisit if any of those change.
 OUTSIDE_TOL_M = 0.4
 
 
@@ -61,10 +65,17 @@ def test_sealed_right_hand_solves_interior():
     assert outside == 0, f"sealed right left the maze {outside} times (cheating)"
 
 
-def test_unsealed_left_hand_cheats_via_exterior():
-    # Locks in WHY the seal is required: without it, left escapes the perimeter.
+def test_unsealed_left_hand_exterior_cheat_closed_by_legged_footprint():
+    # HISTORICAL RECORD: pre-2026-07-17, with the 0.39/0.32 footprint, this test locked in WHY
+    # the entrance seal was required — the legacy WallFollower squeezed OUTSIDE the unsealed
+    # perimeter and "solved" via the exterior (the '5/5 cheat'; see project history) and this
+    # asserted `outside > 0`.
+    # NEW REALITY: the honest legged dynamic envelope (0.49/0.37) no longer fits through that
+    # corridor — the exterior cheat is closed by geometry alone. Characterize that: same
+    # unsealed scenario, but the robot now stays inside. The sealed-entrance tests above remain
+    # the primary interior-solve guard.
     _, _, outside = run_to_exit('left', sealed=False)
-    assert outside > 0, "expected unsealed left to leave the maze (the bug the seal fixes)"
+    assert outside == 0, "expected the legged 0.49/0.37 footprint to geometrically close the exterior cheat"
 
 
 def test_report_faster_legitimate_hand(capsys):

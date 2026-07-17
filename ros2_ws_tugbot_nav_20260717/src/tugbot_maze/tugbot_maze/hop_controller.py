@@ -139,7 +139,7 @@ def hop_drive_command(pose, target_yaw: float, cross_track: float = 0.0, *,
     return (v, w)
 
 
-def hop_command(pose, target_xy, *, v_max: float = 0.5, w_max: float = 0.5,
+def hop_command(pose, target_xy, *, v_max: float = 0.4, w_max: float = 0.5,
                 kp_ang: float = 1.5, slow_angle: float = 0.6,
                 arrive_m: float = 0.25) -> Tuple[float, float, bool]:
     px, py, yaw = pose
