@@ -222,6 +222,7 @@ moves only because the legs push against the ground.
   gains; documented rather than chased further because the solver is position-closed-loop, so
   the only consequence is a slower run (see the spec addendum, item 8).
 - **Maze run** (budget raised for walking speed): `bash tools/run_flood_fill_maze.sh 3600 true
+- **GUI/RViz runs on this machine REQUIRE NVIDIA PRIME offload** (the physical display runs on a weak AMD iGPU; without offload the gpu_lidar render starves and ICP degrades — see spec addendum item 15): `export DISPLAY=:1 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia && bash tools/run_flood_fill_maze.sh 3600 false true online_slam`
   false online_slam` (`MAX_SECONDS=3600 HEADLESS=true USE_RVIZ=false POSE_SOURCE=online_slam`).
 - **Fall detection**: `locomotion_controller` watches `/odom` attitude/z; `|roll|` or `|pitch|`
   `> 0.6 rad`, or base `z < 0.25 m`, sustained 1 s → logs `FALL_DETECTED` and the run wrapper
