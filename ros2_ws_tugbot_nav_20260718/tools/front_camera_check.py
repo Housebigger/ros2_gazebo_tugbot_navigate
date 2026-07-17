@@ -23,6 +23,8 @@ def main():
     rclpy.init()
     node = Check()
     t0 = time.monotonic()
+    # 8.0s window = ~160 frames at the nominal 20Hz: plenty for a stable rate
+    # estimate while keeping the gate fast.
     while time.monotonic() - t0 < 8.0:
         rclpy.spin_once(node, timeout_sec=0.5)
     msgs = node.msgs
@@ -32,8 +34,15 @@ def main():
     m = msgs[-1][1]
     print(f'frames={len(msgs)} hz={hz:.1f} {m.width}x{m.height} '
           f'encoding={m.encoding} frame_id={m.header.frame_id}')
-    assert m.width == 720 and m.height == 540, 'wrong resolution'
+    assert m.width == 720 and m.height == 540, (
+        f'wrong resolution {m.width}x{m.height} (want 720x540)')
     assert 10.0 <= hz <= 30.0, f'rate {hz:.1f}Hz outside 10-30 (nominal 20)'
+    # The static TF in tugbot_gazebo.launch.py publishes base_link ->
+    # anymal_c/base/camera_front; a silent rename in model.sdf would detach
+    # the camera from TF, so the gate pins the frame id.
+    assert m.header.frame_id == 'anymal_c/base/camera_front', (
+        f'frame_id drifted: {m.header.frame_id!r} '
+        f"(want 'anymal_c/base/camera_front'; the launch static TF must match)")
     data = bytes(m.data)
     # Sample evenly across the WHOLE frame (not just the leading bytes / top
     # rows): the maze has no roof and this lens is very wide-angle (~126 deg
