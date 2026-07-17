@@ -11,7 +11,8 @@ NEUTRAL_FOOT = {'LF': (0.34, 0.3012, -0.50), 'RF': (0.34, -0.3012, -0.50),
                 'LH': (-0.34, 0.3012, -0.50), 'RH': (-0.34, -0.3012, -0.50)}
 
 # IK solution of NEUTRAL_FOOT (locked by test_stand_pose_is_ik_of_neutral_foot).
-# Also mirrored into the 12 <initial_position> values in model.sdf.
+# The model-surgery step of this phase mirrors these into the 12
+# <initial_position> values in model.sdf.
 STAND_POSE = {
     'LF_HAA': 0.0, 'LF_HFE': 0.705, 'LF_KFE': -0.9608,
     'RF_HAA': 0.0, 'RF_HFE': 0.705, 'RF_KFE': -0.9608,
@@ -22,7 +23,7 @@ STAND_POSE = {
 
 @dataclass(frozen=True)
 class LeggedParams:
-    stand_height: float = 0.50     # |neutral foot z|; standing base height = this + ball
+    stand_height: float = -NEUTRAL_FOOT['LF'][2]   # derived: |neutral foot z|; standing base height = this + ball
     f_trot: float = 2.0            # stride cycle Hz
     duty: float = 0.5              # stance fraction of the cycle
     swing_lift: float = 0.07       # swing apex height (m)

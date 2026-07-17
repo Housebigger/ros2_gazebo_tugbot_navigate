@@ -56,7 +56,7 @@ def test_stance_moves_backward_under_forward_cmd():
 def test_yaw_cmd_gives_tangential_strides():
     dlf = foot_displacement('LF', 0.0, 0.0, 0.5, P)
     drh = foot_displacement('RH', 0.0, 0.0, 0.5, P)
-    # LF at (+0.34,+0.3012): tangent (-wz*ny, wz*nx) = (-0.1506, +0.17); RH mirrored
+    # LF at (+0.34,+0.3012): tangent (-wz*ny, wz*nx) points back-left; RH mirrored
     assert dlf[0] < 0 and dlf[1] > 0
     assert drh[0] > 0 and drh[1] < 0
 
