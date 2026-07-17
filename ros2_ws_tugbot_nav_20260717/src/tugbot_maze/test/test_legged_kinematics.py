@@ -25,6 +25,7 @@ def test_chain_matches_sdf():
         hip, thigh, shank, _axes, _foot = _CHAIN[leg]
         for link, expect in ((f'{leg}_HIP', hip), (f'{leg}_THIGH', thigh), (f'{leg}_SHANK', shank)):
             m = re.search(rf'<link name="{link}">\s*<pose[^>]*>([^<]+)</pose>', sdf)
+            assert m is not None, f'link {link} pose not found in model.sdf'
             got = [float(v) for v in m.group(1).split()]
             assert got == pytest.approx(list(expect), abs=1e-5), link
 
@@ -40,25 +41,38 @@ def test_fk_x_stance_matches_measured():
 
 
 def test_ik_fk_roundtrip():
+    """Seed is deliberately perturbed from the true solution so the damped
+    Gauss-Newton solver genuinely iterates for every leg (a seed equal to the
+    answer would exit on iteration 0 and test nothing)."""
     for leg in LEGS:
         for q in [(0.1, 0.5, -0.9), (-0.2, 0.7, -1.2), (0.0, 0.3, -0.6)]:
             # mirror the sagittal signs for hind legs (their HFE/KFE bend the other way)
             qq = q if leg in ('LF', 'RF') else (q[0], -q[1], -q[2])
             target = leg_fk(leg, qq)
-            sol, err = leg_ik(leg, target, seed=qq)
+            seed = (qq[0] + 0.12, qq[1] - 0.18, qq[2] + 0.15)
+            sol, err = leg_ik(leg, target, seed=seed)
             assert err < 1e-6
             assert leg_fk(leg, sol) == pytest.approx(target, abs=1e-5)
 
 
+_STAND_SEED = {'LF': (0.0, 0.705, -0.9608), 'RF': (0.0, 0.705, -0.9608),
+               'LH': (0.0, -0.705, 0.9608), 'RH': (0.0, -0.705, 0.9608)}
+
+
 def test_ik_warm_start_converges_fast():
-    near = (0.36, 0.3012, -0.48)   # a step-sized hop from the stand pose
-    _sol, err = leg_ik('LF', near, seed=(0.0, 0.705, -0.9608))
-    assert err < 1e-6
+    near = {'LF': (0.36, 0.3012, -0.48), 'RF': (0.36, -0.3012, -0.48),
+            'LH': (-0.36, 0.3012, -0.48), 'RH': (-0.36, -0.3012, -0.48)}
+    for leg in LEGS:   # a step-sized hop from the stand pose, every leg
+        _sol, err = leg_ik(leg, near[leg], seed=_STAND_SEED[leg])
+        assert err < 1e-6, leg
 
 
 def test_ik_unreachable_reports_error():
-    _sol, err = leg_ik('LF', (1.5, 0.3, -0.5), seed=(0.0, 0.705, -0.9608))
-    assert err > 0.5   # far outside the ~0.6 m leg reach: residual reported, no exception
+    far = {'LF': (1.5, 0.3, -0.5), 'RF': (1.5, -0.3, -0.5),
+           'LH': (-1.5, 0.3, -0.5), 'RH': (-1.5, -0.3, -0.5)}
+    for leg in LEGS:   # far outside the ~0.6 m leg reach: residual reported, no exception
+        _sol, err = leg_ik(leg, far[leg], seed=_STAND_SEED[leg])
+        assert err > 0.5, leg
 
 
 def test_mirror_symmetry():

@@ -13,8 +13,13 @@ import math
 LEGS = ('LF', 'RF', 'LH', 'RH')
 JOINTS = [f'{leg}_{j}' for leg in LEGS for j in ('HAA', 'HFE', 'KFE')]
 
+# Hardware HAA joint limits from the model.sdf <limit> blocks (asymmetric,
+# mirrored left/right). Canonical home: the legacy gait.py copy retires with
+# the animation layer.
 HAA_LIMITS = {'LF': (-0.72, 0.49), 'RF': (-0.49, 0.72),
               'LH': (-0.72, 0.49), 'RH': (-0.49, 0.72)}
+# Foot collision-sphere radius from the original CERBERUS model.sdf (the
+# workspace model gets its collisions restored from it in this phase).
 FOOT_BALL_R = 0.03
 
 # (hip pose, thigh pose, shank pose, (haa,hfe,kfe) x-axis signs, foot centre in shank frame)
@@ -111,10 +116,12 @@ def _solve3(J, e, lam=1e-9):
 
 def leg_ik(leg, target, seed, max_iters=30, tol=1e-8):
     """Damped Gauss-Newton IK. Returns (q, residual_m). Never raises; an
-    unreachable target converges to the closest reachable point and reports
-    the leftover residual — the caller decides what residual is acceptable."""
+    unreachable target typically settles at the closest reachable point and
+    reports the leftover residual — the caller decides what residual is
+    acceptable. Caveat: if the Jacobian goes singular (_solve3 det cutoff)
+    the step degrades to a no-op and the solve stalls where it is; the
+    returned residual still reports that honestly."""
     q = list(seed)
-    err = float('inf')
     for _ in range(max_iters):
         p = leg_fk(leg, q)
         e = [target[i] - p[i] for i in range(3)]
