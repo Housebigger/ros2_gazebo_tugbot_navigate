@@ -2,7 +2,10 @@
 relative leg lengths. +roll (left up) means the left legs are effectively too
 long -> raise the left foot targets; +pitch (nose down) means the front legs
 are too short -> extend the front. dz_i = kp * (roll * y_i - pitch * x_i),
-clamped. Gain 1.0 would level exactly in one shot; 0.8 leaves damping."""
+clamped. Gain 1.0 would level exactly in one shot; 0.8 leaves damping.
+Applied in both STAND and TROT — swing legs receive the same bias, which
+simply shifts their touchdown height.
+"""
 from tugbot_maze.legged.params import NEUTRAL_FOOT
 
 

@@ -91,3 +91,38 @@ def test_stand_applies_attitude_feedback():
     flat = dict(fsm.step(0.01, 0.0, 0.0, 0.0, 0.0))
     rolled = dict(fsm.step(0.01, 0.0, 0.0, 0.2, 0.0))
     assert rolled != pytest.approx(flat)   # feedback changes the pose
+
+
+def test_transition_output_continuity():
+    """C1 regression: joint targets must stay gait-sized across STAND->TROT
+    and TROT->STAND transitions. Entry resets phase to a grounded boundary;
+    exit waits for one — without these, a stale mid-swing phase snapped a
+    lifted foot by up to ~0.35 rad in one tick (6-7x normal gait motion)."""
+    fsm = LocomotionFSM()
+    _run(fsm, P.init_s + 0.1, 0.0, 0.0)
+    prev = fsm.step(0.01, 0.0, 0.0, 0.0, 0.0)
+    max_delta = 0.0
+    modes = set()
+    for push in (0.6, 0.85, 1.1, 1.35, 1.6):   # varied durations scan phase offsets
+        for _ in range(int(push / 0.01)):
+            out = fsm.step(0.01, 0.35, 0.0, 0.0, 0.0)
+            max_delta = max(max_delta, max(abs(out[j] - prev[j]) for j in out))
+            prev = out
+            modes.add(fsm.mode)
+        for _ in range(int(2.0 / 0.01)):
+            out = fsm.step(0.01, 0.0, 0.0, 0.0, 0.0)
+            max_delta = max(max_delta, max(abs(out[j] - prev[j]) for j in out))
+            prev = out
+            modes.add(fsm.mode)
+        assert fsm.mode == fsm.STAND   # the boundary gate must not deadlock the exit
+    assert modes >= {LocomotionFSM.STAND, LocomotionFSM.TROT}
+    assert max_delta < 0.12, max_delta
+
+
+def test_init_ignores_attitude_and_force_trot():
+    """INIT holds the raw stand pose: no attitude feedback (model may be
+    mid-drop) and force_trot is deliberately ignored until settle ends."""
+    fsm = LocomotionFSM()
+    out = fsm.step(0.01, 0.0, 0.0, 0.5, -0.5, force_trot=True)
+    assert fsm.mode == fsm.INIT
+    assert out == pytest.approx(STAND_POSE, abs=1e-9)
