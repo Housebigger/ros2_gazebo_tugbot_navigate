@@ -33,10 +33,12 @@ LAUNCH_PID=""
 kill_all_sim() {
   # Subset of run_flood_fill_maze.sh's kill_all_sim relevant to this launch:
   # the launch tree here spawns the gz server (a ruby wrapper), the ros_gz
-  # bridge_node, and TWO static_transform_publisher nodes (scan_tf +
-  # camera_tf) -- all must die, or an interrupted run leaves orphans.
+  # bridge_node, TWO static_transform_publisher nodes (scan_tf + camera_tf),
+  # and scan_slice_projector -- all must die, or an interrupted run leaves
+  # orphans (observed live: ros2 launch's SIGINT cascade does not reliably
+  # reap scan_slice_projector, an rclpy node, within the 2s teardown window).
   for pat in "ros2 launch" "gz sim" "ruby.*gz" parameter_bridge bridge_node \
-             ros_gz_bridge static_transform_publisher; do
+             ros_gz_bridge static_transform_publisher scan_slice_projector; do
     pkill -9 -f "$pat" 2>/dev/null
   done
 }
