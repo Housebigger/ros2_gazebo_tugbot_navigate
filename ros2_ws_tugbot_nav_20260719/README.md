@@ -1,4 +1,4 @@
-# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260718`
+# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260719`
 
 ROS 2 (Jazzy) + Gazebo Harmonic stack that drives an **ANYmal C quadruped** — as of this
 20260717 iteration the dog **physically walks**: gravity is on, all 54 CERBERUS collision
@@ -17,6 +17,40 @@ the **same `20260528` maze** as `ros2_ws_tugbot_nav_20260614`, but with one addi
 **the interior wall map is withheld** — the robot must build it online while navigating.
 Grid geometry, entrance/exit, and the outer perimeter are known from the start; every
 interior wall is discovered at runtime. The new localization mode is `pose_source:=online_slam`.
+
+## 3D lidar
+
+The ANYmal C carries one `lidar_3d` (CERBERUS `front_laser` spec, but re-centered — see
+below), a 16-beam `gpu_lidar` at `1800×16` beams (`1800` azimuth samples over the full
+360°, `16` vertical rings over `±15°`), `10 Hz`. Unlike the retired 2D `scan_omni`, its
+pose is `(0, 0, 0.35, 0, 0, 0)` — **centered on the back**, at the old 2D scanner's
+position, deliberately *not* the off-center/rotated original CERBERUS `front_laser` pose
+(the nav chain assumes `SCAN_OFFSET_X=0`). It publishes a full 3D point cloud on
+`/lidar/points` (`sensor_msgs/msg/PointCloud2`; on the gz side this lands on
+`/lidar/points/points` — `gpu_lidar` auto-splits its own `<topic>` into a `LaserScan`
+topic plus a separate `<topic>/points` cloud topic, so the bridge points at the latter).
+
+The legacy 2D `/scan` that the whole nav/localization chain consumes is now **synthesized**,
+not sensed directly: the `scan_slice_projector` node subscribes `/lidar/points`, keeps only
+the two near-horizontal `±1°` rings, min-folds their points into the legacy 900-bin
+`LaserScan` contract (field values captured verbatim from the last 2D boot in
+`src/tugbot_maze/test/scan_omni_baseline.json`), and republishes `/scan` at 10 Hz. The
+nav/localization chain (`flood_fill_solver`, `maze_motion`, ICP, `footprint.py`) runs
+**unchanged** — it still only ever sees a 900-bin `LaserScan`.
+
+| ROS topic | Type |
+|---|---|
+| `/lidar/points` | `sensor_msgs/msg/PointCloud2` |
+| `/scan` | `sensor_msgs/msg/LaserScan` (synthesized by `scan_slice_projector`) |
+
+RViz's default config has a `Lidar3D` PointCloud2 display subscribed to `/lidar/points`
+(colored by height, alongside the existing `LaserScan`, `SelfBuiltMap`, and `FrontCamera`
+views) so the raw 3D cloud is directly visible, not just the projected 2D slice.
+
+**Live gate**: `bash tools/verify_lidar3d.sh` — alongside `bash tools/verify_front_camera.sh`
+— boots the maze world headless and asserts `/lidar/points` streams real 3D clouds and the
+projected `/scan` reproduces the legacy field contract exactly (900 samples, angle/range
+fields, empty-bin encoding).
 
 ## Front camera
 
@@ -71,7 +105,7 @@ this iteration's acceptance is the *legged-locomotion* result above.
 ## How to run
 
 ```bash
-cd ros2_ws_tugbot_nav_20260718
+cd ros2_ws_tugbot_nav_20260719
 source /opt/ros/jazzy/setup.bash && colcon build --symlink-install && source install/setup.bash
 
 # New: online_slam — no interior map fed, self-builds the reference while driving:
@@ -122,7 +156,7 @@ The wrapper does three things a bare `ros2 launch` does **not**:
 `maze_dfs`, so `explorer_type:=flood_fill` is **mandatory** or the flood-fill node never starts:
 
 ```bash
-cd ros2_ws_tugbot_nav_20260718
+cd ros2_ws_tugbot_nav_20260719
 source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     headless:=false use_rviz:=true \
@@ -200,7 +234,7 @@ core, validated offline by a ROS-free maze simulator *before* any Gazebo run:
 | `scan_match_localizer.py` | Same ICP core against the **static full known map** — kept as the A/B upper-bound baseline (`pose_source=scan_match`) | yes |
 | `pose_tracking.py` | SE(2) helpers (`compose_2d`, `inverse_2d`, `odom_prior`) for the per-tick odom prior | yes |
 | `maze_sim.py` | **Test-only** raycaster + unicycle integrator over the real `20260528` wall segments, with the **true-footprint collision oracle** (dynamic ANYmal C trot-gait envelope rectangle ±0.49 × ±0.37 m; the honest collision truth) | yes |
-| `footprint.py` | Robot geometry constants (`FOOT_X_FRONT/REAR=±0.49`, `FOOT_HALF_W=0.37` — the dynamic trot envelope, dominates `legged/params.foot_envelope()`; locked by `test_footprint_covers_gait_envelope`), LIDAR `SCAN_OFFSET_X=0.0` — body-centre omni lidar | yes |
+| `footprint.py` | Robot geometry constants (`FOOT_X_FRONT/REAR=±0.49`, `FOOT_HALF_W=0.37` — the dynamic trot envelope, dominates `legged/params.foot_envelope()`; locked by `test_footprint_covers_gait_envelope`), LIDAR `SCAN_OFFSET_X=0.0` — body-centre; `/scan` is now the `scan_slice_projector` projection of `lidar_3d`, still centered so the offset is unchanged | yes |
 | `map_memory.py` / `wall_localize.py` / `hop_controller.py` | Map-integrity guard / perimeter & cell-center offsets / low-level motion commands (`hop_command` `v_max=0.4` aligned to the gait's `vx_max`) | yes |
 | `flood_fill_solver.py` | Thin node — `/scan` + TF → `_lookup_pose` (`online_slam`/`scan_match`/`odom_locked`/`slam`) → `MazeMotion` → `/cmd_vel_nav` at 10 Hz; DIAG + MATCH logging | no |
 | **`legged/kinematics.py` / `trajectory.py` / `trot.py` / `stabilizer.py` / `params.py`** | **New in 20260717** — pure functions, no ROS: per-leg SDF-anchored FK + numeric (damped Gauss-Newton) IK, sinusoidal-lift swing + stance foot trajectory, the diagonal-pair `LocomotionFSM` (INIT→STAND→TROT, phase-boundary-aligned mode switches), roll/pitch→foot-height stabilizer, and the single home for every gait constant | yes |
@@ -213,7 +247,8 @@ still ends at `/cmd_vel_nav`; downstream of that, `/cmd_vel` now drives `locomot
 (12 torque-PID joints) instead of the retired `VelocityControl` kinematic thruster.
 
 Design spec: `docs/superpowers/specs/2026-07-05-online-slam-maze-design.md` (localization layer);
-`docs/superpowers/specs/2026-07-17-legged-locomotion-design.md` (physical walking layer).
+`docs/superpowers/specs/2026-07-17-legged-locomotion-design.md` (physical walking layer);
+`docs/superpowers/specs/2026-07-18-lidar-3d-swap-design.md` (3D lidar sensor layer).
 
 ## Legged locomotion layer (20260717)
 

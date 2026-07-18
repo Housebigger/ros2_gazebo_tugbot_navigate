@@ -130,3 +130,4 @@ gz lidar_3d(16线) → PointCloudPacked → bridge → /lidar/points(PointCloud2
 7. spec 预案梯子被机理分析逐条判不对症:降水平采样加剧单射线影响;降帧率加倍决策陈旧;16→8 线会使 ±1.1° 带内无环、投影全 inf 饿死(梯子地雷,勿踩)。
 8. 用户决策(2026-07-18):走统计路线。5 跑总账:SENSE_DEBUG 跑 EXIT+0.000%(sensed-wall 135/135 与真值全符,最小裕度 0.27m);统计三连 143602/144754 EXIT+0.000%,145945 EXIT+0.719%(1/139 单 tick:mid-turn、cell(1,3) off x−0.27、该 tick ICP rms=0.033 健康、足迹触达 0.614m vs 墙距 0.73m 名义净空 ~0.1m —— 归类边缘转身擦碰歧义带,与已修的 (3,9) 转身族相关但属路口内偏心转身,solver 冻结范围外)。TIMEOUT 记为历史陷阱模式偶发表达。
 9. 递延(建议下阶段):solver front_block 的 yaw 新鲜度/双 tick 确认门(机制对症,惠及所有传感器配置);SENSE 行目前与 DIAG 同 5s 节流,步态频率级封堵不可见,如需按 tick 感知诊断需解节流。
+10. GUI+RViz 验收(2026-07-18):run 174342,EXIT_REACHED,oracle 0.000%(0/138),rms median 0.026,nan 81/136,0 STALL,0 摔倒;gz server 546MiB + GUI 701MiB + RViz 全程 4070。用户人工确认 Lidar3D 点云(墙体竖直延展、随行进生长)、LaserScan 贴合点云腰线、FrontCamera 正常,验收通过。
