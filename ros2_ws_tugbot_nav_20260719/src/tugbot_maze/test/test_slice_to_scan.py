@@ -52,6 +52,8 @@ def test_out_of_band_and_out_of_range_points_are_dropped():
         (0.05, 0.0, 0.0),                               # below range_min
         (150.0, 0.0, 0.0),                              # beyond range_max
         (0.0, 0.0, 1.0),                                # degenerate: zero horizontal
+        (float('inf'), 0.0, 0.0),                       # non-finite x
+        (2.0, 0.0, float('nan')),                       # non-finite z
     ]
     ranges = fold_to_ranges(pts, **kw)
     assert all(math.isinf(r) for r in ranges)
@@ -68,4 +70,32 @@ def test_pi_boundary_wraps_to_a_valid_bin():
     kw = _contract_kwargs()
     pts = [(-4.0, -1e-9, 0.0)]   # azimuth ~ -pi
     ranges = fold_to_ranges(pts, **kw)
+    assert sum(1 for r in ranges if math.isfinite(r)) == 1
+
+
+def test_fractional_bin_offset_rounds_to_nearest_not_floor():
+    kw = _contract_kwargs()
+    az = kw['angle_min'] + 10.6 * kw['angle_increment']   # rint -> 11, floor -> 10
+    pts = [(3.0 * math.cos(az), 3.0 * math.sin(az), 0.0)]
+    ranges = fold_to_ranges(pts, **kw)
+    idx = round((az - kw['angle_min']) / kw['angle_increment'])
+    assert idx == 11
+    assert ranges[idx] == pytest.approx(3.0, abs=1e-6)
+    assert sum(1 for r in ranges if math.isfinite(r)) == 1
+
+
+def test_pi_azimuth_wraps_via_modulo_in_synthetic_geometry():
+    # NOT the captured contract: with a float64 -pi angle_min and a 2*pi/8
+    # increment, an azimuth just below +pi yields raw index 8 (rint of
+    # ~7.9999997), which only the % n_bins wrap folds into bin 0. The
+    # captured float32 contract angles are slightly wider than +/-pi, so
+    # they never exercise the wrap.
+    n_bins = 8
+    ranges = fold_to_ranges([(-5.0, 1e-6, 0.0)], n_bins=n_bins,
+                            angle_min=-math.pi,
+                            angle_increment=2 * math.pi / n_bins,
+                            range_min=0.1, range_max=50.0)
+    assert len(ranges) == n_bins
+    assert math.isfinite(ranges[0])
+    assert ranges[0] == pytest.approx(5.0, abs=1e-6)
     assert sum(1 for r in ranges if math.isfinite(r)) == 1
