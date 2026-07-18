@@ -107,7 +107,15 @@
   direction: "GZ_TO_ROS"
 
 - ros_topic_name: "/lidar/points"
-  gz_topic_name: "/lidar/points"
+  # gz-sim's gpu_lidar sensor plugin publishes gz.msgs.LaserScan on the
+  # sensor's own <topic> ("/lidar/points") and auto-creates a SEPARATE
+  # "<topic>/points" topic for the actual gz.msgs.PointCloudPacked cloud
+  # (verified live: `gz topic -i -t /lidar/points` -> LaserScan publisher;
+  # `gz topic -i -t /lidar/points/points` -> PointCloudPacked publisher).
+  # Bridging gz_topic_name "/lidar/points" against PointCloudPacked is a
+  # silent type mismatch (gz transport never delivers it) -- point at the
+  # real "/points" topic instead.
+  gz_topic_name: "/lidar/points/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "gz.msgs.PointCloudPacked"
   direction: "GZ_TO_ROS"

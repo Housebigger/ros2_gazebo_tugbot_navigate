@@ -32,6 +32,7 @@ setup(
             'wall_follow_solver = tugbot_maze.wall_follow_solver:main',
             'flood_fill_solver = tugbot_maze.flood_fill_solver:main',
             'locomotion_controller = tugbot_maze.locomotion_controller:main',
+            'scan_slice_projector = tugbot_maze.scan_slice_projector:main',
         ],
     },
 )

@@ -95,6 +95,14 @@ def generate_launch_description():
         output='screen',
     )
 
+    scan_projector = Node(
+        package='tugbot_maze',
+        executable='scan_slice_projector',
+        name='scan_slice_projector',
+        parameters=[{'use_sim_time': use_sim_time}],
+        output='screen',
+    )
+
     return LaunchDescription([
         world_arg,
         use_sim_time_arg,
@@ -105,4 +113,5 @@ def generate_launch_description():
         bridge,
         scan_tf,
         camera_tf,
+        scan_projector,
     ])
