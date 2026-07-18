@@ -216,26 +216,41 @@
         </geometry>
       </visual>
       <!-- Sensors -->
-      <sensor name="scan_omni" type="gpu_lidar">
+      <sensor name="lidar_3d" type="gpu_lidar">
+        <!-- Centered on the back at the legacy 2D scanner's old position:
+             the nav chain assumes SCAN_OFFSET_X=0. The original CERBERUS
+             front_laser pose (-0.364 0 0.142, yaw -1.571) is off-center
+             and rotated and must not be copied. -->
         <pose>0 0 0.35 0 0 0</pose>
-        <topic>/scan</topic>
+        <topic>/lidar/points</topic>
         <always_on>1</always_on>
-        <visualize>true</visualize>
+        <visualize>false</visualize>
         <update_rate>10</update_rate>
         <lidar>
           <scan>
             <horizontal>
-              <samples>900</samples>
-              <resolution>1</resolution>
-              <min_angle>-3.141592654</min_angle>
-              <max_angle>3.141592654</max_angle>
+              <samples>1800</samples>
+              <resolution>1.0</resolution>
+              <min_angle>-3.14159</min_angle>
+              <max_angle>3.14159</max_angle>
             </horizontal>
+            <vertical>
+              <samples>16</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.261799</min_angle>
+              <max_angle>0.261799</max_angle>
+            </vertical>
           </scan>
           <range>
-            <min>0.2</min>
-            <max>100.0</max>
+            <min>0.05</min>
+            <max>100</max>
             <resolution>0.01</resolution>
           </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0</mean>
+            <stddev>0.01</stddev>
+          </noise>
         </lidar>
       </sensor>
       <sensor name="camera_front" type="camera">
@@ -1452,7 +1467,7 @@
          base_link exists; the actual link is 'base'). It is kept as base_link on
          purpose to preserve the tugbot DiffDrive odom->base_link output contract
          for the nav stack; a launch-provided static TF
-         base_link -> anymal_c/base/scan_omni bridges the scan frame. Do not
+         base_link -> anymal_c/base/lidar_3d bridges the lidar frame. Do not
          "fix" it to base. -->
     <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
       <odom_frame>odom</odom_frame>

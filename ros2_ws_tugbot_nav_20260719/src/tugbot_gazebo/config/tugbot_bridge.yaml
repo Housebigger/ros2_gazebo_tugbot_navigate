@@ -16,12 +16,6 @@
   gz_type_name: "gz.msgs.Odometry"
   direction: "GZ_TO_ROS"
 
-- ros_topic_name: "/scan"
-  gz_topic_name: "/scan"
-  ros_type_name: "sensor_msgs/msg/LaserScan"
-  gz_type_name: "gz.msgs.LaserScan"
-  direction: "GZ_TO_ROS"
-
 - ros_topic_name: "/tf"
   gz_topic_name: "/tf"
   ros_type_name: "tf2_msgs/msg/TFMessage"
@@ -110,4 +104,10 @@
   gz_topic_name: "/camera/front/camera_info"
   ros_type_name: "sensor_msgs/msg/CameraInfo"
   gz_type_name: "gz.msgs.CameraInfo"
+  direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/lidar/points"
+  gz_topic_name: "/lidar/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
   direction: "GZ_TO_ROS"
