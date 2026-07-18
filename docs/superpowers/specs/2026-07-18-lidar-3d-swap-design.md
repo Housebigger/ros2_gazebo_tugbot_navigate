@@ -121,4 +121,12 @@ gz lidar_3d(16线) → PointCloudPacked → bridge → /lidar/points(PointCloud2
 
 ## 附记(实现期决策记录)
 
-(实现过程中的偏差与决策记在这里,同前两阶段惯例。)
+1. gz gpu_lidar 话题裂分实锤(verify-first 预言命中):`<topic>` 被 gz 自己的 gz.msgs.LaserScan 占用,PointCloudPacked 自动发在 `<topic>/points` —— bridge 的 gz 侧已改指 `/lidar/points/points`(ROS 侧名不变);原同名映射是静默类型错配、零消息。
+2. 合同捕获(run 前最后的 2D 窗口):angle_increment=2π/899(gz 用 samples−1 分度)、角界为 float32 π(±3.1415927410125732)、空 bin=+inf(564/900,nan 0)、time 字段全 0 —— 投影核 SCAN_CONTRACT 逐位复刻并被测试锁死。
+3. 投影核评审网:变异测试杀死 floor-代-rint 与去模运算两个静默变体;isfinite 过滤被证明黑盒行为等价(非有限点在下游各级必被拦)= 纵深防御,诚实记录于提交信息。
+4. 投影节点评审加固:on_cloud 全体 try/except(throttle 5s)防单帧畸形云杀死 /scan 独食源;scan_slice_projector 补进全部三个 run 脚本与两个 gate 脚本的 kill 列表(ros2 launch SIGINT 级联回收不可靠,实测孤儿)。
+5. ⚠️ 首跑回归 TIMEOUT(run 120504)完整归因:RTF=1.000、ICP rms 0.028/nan 47% 健康、0 摔倒 —— 非 GPU 非定位;机制=solver 转弯瞬间 yaw 陈旧致真墙方位误归类(15 STALL 中 14 个附近确有真墙)→ 假 front_block → 90s 周期逃逸循环,入口在 (5,5) 中央交叉区(2026-06 已记录的历史麻烦区),两跑前 310s 路径逐格相同、分叉纯随机。伴随 22.3% oracle(逃逸/倒车机动中的真实碰撞)。
+6. 3D 雷达本身被三路 A/B 洗清:出生点静止投影 /scan 与旧 2D 基线 finite 数逐数一致(336/900,近距弧=真实入口墙);/scan 时延 A/B 新 16ms vs 旧 12ms(+4ms);环几何反证——双环 min-fold 抗越顶(墙高 1.2m,俯仰极值下 d*=9.95m)优于旧单波束(6.51m),幻影 0.6m 低于地面击中几何下限(0.845m)不可能来自地面。
+7. spec 预案梯子被机理分析逐条判不对症:降水平采样加剧单射线影响;降帧率加倍决策陈旧;16→8 线会使 ±1.1° 带内无环、投影全 inf 饿死(梯子地雷,勿踩)。
+8. 用户决策(2026-07-18):走统计路线。5 跑总账:SENSE_DEBUG 跑 EXIT+0.000%(sensed-wall 135/135 与真值全符,最小裕度 0.27m);统计三连 143602/144754 EXIT+0.000%,145945 EXIT+0.719%(1/139 单 tick:mid-turn、cell(1,3) off x−0.27、该 tick ICP rms=0.033 健康、足迹触达 0.614m vs 墙距 0.73m 名义净空 ~0.1m —— 归类边缘转身擦碰歧义带,与已修的 (3,9) 转身族相关但属路口内偏心转身,solver 冻结范围外)。TIMEOUT 记为历史陷阱模式偶发表达。
+9. 递延(建议下阶段):solver front_block 的 yaw 新鲜度/双 tick 确认门(机制对症,惠及所有传感器配置);SENSE 行目前与 DIAG 同 5s 节流,步态频率级封堵不可见,如需按 tick 感知诊断需解节流。
