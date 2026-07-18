@@ -67,8 +67,9 @@
 - **输出几何逐字段复刻旧 scan_omni 的 /scan**:900 样本、angle_min/max −π..π、
   range 0.2–100(投影层裁剪到旧限)、10Hz(每云一发)、header.frame_id =
   新传感器 frame、stamp 沿用点云 stamp。
-- 挂进 `tugbot_maze_explore.launch.py`(与 bridge/solver 同级,无参数化需求,
-  YAGNI)。
+- 挂进 `tugbot_gazebo.launch.py`(与 bridge/静态 TF 同级——传感器适配属 sensor 级
+  管线,裸 sim 会话也应有 /scan;计划期修订,原写 explore launch)。无参数化需求
+  (YAGNI)。
 - **离线可测**:核心切片函数与 rclpy 解耦(纯函数:点数组→900 ranges),
   pytest 用合成点云断言精确 bin 落位、min-fold、空 bin、通道选择。
 
