@@ -19,28 +19,36 @@ class ScanSliceProjector(Node):
         self.create_subscription(PointCloud2, '/lidar/points', self.on_cloud, 5)
 
     def on_cloud(self, cloud):
-        pts = point_cloud2.read_points_numpy(
-            cloud, field_names=('x', 'y', 'z'), skip_nans=False)
-        c = SCAN_CONTRACT
-        msg = LaserScan()
-        msg.header = cloud.header
-        msg.angle_min = c['angle_min']
-        msg.angle_max = c['angle_max']
-        msg.angle_increment = c['angle_increment']
-        msg.time_increment = c['time_increment']
-        msg.scan_time = c['scan_time']
-        msg.range_min = c['range_min']
-        msg.range_max = c['range_max']
-        msg.ranges = [float(r) for r in fold_to_ranges(
-            pts, c['n_bins'], c['angle_min'], c['angle_increment'],
-            c['range_min'], c['range_max'])]
-        self.pub.publish(msg)
+        try:
+            pts = point_cloud2.read_points_numpy(
+                cloud, field_names=('x', 'y', 'z'), skip_nans=False)
+            c = SCAN_CONTRACT
+            msg = LaserScan()
+            msg.header = cloud.header
+            msg.angle_min = c['angle_min']
+            msg.angle_max = c['angle_max']
+            msg.angle_increment = c['angle_increment']
+            msg.time_increment = c['time_increment']
+            msg.scan_time = c['scan_time']
+            msg.range_min = c['range_min']
+            msg.range_max = c['range_max']
+            msg.ranges = fold_to_ranges(
+                pts, c['n_bins'], c['angle_min'], c['angle_increment'],
+                c['range_min'], c['range_max'])
+            self.pub.publish(msg)
+        except Exception as e:   # never crash: /scan feeds the whole nav chain
+            self.get_logger().error(f'projector cloud dropped: {e}',
+                                    throttle_duration_sec=5.0)
 
 
-def main():
-    rclpy.init()
+def main(args=None):
+    rclpy.init(args=args)
     node = ScanSliceProjector()
-    rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':

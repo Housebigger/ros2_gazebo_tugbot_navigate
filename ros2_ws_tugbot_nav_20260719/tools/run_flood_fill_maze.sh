@@ -41,7 +41,7 @@ kill_all_sim() {
                behavior_server smoother_server route_server waypoint_follower \
                velocity_smoother collision_monitor lifecycle_manager map_server amcl \
                maze_explorer maze_solver wall_follow_solver frontier_explorer maze_goal_monitor \
-               flood_fill_solver locomotion_controller \
+               flood_fill_solver locomotion_controller scan_slice_projector \
                robot_state_publisher static_transform_publisher component_container rviz; do
         pkill -9 -f "$pat" 2>/dev/null
     done
