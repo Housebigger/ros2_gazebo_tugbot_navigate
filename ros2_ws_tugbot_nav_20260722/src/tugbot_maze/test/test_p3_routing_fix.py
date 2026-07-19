@@ -270,9 +270,11 @@ def test_freeze_loop_regression_never_stuck():
     m._escape((10.0, 10.0, 0.0), 100.0)
     for k in range(5):
         m.phase = 'center'; m._escape_backout = False
+        m.backout_target = None
         m._escape((10.0, 10.0, 0.0), 200.0 + 100.0 * k)
         assert m.phase != 'stuck'                       # the freeze is structurally gone
         assert m.phase == 'backout'
+        assert m.backout_target == (6, 5)   # each iteration re-arms the reverse, not just the phase flag
     assert m._no_progress_win == m.no_progress_s
 
 

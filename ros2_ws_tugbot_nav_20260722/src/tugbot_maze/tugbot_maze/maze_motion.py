@@ -532,9 +532,10 @@ class MazeMotion:
                                               self.prev_cell, can_reverse, False, growth,
                                               self._no_progress_win, 'reverify', 0))
                 return self._reopen_edge(c, d, 'loco_reverify', t)
-            self._no_progress_win = self.no_progress_s       # nothing to change: fast metronome is void;
-            cut_n = 0                                        # fall through to the ladder (reverse = the
-                                                             # only remaining action; freeze never happens)
+            # nothing to change: the fast metronome is void; fall through to the ladder
+            # (reverse = the only remaining action; the freeze never happens)
+            self._no_progress_win = self.no_progress_s
+            cut_n = 0
         gave_up = self.escape_tier >= 2 and self.hop_dir is not None
         if gave_up:                                          # Tier 2+: GIVE UP the blocked edge
             dirn = _dir_name(self.hop_dir)
