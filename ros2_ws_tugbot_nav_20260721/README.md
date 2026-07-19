@@ -1,4 +1,4 @@
-# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260719`
+# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260721`
 
 ROS 2 (Jazzy) + Gazebo Harmonic stack that drives an **ANYmal C quadruped** — as of this
 20260717 iteration the dog **physically walks**: gravity is on, all 54 CERBERUS collision
@@ -105,7 +105,7 @@ this iteration's acceptance is the *legged-locomotion* result above.
 ## How to run
 
 ```bash
-cd ros2_ws_tugbot_nav_20260719
+cd ros2_ws_tugbot_nav_20260721
 source /opt/ros/jazzy/setup.bash && colcon build --symlink-install && source install/setup.bash
 
 # New: online_slam — no interior map fed, self-builds the reference while driving:
@@ -156,7 +156,7 @@ The wrapper does three things a bare `ros2 launch` does **not**:
 `maze_dfs`, so `explorer_type:=flood_fill` is **mandatory** or the flood-fill node never starts:
 
 ```bash
-cd ros2_ws_tugbot_nav_20260719
+cd ros2_ws_tugbot_nav_20260721
 source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     headless:=false use_rviz:=true \
@@ -219,6 +219,42 @@ existing cold-start role (initial `map→base_link` bootstrap at the entrance).
 The ICP core (`point-to-line`, observability-gated) is the **same validated math** as in
 `scan_match_localizer.py`; `OnlineScanMatchLocalizer` reuses it with a mutable, per-tick segment
 set instead of a static one.
+
+### Yaw-only fallback and clamp-lock escape (20260721)
+
+The 55-60% deterministic-rejection background state (gates firing in uncommitted
+regions) used to mean pure dead reckoning: heading drift accumulated freely until
+the next full ICP acceptance. Two bounded correctors now narrow that window, both
+implemented in `online_scan_match_localizer.py` with zero navigation-chain changes:
+
+- **Yaw-only fallback** (`yaw_only_correct`): when full ICP is gated
+  (sparse-interior / no-local-interior-walls) or the inner ICP clamp-rejects, a
+  1-DOF grid search (window +/-0.2 rad, step 0.01) re-scores yaw against the same
+  reference set. Selection is inlier-primary (argmax inliers, rms tie-break —
+  pure rms-argmin picks the wrong sign at low inlier counts). Acceptance is
+  branch-gated: interior branch needs n>=60 inliers, >=20% rms improvement and
+  rms <= 0.15; the saturated branch needs a >=20% relative inlier increase with
+  an n>=30 floor. Every accepted step passes through an unconditional +/-0.1
+  rad/tick saturating clamp; x/y are never touched.
+- **Clamp-lock escape**: a converged-but-clamp-rejected inner ICP (n>=100,
+  converged pose available) repeated 3 ticks in a row indicates the prior is
+  pinned outside the accept region ("clamp lock" — the mechanism behind the one
+  runaway TIMEOUT in this phase's first batch). The escape applies one bounded
+  step toward the converged pose (translation <= 0.15 m direction-preserved,
+  yaw <= 0.1 rad) and resets the streak; the correction self-damps as the
+  distance decays.
+
+Observability: the solver MATCH log line carries `fb=` (which fallback fired:
+`yaw_only` / `clamp_escape`), `ystep=` (applied yaw step) and `gr=` (gate
+reason); `tools/replay_collision_oracle.py` prints a `live_rate=` alongside the
+official rate (deduplicating consecutive bit-identical poses, so stuck dwell
+cannot inflate the collision statistic).
+
+Result over the acceptance campaign (8 headless + 1 GUI): 7 clean completions
+(worst oracle 0.690%, single-tick), zero clamp-lock recurrences, and the
+remaining TIMEOUTs traced to routing-layer causes (exploration-graph
+exhaustion), not localization — see the failure taxonomy in
+`docs/superpowers/specs/2026-07-19-yaw-only-fallback-design.md`.
 
 ## Architecture (`src/tugbot_maze/`)
 
