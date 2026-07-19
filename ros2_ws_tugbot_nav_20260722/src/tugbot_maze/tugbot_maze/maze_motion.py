@@ -381,40 +381,56 @@ class MazeMotion:
         if in_grid(nb):
             self.locomotion_walls.add((nb, OPP[d]))
 
+    def _edge_exit_dist(self, edge):
+        """Single-edge re-open metric: geometric distance (cell units) from the edge's FAR
+        endpoint (the cell outside the reachable component) to EXIT_CELL. Routing continues
+        from the far endpoint after crossing the re-opened edge, so nearer-to-exit edges are
+        re-verified first -- a falsely-sealed exit approach ranks first."""
+        (c, d) = edge
+        nb = (c[0] + DIRS[d][0], c[1] + DIRS[d][1])
+        return math.hypot(nb[0] - EXIT_CELL[0], nb[1] - EXIT_CELL[1])
+
     def _unstick(self, t):
-        """Boxed (next_cell None) or exit-unreachable -> a false WALL cuts the robot's reachable
-        component off from the exit. Re-open the CUT edges (walls from the component to a cell
-        outside it) in ASCENDING trust -- locomotion (hop-failure) -> non-committed sensed (poor
-        reads) -> committed (2x-corroborated, trusted last). Within a tier, prefer edges INCIDENT to
-        self.cell (re-sensable on the very next center tick) so recovery stays inside the bounded
-        loop. Re-open is OPTIMISTIC -> OPEN (flood routes through it); the cell is un-committed but
-        KEPT in `sensed`, so the gate re-WALLs it only from a GOOD re-sense (never a poor pose --
-        that poor re-WALL was the bug that could re-seal the false wall). Bounded by self.reopened
-        (both reps): when no un-reopened cut edge remains, the map is disconnected -> 'stuck'."""
+        """Boxed (next_cell None) or exit-unreachable -> a false WALL cuts the robot's
+        reachable component off from the exit. Re-open ONE cut edge (component -> outside)
+        per invocation, in ASCENDING trust tiers -- locomotion (hop-failure) -> non-committed
+        sensed (poor reads) -> committed (2x-corroborated, trusted last). Within the first
+        non-empty tier pick the single edge whose far endpoint is geometrically nearest
+        EXIT_CELL (falsely-sealed exit approaches rank first); ties prefer edges INCIDENT to
+        self.cell (re-sensable on the very next center tick), then a deterministic order.
+        Single-edge replaces the former whole-tier mass re-open (20260719 P3 forensics: one
+        n=16 committed mass-rollback cost minutes of re-sensing + repeated optimism). The
+        re-open is OPTIMISTIC -> OPEN; the cell is un-committed but KEPT in `sensed`, so the
+        gate re-WALLs it only from a GOOD re-sense. Bounded by self.reopened (both reps):
+        when no un-reopened cut edge remains, the map is disconnected -> 'stuck'."""
         R = self._reachable_component(self.cell)
         cut = [(c, d) for c in R for d, (dx, dy) in DIRS.items()
                if self.brain.is_wall(c, d) and (c, d) not in self.reopened
                and in_grid((c[0] + dx, c[1] + dy)) and (c[0] + dx, c[1] + dy) not in R]
-        for pick in (lambda e: e in self.locomotion_walls,
-                     lambda e: e not in self.locomotion_walls and e[0] not in self.committed,
-                     lambda e: e[0] in self.committed):
+        tiers = (('loco', lambda e: e in self.locomotion_walls),
+                 ('sensed', lambda e: e not in self.locomotion_walls
+                                      and e[0] not in self.committed),
+                 ('committed', lambda e: e[0] in self.committed))
+        for tier, pick in tiers:
             cand = [e for e in cut if pick(e)]
-            if cand:
-                incident = [e for e in cand if e[0] == self.cell]
-                for (c, d) in (incident or cand):
-                    nb = (c[0] + DIRS[d][0], c[1] + DIRS[d][1])
-                    self.brain.mark(c, d, is_wall=False)     # re-open optimistically; a GOOD re-sense re-confirms
-                    self.reopened.add((c, d)); self.reopened.add((nb, OPP[d]))      # both reps -> clean 1x bound
-                    self.locomotion_walls.discard((c, d)); self.locomotion_walls.discard((nb, OPP[d]))
-                    self.failed_hops.pop((c, d), None); self.failed_hops.pop((nb, OPP[d]), None)
-                    self.committed.discard(c); self.corrob.pop(c, None)             # keep `sensed`: re-WALL needs good
-                self.center_start = None
-                self.align_start = None; self.latched_cardinal = None
-                self.settle_until = t + self.settle_s
-                self.escape_tier = 0                          # map mutation -> retry the cheap Tier-1 first
-                self.events.append("UNSTICK reopen cell=%s n=%d" % (self.cell, len(incident or cand)))  # DIAG
-                self.phase = 'center'                          # explicit: re-route / re-sense next tick
-                return (0.0, 0.0, False)
+            if not cand:
+                continue
+            c, d = min(cand, key=lambda e: (self._edge_exit_dist(e),
+                                            0 if e[0] == self.cell else 1, e))
+            nb = (c[0] + DIRS[d][0], c[1] + DIRS[d][1])
+            self.brain.mark(c, d, is_wall=False)     # re-open optimistically; a GOOD re-sense re-confirms
+            self.reopened.add((c, d)); self.reopened.add((nb, OPP[d]))   # both reps -> clean 1x bound
+            self.locomotion_walls.discard((c, d)); self.locomotion_walls.discard((nb, OPP[d]))
+            self.failed_hops.pop((c, d), None); self.failed_hops.pop((nb, OPP[d]), None)
+            self.committed.discard(c); self.corrob.pop(c, None)          # keep `sensed`: re-WALL needs good
+            self.center_start = None
+            self.align_start = None; self.latched_cardinal = None
+            self.settle_until = t + self.settle_s
+            self.escape_tier = 0                      # map mutation -> retry the cheap Tier-1 first
+            self.events.append("UNSTICK reopen cell=%s edge=(%s,%s) tier=%s dexit=%.2f"  # DIAG
+                               % (self.cell, c, d, tier, self._edge_exit_dist((c, d))))
+            self.phase = 'center'                      # explicit: re-route / re-sense next tick
+            return (0.0, 0.0, False)
         self.events.append("UNSTICK exhausted -> stuck cell=%s" % (self.cell,))  # DIAG
         self.phase = 'stuck'
         return (0.0, 0.0, False)

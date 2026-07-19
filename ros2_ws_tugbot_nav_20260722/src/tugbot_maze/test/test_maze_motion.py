@@ -152,7 +152,9 @@ def test_committed_dead_end_reopened_not_stuck():
     m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), 0.0)
     assert m.phase != 'stuck'
     assert cell not in m.committed and (cell, 'E') in m.reopened
-    assert all(m.brain._state(cell, d) != 'wall' for d in ('N', 'S', 'E', 'W'))   # re-opened
+    assert len(m.reopened) == 2                              # single-edge contract (P3 fix, 20260720)
+    assert ((5, 5), 'E') in m.reopened                       # dexit-min of the four: E 5.66 < N 5.83 < S 7.07 < W 7.21
+    assert m.brain._state((5, 5), 'E') != 'wall'
 
 
 def test_commit_freezes_sensing_not_map():
@@ -189,8 +191,9 @@ def test_disconnecting_false_wall_triggers_unstick():
     sim = MazeSim(load_segments(), cell_center(cell), 0.0)
     m.step(sim.pose, sim.scan(n_beams=360, fov_rad=2 * math.pi), 0.0)
     assert m.phase != 'stuck'                                # unstick fired (no silent wander/false-stuck)
-    assert (cell, 'E') in m.reopened
-    assert m.brain._state((5, 5), 'E') != 'wall'             # a cut wall was re-opened
+    assert len(m.reopened) == 2                              # single-edge contract (P3 fix, 20260720)
+    assert ((5, 6), 'E') in m.reopened                       # dexit-min cut edge
+    assert m.brain._state((5, 6), 'E') != 'wall'             # the chosen cut wall was re-opened
 
 
 def _pocket_walls():
@@ -579,12 +582,12 @@ def test_unstick_reopen_clears_failed_hops_and_resets_tier():
         b.mark((5, 5), d, True)
     m = MazeMotion(b)
     m.cell = (5, 5); m.escape_tier = 2
+    m.failed_hops[((5, 5), 'E')] = 3
     m.failed_hops[((5, 5), 'N')] = 3
     m._unstick(1.0)
     assert m.escape_tier == 0                              # map mutation (reopen) resets escalation
-    # at least one incident edge was reopened and its failed_hops cleared
-    assert all(k[0] != (5, 5) or k not in m.failed_hops for k in [((5, 5), 'N')]) or \
-           ((5, 5), 'N') not in m.failed_hops
+    assert ((5, 5), 'E') not in m.failed_hops              # the picked (re-opened) edge's entry cleared
+    assert ((5, 5), 'N') in m.failed_hops                  # single-edge: only the re-opened edge's bookkeeping is touched (P3 fix, 20260720)
 
 
 def test_wedge_gate_skips_when_rotating_in_place():
