@@ -163,5 +163,9 @@ class ScanMatchLocalizer:
         if (math.hypot(pose[0] - x0, pose[1] - y0) > self.trans_clamp_m
                 or abs(_wrap(pose[2] - t0)) > self.yaw_clamp_rad):
             info["rejected"] = True
+            # Pure diagnostic (2026-07-19 amendment): the converged pose being
+            # discarded by this reject-if-exceeds clamp. Behavior is unchanged --
+            # callers that don't know this key simply carry an extra dict entry.
+            info["conv_pose"] = pose
             return (x0, y0, t0), info
         return pose, info

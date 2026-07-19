@@ -383,11 +383,12 @@ class FloodFillSolver(Node):
         if self.pose_source in ('scan_match', 'online_slam') and self._sm_info is not None:
             i = self._sm_info
             self.get_logger().info(
-                'MATCH rms=%.3f n=%d eigmin=%.2f fb=%s rejected=%s'
+                'MATCH rms=%.3f n=%d eigmin=%.2f fb=%s rejected=%s ystep=%.3f gr=%s'
                 % (i.get('residual_rms', float('nan')), i.get('n_inliers', 0),
                    i.get('eig_min', 0.0),
                    ','.join(sorted(i.get('fell_back', set()))) or '-',
-                   i.get('rejected', False)))
+                   i.get('rejected', False),
+                   i.get('yaw_step', 0.0), i.get('gate_reason', '-')))
         if self.sense_debug and self.motion.dbg:
             d = self.motion.dbg
             self.get_logger().info('SENSE cell=%s pose=%s off=%s good=%s committed=%s corrob=%s walls=%s'

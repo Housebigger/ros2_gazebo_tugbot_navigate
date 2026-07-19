@@ -33,7 +33,7 @@ from typing import Iterable, List, Tuple
 import numpy as np
 
 from tugbot_maze.flood_fill_brain import CELL_SIZE_M, DIRS
-from tugbot_maze.scan_match_localizer import ScanMatchLocalizer
+from tugbot_maze.scan_match_localizer import ScanMatchLocalizer, _wrap
 
 Segment = Tuple[float, float, float, float]
 Cell = Tuple[int, int]
@@ -61,13 +61,38 @@ YAW_STEP_CLAMP = 0.1      # max applied per-tick correction (rad)
 # relative improvement inf -- must decline). Half the interior floor because
 # saturated geometry structurally caps achievable counts.
 YAW_SATURATED_MIN_INLIERS = YAW_MIN_INLIERS // 2   # = 30
+# rms hard ceiling for ANY accept (2026-07-19 amendment, "yaw-only insurance"):
+# wall_half_thickness_m=0.12 makes healthy fits ~0.11; forensics showed this
+# would have declined R3's weakest accept (n=182, rms=0.152) -- a fit that
+# looked plausible on inlier count + improvement alone but was geometrically
+# noisy enough that it should not have been trusted.
+YAW_RMS_CEILING = 0.15
+
+# --- clamp-lock escape (2026-07-19 amendment) --------------------------------
+# Forensics (run R3): the inner ScanMatchLocalizer.correct() clamp
+# ("reject-if-exceeds") discards a CONVERGED fit wholesale whenever the
+# correction magnitude exceeds trans_clamp_m/yaw_clamp_rad, even when the fit
+# itself is healthy (R3: n=421, eigmin=22) -- 575 consecutive rejections,
+# nothing downstream can spend the recoverable position error ("clamp-lock").
+# After CLAMP_LOCK_STREAK consecutive HEALTHY clamp-type rejections, spend a
+# small bounded step toward the discarded converged pose instead of dead
+# reckoning forever. This is deliberately rate-limited (at most one escape
+# per 3 healthy rejections) and bounded (<=CLAMP_ESCAPE_TRANS m,
+# <=YAW_STEP_CLAMP rad) -- the same conservative-bounded-step philosophy as
+# the yaw-only fallback, just spending 2-DOF converged evidence instead of a
+# 1-DOF rotation-only fit.
+CLAMP_LOCK_STREAK = 3          # consecutive healthy clamp-type rejections before escaping
+CLAMP_LOCK_MIN_INLIERS = 100   # 'healthy' floor: a converged, well-supported inner fit
+CLAMP_ESCAPE_TRANS = 0.15      # m -- max translation spent per escape (vector scaled, not clipped)
+# yaw escape step reuses YAW_STEP_CLAMP (0.1 rad) -- same constant as yaw-only.
 
 
 def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
                      window=YAW_WINDOW_RAD, grid=YAW_GRID_STEP,
                      min_inliers=YAW_MIN_INLIERS, min_improve=YAW_MIN_IMPROVE,
                      step_clamp=YAW_STEP_CLAMP,
-                     saturated_min_inliers=YAW_SATURATED_MIN_INLIERS):
+                     saturated_min_inliers=YAW_SATURATED_MIN_INLIERS,
+                     rms_ceiling=YAW_RMS_CEILING):
     """1-DOF fallback: grid-search d_theta against icp's reference. Position
     NEVER changes.
 
@@ -104,6 +129,20 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
         for ANY nonzero best_n, and without the floor a corner-aliasing
         handful of matches (bias 1.2 rad probe: n0=0, best_n=4) would be
         accepted; a rotation fit on a handful of points is noise.
+
+    The INTERIOR branch ALSO requires best_rms <= rms_ceiling (2026-07-19
+    amendment, "yaw-only insurance"): inlier count and improvement alone can
+    still pass a geometrically noisy fit (forensics: R3's weakest accept,
+    n=182, rms=0.152); healthy interior-optimum fits cluster well under the
+    ceiling given wall_half_thickness_m=0.12. The SATURATED branch does NOT
+    gain this ceiling: its own rms is already documented above as an
+    unreliable signal (no interior turning point), which is exactly why it
+    uses the relative-inlier-increase criterion instead -- a legitimate large
+    over-window bias (the case this branch exists to walk down over
+    successive ticks) systematically produces a higher rms at its
+    window-edge optimum than the ceiling (measured: bias 0.3 rad -> rms
+    0.165), so an absolute rms ceiling there would defeat the branch's own
+    purpose rather than reject noise.
 
     The applied step is clamped to +/-step_clamp UNCONDITIONALLY, on both
     branches -- a saturating clamp: a bounded step is always applied, and
@@ -161,12 +200,16 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
     saturated = abs(best_k) == steps
     if saturated:
         improve = math.inf if n0 == 0 else (best_n - n0) / n0
+        # No rms_ceiling here -- see docstring: rms is documented unreliable
+        # on this branch, and legitimate large over-window biases exceed the
+        # ceiling by design (this branch's own reason to exist).
         accepted = (best_n >= saturated_min_inliers
                     and improve >= min_improve)
     else:
         improve = 1.0 if not math.isfinite(rms0) else (
             0.0 if rms0 <= 0.0 else 1.0 - (best_rms / rms0))
-        accepted = best_n >= min_inliers and improve >= min_improve
+        accepted = (best_n >= min_inliers and improve >= min_improve
+                    and best_rms <= rms_ceiling)
 
     if not accepted:
         return tuple(prior_pose), {'rejected': True,
@@ -179,6 +222,18 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
              'fell_back': {'yaw_only'}, 'yaw_step': applied,
              'saturated': saturated, 'improve': improve,
              'residual_rms': best_rms, 'n_inliers': best_n})
+
+
+def _is_clamp_type_reject(info, *, min_inliers=CLAMP_LOCK_MIN_INLIERS) -> bool:
+    """True iff an inner ScanMatchLocalizer rejection is the clamp-lock kind:
+    a converged, well-supported fit (info['conv_pose'] present, n_inliers over
+    the healthy floor) that was discarded purely by the reject-if-exceeds
+    clamp -- NOT an inlier-floor (under_inliers) reject, which carries no
+    recoverable converged pose at all."""
+    return (bool(info.get('rejected'))
+            and not info.get('under_inliers')
+            and info.get('n_inliers', 0) >= min_inliers
+            and 'conv_pose' in info)
 
 
 def _edge_segment(cell: Cell, d: str) -> Segment:
@@ -244,6 +299,7 @@ class OnlineScanMatchLocalizer:
         self._min_interior = int(min_interior_segs)
         self._local_radius = float(local_radius)
         self._sig = frozenset()
+        self._clamp_streak = 0    # consecutive healthy clamp-type inner-ICP rejections
         self._rebuild([])
 
     def _rebuild(self, interior_segments) -> None:
@@ -329,6 +385,31 @@ class OnlineScanMatchLocalizer:
             info['gate_reason'] = gate_reason
         return est, info
 
+    def _clamp_lock_escape(self, prior_pose, info):
+        """Spend a bounded step from the odom prior toward the discarded
+        converged pose (info['conv_pose']) after CLAMP_LOCK_STREAK consecutive
+        HEALTHY clamp-type rejections (2026-07-19 amendment). Translation is
+        scaled (direction preserved) to at most CLAMP_ESCAPE_TRANS m; yaw is
+        clamped to +/-YAW_STEP_CLAMP rad, same constant as yaw-only. This is
+        the only place a rejected inner-ICP fit's converged pose is ever
+        spent -- see the module-level clamp-lock forensics above
+        yaw_only_correct."""
+        px, py, pyaw = float(prior_pose[0]), float(prior_pose[1]), float(prior_pose[2])
+        cx, cy, cyaw = info['conv_pose']
+        dx, dy = cx - px, cy - py
+        conv_dist = math.hypot(dx, dy)
+        if conv_dist > CLAMP_ESCAPE_TRANS:
+            scale = CLAMP_ESCAPE_TRANS / conv_dist
+            dx *= scale
+            dy *= scale
+        dyaw = max(-YAW_STEP_CLAMP, min(YAW_STEP_CLAMP, _wrap(cyaw - pyaw)))
+        new_pose = (px + dx, py + dy, _wrap(pyaw + dyaw))
+        return new_pose, {'rejected': False, 'reason': 'clamp_lock_escape',
+                          'fell_back': {'clamp_escape'},
+                          'residual_rms': info.get('residual_rms', float('nan')),
+                          'n_inliers': info.get('n_inliers', 0),
+                          'conv_dist': conv_dist, 'yaw_step': dyaw}
+
     def correct(self, prior_pose, ranges, angle_min, angle_inc, interior_segments):
         """Return (corrected_pose, info).
 
@@ -336,12 +417,23 @@ class OnlineScanMatchLocalizer:
           1. Sparse-interior: skip if fewer than min_interior_segs interior walls.
           2. Locality: skip if no interior segment is within local_radius of the prior.
           3. Beam premasking: remove beams too far from any reference wall.
-          4. ICP (rejects if under min_inliers after premasking).
+          4. ICP (rejects if under min_inliers after premasking, or clamp-rejects an
+             over-large converged correction).
 
         Every rejection path (1, 2, and 4) tries the 1-DOF yaw-only fallback before
         giving up to pure odom: wall DIRECTION is observable even where the full
         3-DOF fit is gated (junction cells, sparse local reference). x,y always pass
-        through bit-identical when the fallback runs; see yaw_only_correct."""
+        through bit-identical when the fallback runs; see yaw_only_correct.
+
+        Gates 1/2 never touch _clamp_streak (no inner ICP ran, so clamp-type vs
+        not is undetermined). On the inner-ICP path (4), a clamp-type rejection
+        (see _is_clamp_type_reject) increments the streak; any other outcome --
+        an accepted ICP correction, a non-clamp rejection (under_inliers), or an
+        accepted yaw-only fallback -- resets it to 0. At CLAMP_LOCK_STREAK
+        consecutive clamp-type rejections, _clamp_lock_escape runs INSTEAD of
+        the yaw-only fallback (2-DOF converged evidence is strictly more
+        informative) and the streak resets (at most one escape per 3 healthy
+        rejections -- a natural rate limit)."""
         sig = frozenset(tuple(s) for s in interior_segments)
         if sig != self._sig:
             self._rebuild(interior_segments)
@@ -358,6 +450,13 @@ class OnlineScanMatchLocalizer:
         masked = self._mask_far_beams(prior_pose, ranges, angle_min, angle_inc)
         est, info = self._icp.correct(prior_pose, masked, angle_min, angle_inc)
         if info.get('rejected'):
+            if _is_clamp_type_reject(info):
+                self._clamp_streak += 1
+            else:
+                self._clamp_streak = 0
+            if self._clamp_streak >= CLAMP_LOCK_STREAK:
+                self._clamp_streak = 0
+                return self._clamp_lock_escape(prior_pose, info)
             # ScanMatchLocalizer.correct's info dict carries no 'reason' key (only
             # 'rejected' + an 'under_inliers' flag on the inlier-floor path); the
             # clamp-exceeded path sets neither. 'icp_rejected' is therefore the
@@ -366,6 +465,9 @@ class OnlineScanMatchLocalizer:
             est2, info2 = self._yaw_fallback(prior_pose, masked, angle_min,
                                              angle_inc, inner, already_masked=True)
             if not info2['rejected']:
+                self._clamp_streak = 0
                 return est2, info2
             info['reason'] = inner + '+yaw_only_declined'
+        else:
+            self._clamp_streak = 0
         return est, info

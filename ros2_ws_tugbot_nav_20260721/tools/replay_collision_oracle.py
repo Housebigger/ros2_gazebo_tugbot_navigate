@@ -62,8 +62,10 @@ def main(argv):
         return 2
 
     total = coll = 0
+    live_total = live_coll = 0
     grazes = []
     for lg in logs:
+        prev_sample = None    # reset per run: dedup is within a single run's tick sequence
         with open(lg, errors="ignore") as f:
             for line in f:
                 m = DIAG_RE.search(line)
@@ -72,17 +74,33 @@ def main(argv):
                 x, y, yaw = float(m.group(1)), float(m.group(2)), float(m.group(3))
                 phase = m.group(9)
                 total += 1
-                if sim.collides(x, y, yaw):
+                collided = sim.collides(x, y, yaw)
+                if collided:
                     coll += 1
                     cell = pose_to_cell(x, y)
                     cx, cy = cell_center(cell)
                     grazes.append((cell, x, y, math.degrees(yaw), phase, x - cx, y - cy))
+                # live_rate (2026-07-19 amendment, "卡死驻留度量修正"): the official
+                # rate above counts every DIAG tick, so a robot frozen at one pose
+                # for minutes (stuck/timeout) counts as hundreds of "collisions" if
+                # that pose grazes a wall -- a dwell artifact, not distinct events.
+                # Dedup CONSECUTIVE bit-identical (x,y,yaw) samples (same run only)
+                # before recomputing the same ratio; does not touch `rate` above.
+                sample = (x, y, yaw)
+                if sample != prev_sample:
+                    live_total += 1
+                    if collided:
+                        live_coll += 1
+                prev_sample = sample
 
     if total == 0:
         print("warning: 0 DIAG samples matched under the given paths -- rate is UNDEFINED, "
               "not a clean run (check the log path / DIAG format)", file=sys.stderr)
     rate = (100.0 * coll / total) if total else 0.0
     print(f"runs={len(logs)} samples={total} collide={coll} rate={rate:.3f}%")
+    live_rate = (100.0 * live_coll / live_total) if live_total else 0.0
+    print(f"live_rate={live_rate:.3f}% (live_samples={live_total} live_collide={live_coll}, "
+          f"dedup of consecutive bit-identical (x,y,yaw) DIAG samples)")
     for cell, x, y, yd, phase, offx, offy in sorted(grazes):
         print(f"  cell={cell} pose=({x:.2f},{y:.2f}) yaw={yd:+.0f}deg "
               f"phase={phase} off=(x{offx:+.2f},y{offy:+.2f})")
