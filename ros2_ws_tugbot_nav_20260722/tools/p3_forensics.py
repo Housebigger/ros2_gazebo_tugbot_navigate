@@ -20,7 +20,9 @@ Regex notes (verified against the real 20260719 artifacts):
   - solver phase is slash-compound (`phase=entering/center`), so PHASE uses \\S+;
     locomotion LOCO lines have a numeric `phase=` but no dcell, so the
     (cell AND phase) filter excludes them;
-  - ESCAPE/UNSTICK regexes match maze_motion's event strings verbatim.
+  - ESCAPE/UNSTICK regexes match maze_motion's event strings verbatim; UNSTICK has TWO
+    formats -- the old mass-reopen `n=` and the post-P3-fix single-edge `edge=` DIAG --
+    and a line matching either is counted as a 'UNS' event.
 """
 import math
 import re
@@ -30,7 +32,8 @@ EXIT_CELL = (10, 9)
 STAMP = re.compile(r'\[(\d+)\.(\d+)\]')
 ESC = re.compile(r'ESCAPE tier=(\d+) count=(\d+) cell=\((\d+), (\d+)\) prev=(\S+ ?\S*?) '
                  r'can_reverse=(\w+) gave_up_edge=(\w+)')
-UNS = re.compile(r'UNSTICK reopen cell=\((\d+), (\d+)\) n=(\d+)')
+UNS = re.compile(r'UNSTICK reopen cell=\((\d+), (\d+)\) n=(\d+)')      # old (pre-P3-fix) mass-reopen DIAG
+UNS_NEW = re.compile(r'UNSTICK reopen cell=\((\d+), (\d+)\) edge=')    # single-edge DIAG (P3 fix, 20260720)
 CELL = re.compile(r'dcell=\((\d+), (\d+)\)')
 PHASE = re.compile(r'phase=(\S+)')
 
@@ -57,12 +60,14 @@ def analyze(path):
             if t0 is None:
                 t0 = t
             t_last = t
-            me, mu = ESC.search(line), UNS.search(line)
+            me = ESC.search(line)
+            mu = UNS.search(line) or UNS_NEW.search(line)   # both DIAG formats -> 'UNS' event
             if me:
                 events.append((t, 'ESC', (int(me.group(3)), int(me.group(4))), me.group(0)))
                 continue
             if mu:
-                events.append((t, 'UNS', (int(mu.group(1)), int(mu.group(2))), mu.group(0)))
+                events.append((t, 'UNS', (int(mu.group(1)), int(mu.group(2))),
+                               line[mu.start():].rstrip()))
                 continue
             mc, mp = CELL.search(line), PHASE.search(line)
             if mc and mp:

@@ -417,6 +417,7 @@ class MazeMotion:
                 continue
             c, d = min(cand, key=lambda e: (self._edge_exit_dist(e),
                                             0 if e[0] == self.cell else 1, e))
+            dexit = self._edge_exit_dist((c, d))
             nb = (c[0] + DIRS[d][0], c[1] + DIRS[d][1])
             self.brain.mark(c, d, is_wall=False)     # re-open optimistically; a GOOD re-sense re-confirms
             self.reopened.add((c, d)); self.reopened.add((nb, OPP[d]))   # both reps -> clean 1x bound
@@ -428,7 +429,7 @@ class MazeMotion:
             self.settle_until = t + self.settle_s
             self.escape_tier = 0                      # map mutation -> retry the cheap Tier-1 first
             self.events.append("UNSTICK reopen cell=%s edge=(%s,%s) tier=%s dexit=%.2f"  # DIAG
-                               % (self.cell, c, d, tier, self._edge_exit_dist((c, d))))
+                               % (self.cell, c, d, tier, dexit))
             self.phase = 'center'                      # explicit: re-route / re-sense next tick
             return (0.0, 0.0, False)
         self.events.append("UNSTICK exhausted -> stuck cell=%s" % (self.cell,))  # DIAG

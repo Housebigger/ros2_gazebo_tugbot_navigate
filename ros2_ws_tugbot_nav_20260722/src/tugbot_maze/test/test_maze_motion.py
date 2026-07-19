@@ -588,6 +588,7 @@ def test_unstick_reopen_clears_failed_hops_and_resets_tier():
     assert m.escape_tier == 0                              # map mutation (reopen) resets escalation
     assert ((5, 5), 'E') not in m.failed_hops              # the picked (re-opened) edge's entry cleared
     assert ((5, 5), 'N') in m.failed_hops                  # single-edge: only the re-opened edge's bookkeeping is touched (P3 fix, 20260720)
+    assert ' tier=sensed' in m.events[-1]                  # tier-2 (non-loco, non-committed) DIAG naming pinned
 
 
 def test_wedge_gate_skips_when_rotating_in_place():
