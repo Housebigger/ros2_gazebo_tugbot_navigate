@@ -278,30 +278,41 @@ class OnlineScanMatchLocalizer:
         interior reference is sparse this lets beams hitting unmodeled walls form wrong
         correspondences, biasing the Jacobian toward a false minimum.  Pre-masking
         enforces the distance gate from iteration 0 onward.  If fewer than min_inliers
-        beams survive, the ICP rejects (under_inliers) and returns the odom prior."""
+        beams survive, the ICP rejects (under_inliers) and returns the odom prior.
+
+        Only valid beams (finite, positive, within usable_range_m -- mirroring
+        _beams_to_points' validity predicate) are considered: trig on raw inf
+        ranges yields inf*0.0 = nan RuntimeWarnings, and invalid/out-of-range
+        beams are excluded by _beams_to_points downstream anyway, so leaving
+        them untouched in the returned list is semantics-preserving."""
         if self._icp._a.shape[0] == 0:
             return ranges
         r = np.asarray(ranges, dtype=float)
+        valid = np.isfinite(r) & (r > 0.0) & (r <= self._icp.usable_range_m)
+        if not np.any(valid):
+            return ranges                                             # nothing maskable
+        idx = np.nonzero(valid)[0]
+        rv = r[idx]
         x, y, th = float(prior_pose[0]), float(prior_pose[1]), float(prior_pose[2])
         c, s = math.cos(th), math.sin(th)
-        ang = angle_min + np.arange(len(r), dtype=float) * angle_inc
-        bx = self._icp.scan_offset_x + r * np.cos(ang)
-        by = r * np.sin(ang)
+        ang = angle_min + idx.astype(float) * angle_inc
+        bx = self._icp.scan_offset_x + rv * np.cos(ang)
+        by = rv * np.sin(ang)
         px = x + c * bx - s * by
         py = y + s * bx + c * by
-        pts = np.stack([px, py], axis=1)                              # (N, 2)
-        ap = pts[:, None, :] - self._icp._a[None, :, :]              # (N, S, 2)
+        pts = np.stack([px, py], axis=1)                              # (V, 2)
+        ap = pts[:, None, :] - self._icp._a[None, :, :]              # (V, S, 2)
         t = np.clip(
             np.sum(ap * self._icp._e[None, :, :], axis=2) / self._icp._len2[None, :],
             0.0, 1.0)
         foot = self._icp._a[None, :, :] + t[:, :, None] * self._icp._e
-        dist = np.sqrt(np.sum((pts[:, None, :] - foot) ** 2, axis=2)).min(axis=1)  # (N,)
+        dist = np.sqrt(np.sum((pts[:, None, :] - foot) ** 2, axis=2)).min(axis=1)  # (V,)
         threshold = self._icp.max_corr_dist_m + self._icp.wall_half_thickness_m
-        far = np.isfinite(r) & (r > 0.0) & (dist > threshold)
+        far = dist > threshold
         if not np.any(far):
             return ranges                                             # fast path: nothing masked
         out = r.copy()
-        out[far] = np.inf
+        out[idx[far]] = np.inf
         return out.tolist()
 
     def _yaw_fallback(self, prior_pose, ranges, angle_min, angle_inc, gate_reason,

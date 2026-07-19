@@ -4,6 +4,7 @@ observable at range - even from the perimeter alone. The fallback corrects
 yaw only; x,y must be bit-identical to the prior on EVERY path (a 1-DOF
 fit structurally cannot reproduce the 2026-06 two-axis position corruption)."""
 import math
+import warnings
 
 import pytest
 
@@ -163,3 +164,75 @@ def test_correct_declined_fallback_reports_both_reasons():
     assert info['rejected'] is True
     assert 'sparse_interior_gate' in info['reason'] and 'yaw_only_declined' in info['reason']
     assert est == prior
+
+
+def test_mask_far_beams_warning_free_on_mostly_inf_scan():
+    # A mostly-inf junction-style scan through the gate-1 fallback path made
+    # _mask_far_beams compute trig on RAW ranges (inf * 0.0 = nan) before its
+    # validity mask -> RuntimeWarnings at tick rate on exactly the scans the
+    # fallback targets. Must be warning-free end to end.
+    ranges = [math.inf] * 360
+    ranges[:40] = [5.0] * 40
+    amin, ainc = -math.pi, 2 * math.pi / 360
+    loc = _localizer()
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', RuntimeWarning)
+        loc.correct((3.0, 3.0, 0.0), ranges, amin, ainc, [])
+
+
+# An interior wall segment ~0.7-0.8 m from the (3,3) prior: close enough to
+# pass gate 2 (endpoints within local_radius = 1.0 m) yet INERT for the scan
+# (no perimeter-fixture beam endpoint lands within masking distance of it, and
+# every scan point associates to the much nearer perimeter). It exists purely
+# to route correct() past gates 1/2 into the inner-ICP path.
+_GATE_PASS_WALL = [(2.6, 2.3, 3.4, 2.3)]
+
+
+def test_correct_inner_icp_reject_then_declined_fallback():
+    # already_masked=True path, double-decline case: gates 1/2 pass (committed
+    # wall 0.7 m south of the prior) but the scan is phantom close clutter the
+    # reference cannot explain -> premasking kills every beam -> inner ICP
+    # rejects (under_inliers) -> the fallback has nothing to fit either.
+    # Reasons chain, diagnostics stay the inner ICP's, pose bit-identical.
+    prior = (10.0, 10.0, 0.0)
+    interior = [(9.5, 9.3, 10.5, 9.3)]
+    ranges = [0.2] * 360
+    amin, ainc = -math.pi, 2 * math.pi / 360
+    loc = _localizer()
+    est, info = loc.correct(prior, ranges, amin, ainc, interior)
+    assert info['rejected'] is True
+    assert info['reason'] == 'icp_rejected+yaw_only_declined'
+    assert info['under_inliers'] is True and info['n_inliers'] == 0   # the ICP's dict
+    assert est == prior
+
+
+def test_correct_inner_icp_clamp_reject_recovered_by_yaw_fallback():
+    # already_masked=True path, ACCEPT case: bias 0.19 rad sits inside the
+    # fallback's 0.2 window but beyond full ICP's yaw_clamp_rad (~0.1745), so
+    # the inner ICP converges and then clamp-REJECTS its over-large correction
+    # while the 1-DOF fit accepts on the same masked beams, applying its
+    # clamped step toward truth with x,y untouched.
+    pose_true = (3.0, 3.0, 0.9)
+    ranges, amin, ainc = _scan_at(pose_true)
+    prior = (pose_true[0], pose_true[1], pose_true[2] + 0.19)
+    loc = _localizer()
+    est, info = loc.correct(prior, ranges, amin, ainc, _GATE_PASS_WALL)
+    assert info['rejected'] is False and 'yaw_only' in info['fell_back']
+    assert info['gate_reason'] == 'icp_rejected'
+    assert est[0] == prior[0] and est[1] == prior[1]
+    assert est[2] - prior[2] == pytest.approx(-YAW_STEP_CLAMP, abs=1e-6)
+
+
+def test_correct_plain_icp_success_has_no_gate_reason():
+    # Full ICP succeeds (gates pass, in-clamp bias): the info dict is the
+    # inner ICP's own -- no gate_reason key, no yaw_only in fell_back.
+    pose_true = (3.0, 3.0, 0.9)
+    ranges, amin, ainc = _scan_at(pose_true)
+    prior = (pose_true[0], pose_true[1], pose_true[2] + 0.05)
+    loc = _localizer()
+    est, info = loc.correct(prior, ranges, amin, ainc, _GATE_PASS_WALL)
+    assert info['rejected'] is False
+    assert 'gate_reason' not in info
+    assert 'yaw_only' not in info['fell_back']
+    resid = math.atan2(math.sin(est[2] - pose_true[2]), math.cos(est[2] - pose_true[2]))
+    assert abs(resid) < 0.02
