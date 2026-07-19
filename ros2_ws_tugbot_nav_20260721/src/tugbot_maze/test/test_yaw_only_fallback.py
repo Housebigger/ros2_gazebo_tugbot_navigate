@@ -45,7 +45,8 @@ def test_recovers_in_window_bias_and_freezes_xy(bias):
     assert est[0] == prior[0] and est[1] == prior[1]          # x,y bit-identical
     if bias > YAW_STEP_CLAMP:
         # The per-tick contract is NEVER more than YAW_STEP_CLAMP, on every
-        # path (matching the full ICP's own yaw_clamp_rad philosophy): the
+        # path (same bounded per-tick magnitude as the full ICP's
+        # yaw_clamp_rad, but saturating instead of rejecting): the
         # first call engages the clamp exactly (full step, correct sign);
         # a SECOND call with the corrected prior closes the remainder.
         assert est[2] - prior[2] == pytest.approx(-YAW_STEP_CLAMP, abs=1e-6)

@@ -179,7 +179,7 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
         pts = icp._beams_to_points((x, y, yaw + dth), ranges, angle_min, angle_inc)
         if pts.shape[0] == 0:
             return math.inf, 0
-        foot, n, dist = icp._associate(pts)
+        _, _, dist = icp._associate(pts)
         mask = dist <= max_corr
         n_in = int(mask.sum())
         if n_in == 0:
