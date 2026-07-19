@@ -140,6 +140,7 @@ class MazeMotion:
         self.max_escape_tier = 2
         self.no_progress_fast_s = NO_PROGRESS_FAST_S  # exhausted-state fast window (P3 fix)
         self._no_progress_win = self.no_progress_s    # current adaptive watchdog window
+        # post-construction no_progress_s overrides must ALSO set _no_progress_win (it re-syncs only on new ground)
         self._esc_visited_n = 0                       # len(visited) at the previous escape
         self.failed_hops = {}                 # (cell,dir) -> consecutive cross-occupation failed-hop count
         self.failed_hop_limit = 3
@@ -319,7 +320,9 @@ class MazeMotion:
         """True iff the robot stayed within <= confine_k distinct cells over the last adaptive
         watchdog window (_no_progress_win). A tight ping-pong keeps a small rolling footprint
         (confined); a long legitimate backtrack sweeps many distinct cells (not confined -> the
-        watchdog stays silent)."""
+        watchdog stays silent). That long-backtrack guard is calm-window behavior; under the
+        fast window a mid-transit re-fire is intended (metronome: one bounded map change per
+        fast window), bounded by the reopened set."""
         self.recent = [(t2, c) for (t2, c) in self.recent if t2 >= t - self._no_progress_win]
         footprint = {c for (_, c) in self.recent}
         footprint.add(self.cell)
@@ -453,7 +456,10 @@ class MazeMotion:
         exhausted signal (20260719 P3 forensics: 23-25 escapes, near-all tier=2
         gave_up_edge=False -- every neighbour VISITED, the reverse changes nothing): divert
         straight to _unstick (single-edge re-open = a guaranteed map change) and drop the
-        watchdog to the fast window until visited grows again. No valid reverse -> hand to
+        watchdog to the fast window until visited grows again; on that divert path
+        escape_tier is vestigial (still incremented for observability continuity, but the
+        action taken is the unstick divert, and the tier stays saturated across the
+        exhausted->stuck terminal loop). No valid reverse -> hand to
         _unstick AT MOST ONCE this tick (terminal; C2 revives next tick)."""
         x, y, yaw = pose
         self.escape_count += 1
@@ -466,13 +472,13 @@ class MazeMotion:
         d_prev = (_dir_name((pc[0] - self.cell[0], pc[1] - self.cell[1]))
                   if (pc is not None and man == 1) else None)
         can_reverse = d_prev is not None and not self.brain.is_wall(self.cell, d_prev)
+        esc_fmt = ("ESCAPE tier=%d count=%d cell=%s prev=%s can_reverse=%s "
+                   "gave_up_edge=%s growth=%d win=%.0f")     # DIAG (single copy, both emit sites)
         if growth == 0:                                      # EXHAUSTED: no new ground since last escape
             self._no_progress_win = self.no_progress_fast_s  # fast cadence until visited grows
-            self.events.append("ESCAPE tier=%d count=%d cell=%s prev=%s can_reverse=%s "
-                               "gave_up_edge=%s growth=%d win=%.0f"  # DIAG
-                               % (self.escape_tier, self.escape_count, self.cell,
-                                  self.prev_cell, can_reverse, False, growth,
-                                  self._no_progress_win))
+            self.events.append(esc_fmt % (self.escape_tier, self.escape_count, self.cell,
+                                          self.prev_cell, can_reverse, False, growth,
+                                          self._no_progress_win))
             return self._unstick(t)                          # map-changing action, not a degenerate reverse
         gave_up = self.escape_tier >= 2 and self.hop_dir is not None
         if gave_up:                                          # Tier 2+: GIVE UP the blocked edge
@@ -485,10 +491,8 @@ class MazeMotion:
                 self.failed_hops.pop((self.cell, dirn), None)
             else:
                 gave_up = False                              # visited edge stays open (accurate logging)
-        self.events.append("ESCAPE tier=%d count=%d cell=%s prev=%s can_reverse=%s "
-                           "gave_up_edge=%s growth=%d win=%.0f"  # DIAG
-                           % (self.escape_tier, self.escape_count, self.cell, self.prev_cell,
-                              can_reverse, gave_up, growth, self._no_progress_win))
+        self.events.append(esc_fmt % (self.escape_tier, self.escape_count, self.cell, self.prev_cell,
+                                      can_reverse, gave_up, growth, self._no_progress_win))
         if can_reverse:                                      # Tier 1 & 2: one-cell reverse to prev
             dx, dy = DIRS[d_prev]
             self.backout_target = pc
