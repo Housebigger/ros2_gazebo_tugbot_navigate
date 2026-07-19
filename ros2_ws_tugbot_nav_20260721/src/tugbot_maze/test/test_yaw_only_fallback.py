@@ -134,3 +134,32 @@ def test_constants_exported_with_spec_values():
     assert YAW_MIN_IMPROVE == pytest.approx(0.20)
     assert YAW_STEP_CLAMP == pytest.approx(0.1)
     assert YAW_SATURATED_MIN_INLIERS == 30 == YAW_MIN_INLIERS // 2
+
+
+def test_correct_falls_back_on_sparse_interior_gate():
+    # Corner-adjacent pose (not the shared POSE_TRUE, which sits deep in the
+    # room centre -> only 61/360 beams land within usable_range_m=8.0, a
+    # ceiling already at the YAW_MIN_INLIERS=60 floor before correct()'s
+    # required premask trims it further). This pose keeps >200 beams in
+    # range so premask-then-fallback clears the floor with headroom.
+    pose_true = (3.0, 3.0, 0.9)
+    ranges, amin, ainc = _scan_at(pose_true)
+    prior = (pose_true[0], pose_true[1], pose_true[2] + 0.08)
+    loc = _localizer()                                    # interior EMPTY -> gate 1
+    est, info = loc.correct(prior, ranges, amin, ainc, [])
+    assert info['rejected'] is False and 'yaw_only' in info['fell_back']
+    assert info['gate_reason'] == 'sparse_interior_gate'
+    assert est[0] == prior[0] and est[1] == prior[1]
+    resid = math.atan2(math.sin(est[2] - pose_true[2]), math.cos(est[2] - pose_true[2]))
+    assert abs(resid) < 0.05
+
+
+def test_correct_declined_fallback_reports_both_reasons():
+    prior = (10.0, 10.0, 0.0)
+    ranges = [0.6] * 360
+    amin, ainc = -math.pi, 2 * math.pi / 360
+    loc = _localizer()
+    est, info = loc.correct(prior, ranges, amin, ainc, [])
+    assert info['rejected'] is True
+    assert 'sparse_interior_gate' in info['reason'] and 'yaw_only_declined' in info['reason']
+    assert est == prior

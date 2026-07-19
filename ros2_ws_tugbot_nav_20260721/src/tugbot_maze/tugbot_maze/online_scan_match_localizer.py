@@ -304,6 +304,20 @@ class OnlineScanMatchLocalizer:
         out[far] = np.inf
         return out.tolist()
 
+    def _yaw_fallback(self, prior_pose, ranges, angle_min, angle_inc, gate_reason,
+                      already_masked=False):
+        """Try the 1-DOF fallback on a rejection path. Far beams pollute the
+        rotation fit exactly as they pollute full ICP, so gate-1/2 paths premask
+        here; the inner-ICP path arrives already masked."""
+        beams = ranges if already_masked else self._mask_far_beams(
+            prior_pose, ranges, angle_min, angle_inc)
+        est, info = yaw_only_correct(prior_pose, beams, angle_min, angle_inc, self._icp)
+        if info['rejected']:
+            info['reason'] = gate_reason + '+yaw_only_declined'
+        else:
+            info['gate_reason'] = gate_reason
+        return est, info
+
     def correct(self, prior_pose, ranges, angle_min, angle_inc, interior_segments):
         """Return (corrected_pose, info).
 
@@ -311,19 +325,36 @@ class OnlineScanMatchLocalizer:
           1. Sparse-interior: skip if fewer than min_interior_segs interior walls.
           2. Locality: skip if no interior segment is within local_radius of the prior.
           3. Beam premasking: remove beams too far from any reference wall.
-          4. ICP (rejects if under min_inliers after premasking)."""
+          4. ICP (rejects if under min_inliers after premasking).
+
+        Every rejection path (1, 2, and 4) tries the 1-DOF yaw-only fallback before
+        giving up to pure odom: wall DIRECTION is observable even where the full
+        3-DOF fit is gated (junction cells, sparse local reference). x,y always pass
+        through bit-identical when the fallback runs; see yaw_only_correct."""
         sig = frozenset(tuple(s) for s in interior_segments)
         if sig != self._sig:
             self._rebuild(interior_segments)
             self._sig = sig
         # Gate 1: sparse-interior
         if len(interior_segments) < self._min_interior:
-            return prior_pose, {'rejected': True, 'n_inliers': 0,
-                                'reason': 'sparse_interior_gate'}
+            return self._yaw_fallback(prior_pose, ranges, angle_min, angle_inc,
+                                      'sparse_interior_gate')
         # Gate 2: locality — robot must be near at least one committed wall
         if not self._has_local_interior(prior_pose, interior_segments):
-            return prior_pose, {'rejected': True, 'n_inliers': 0,
-                                'reason': 'no_local_interior_walls'}
+            return self._yaw_fallback(prior_pose, ranges, angle_min, angle_inc,
+                                      'no_local_interior_walls')
         # Gate 3 + ICP: pre-mask far beams then run the ICP
         masked = self._mask_far_beams(prior_pose, ranges, angle_min, angle_inc)
-        return self._icp.correct(prior_pose, masked, angle_min, angle_inc)
+        est, info = self._icp.correct(prior_pose, masked, angle_min, angle_inc)
+        if info.get('rejected'):
+            # ScanMatchLocalizer.correct's info dict carries no 'reason' key (only
+            # 'rejected' + an 'under_inliers' flag on the inlier-floor path); the
+            # clamp-exceeded path sets neither. 'icp_rejected' is therefore the
+            # generic label actually used on every inner-ICP rejection today.
+            inner = str(info.get('reason', 'icp_rejected'))
+            est2, info2 = self._yaw_fallback(prior_pose, masked, angle_min,
+                                             angle_inc, inner, already_masked=True)
+            if not info2['rejected']:
+                return est2, info2
+            info['reason'] = inner + '+yaw_only_declined'
+        return est, info
