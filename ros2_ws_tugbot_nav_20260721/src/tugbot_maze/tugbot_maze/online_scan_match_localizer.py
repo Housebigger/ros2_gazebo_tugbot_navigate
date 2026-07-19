@@ -81,6 +81,13 @@ YAW_RMS_CEILING = 0.15
 # <=YAW_STEP_CLAMP rad) -- the same conservative-bounded-step philosophy as
 # the yaw-only fallback, just spending 2-DOF converged evidence instead of a
 # 1-DOF rotation-only fit.
+# In real units: correct() runs once per scan (~10 Hz), so the SUSTAINED
+# worst case is one escape of <=0.15 m / <=0.1 rad per ~0.3 s (3 ticks).
+# It is also self-limiting, not just rate-limited: each escape spends part
+# of the true error, so conv_dist shrinks on the next converged fit and the
+# step magnitude (min(conv_dist, CLAMP_ESCAPE_TRANS), likewise the yaw
+# delta) decays toward zero as the pose approaches the converged estimate --
+# once inside the inner clamp the full ICP accepts normally. No runaway.
 CLAMP_LOCK_STREAK = 3          # consecutive healthy clamp-type rejections before escaping
 CLAMP_LOCK_MIN_INLIERS = 100   # 'healthy' floor: a converged, well-supported inner fit
 CLAMP_ESCAPE_TRANS = 0.15      # m -- max translation spent per escape (vector scaled, not clipped)

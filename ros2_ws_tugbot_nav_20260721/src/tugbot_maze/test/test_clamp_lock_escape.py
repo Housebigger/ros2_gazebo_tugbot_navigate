@@ -164,6 +164,9 @@ def test_escape_translation_scaled_and_direction_preserved():
     assert math.hypot(dx, dy) == pytest.approx(CLAMP_ESCAPE_TRANS, abs=1e-9)
     assert dx > 0 and dy == pytest.approx(0.0, abs=1e-9)   # direction preserved
     assert out['conv_dist'] == pytest.approx(10.0)
+    # pure-translation conv delta: yaw must be genuinely untouched
+    assert out['yaw_step'] == 0.0
+    assert pose[2] == prior[2]
 
 
 def test_escape_translation_diagonal_direction_preserved():
@@ -196,6 +199,27 @@ def test_escape_full_delta_applies_when_within_bounds():
     assert pose[0] == pytest.approx(conv[0], abs=1e-9)
     assert pose[1] == pytest.approx(conv[1], abs=1e-9)
     assert pose[2] == pytest.approx(conv[2], abs=1e-9)
+
+
+# --- gates 1/2 never touch the streak (no inner ICP ran) -------------------
+
+
+@pytest.mark.parametrize('gate,interior', [
+    ('sparse_interior_gate', []),                            # gate 1: empty interior
+    ('no_local_interior_walls', [(15.0, 15.0, 17.0, 15.0)]),  # gate 2: all walls distant
+])
+def test_gates_never_touch_clamp_streak(gate, interior):
+    # On a gate-1/2 tick no inner ICP ran, so clamp-type vs not is
+    # undetermined -- the streak must be neither incremented nor reset,
+    # regardless of the gate's own yaw-only accept/decline outcome.
+    prior = (3.0, 3.0, 0.9)
+    ranges, amin, ainc = _scan_at(prior)
+    loc = _localizer()
+    loc._clamp_streak = 2                       # mid-streak when the gate fires
+    est, info = loc.correct(prior, ranges, amin, ainc, interior)
+    assert (info.get('gate_reason') == gate     # yaw-only accepted, or
+            or gate in info.get('reason', ''))  # declined -- gate fired either way
+    assert loc._clamp_streak == 2               # untouched
 
 
 # --- 4. priority: escape beats yaw-only even when yaw-only would accept ----
