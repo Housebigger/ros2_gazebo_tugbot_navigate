@@ -9,7 +9,8 @@ import pytest
 
 from tugbot_maze.maze_sim import MazeSim
 from tugbot_maze.online_scan_match_localizer import (
-    YAW_MIN_IMPROVE, YAW_MIN_INLIERS, YAW_STEP_CLAMP, YAW_WINDOW_RAD,
+    YAW_MIN_IMPROVE, YAW_MIN_INLIERS, YAW_SATURATED_MIN_INLIERS,
+    YAW_STEP_CLAMP, YAW_WINDOW_RAD,
     OnlineScanMatchLocalizer, yaw_only_correct,
 )
 
@@ -77,6 +78,32 @@ def test_declines_when_scan_unrelated_to_reference():
     assert est == prior
 
 
+def test_saturated_declines_on_corner_aliasing_handful():
+    # Spec-review probe: bias 1.2 rad -> the prior explains NOTHING (n0 = 0)
+    # and only a corner-aliasing handful of beams (~4) matches anywhere in
+    # the window, at its edge. The relative inlier increase is then inf for
+    # ANY nonzero count, but a rotation fit on a handful of points is noise:
+    # the saturated branch's absolute floor must decline it.
+    ranges, amin, ainc = _scan_at(POSE_TRUE)
+    prior = (POSE_TRUE[0], POSE_TRUE[1], POSE_TRUE[2] + 1.2)
+    loc = _localizer()
+    est, info = yaw_only_correct(prior, ranges, amin, ainc, _icp_of(loc))
+    assert info['rejected'] is True and 'yaw_only_declined' in info['reason']
+    assert info['n_inliers'] < YAW_SATURATED_MIN_INLIERS
+    assert est == prior                                   # pose bit-identical
+
+
+def test_saturated_accept_clears_inlier_floor():
+    # The legitimate over-window case (true bias 0.3) must survive the new
+    # floor: its window-edge optimum carries well over the saturated minimum.
+    ranges, amin, ainc = _scan_at(POSE_TRUE)
+    prior = (POSE_TRUE[0], POSE_TRUE[1], POSE_TRUE[2] + 0.3)
+    loc = _localizer()
+    est, info = yaw_only_correct(prior, ranges, amin, ainc, _icp_of(loc))
+    assert info['rejected'] is False
+    assert info['n_inliers'] >= YAW_SATURATED_MIN_INLIERS
+
+
 def test_declines_when_no_improvement_available():
     # Prior yaw already exact: best-case rms improvement ~0 < 20% -> decline
     # (guards against noise-driven idle corrections).
@@ -106,3 +133,4 @@ def test_constants_exported_with_spec_values():
     assert YAW_MIN_INLIERS == 60
     assert YAW_MIN_IMPROVE == pytest.approx(0.20)
     assert YAW_STEP_CLAMP == pytest.approx(0.1)
+    assert YAW_SATURATED_MIN_INLIERS == 30 == YAW_MIN_INLIERS // 2

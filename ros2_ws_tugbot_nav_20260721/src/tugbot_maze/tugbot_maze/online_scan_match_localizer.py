@@ -56,12 +56,18 @@ YAW_GRID_STEP = 0.01      # 0.57deg resolution; convergence target is 0.02 rad
 YAW_MIN_INLIERS = 60      # beams that must land near reference at the optimum
 YAW_MIN_IMPROVE = 0.20    # required relative rms improvement vs d_theta = 0
 YAW_STEP_CLAMP = 0.1      # max applied per-tick correction (rad)
+# Absolute inlier floor for the SATURATED accept: a rotation fit on a handful
+# of points is noise (corner-aliasing probe: bias 1.2 rad -> n0=0, best_n=4,
+# relative improvement inf -- must decline). Half the interior floor because
+# saturated geometry structurally caps achievable counts.
+YAW_SATURATED_MIN_INLIERS = YAW_MIN_INLIERS // 2   # = 30
 
 
 def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
                      window=YAW_WINDOW_RAD, grid=YAW_GRID_STEP,
                      min_inliers=YAW_MIN_INLIERS, min_improve=YAW_MIN_IMPROVE,
-                     step_clamp=YAW_STEP_CLAMP):
+                     step_clamp=YAW_STEP_CLAMP,
+                     saturated_min_inliers=YAW_SATURATED_MIN_INLIERS):
     """1-DOF fallback: grid-search d_theta against icp's reference. Position
     NEVER changes.
 
@@ -79,7 +85,10 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
 
       - Interior optimum (a genuine local minimum -- the true bias is
         within +/-window): require best_n >= min_inliers AND the rms
-        improves by >= min_improve relative to d_theta=0.
+        improves by >= min_improve relative to d_theta=0. Improvement edge
+        cases: rms0 = inf (prior has NO inliers at all) counts as full
+        improvement (1.0); rms0 <= 0 (prior already perfect) counts as 0,
+        so an exact prior always declines rather than chasing noise.
 
       - Saturated optimum (best_n found at +/-window -- the search was
         truncated and the true bias likely lies further out): the rms
@@ -89,15 +98,29 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
         approaching the tail of a large, uncorrected bias). Instead
         require the RELATIVE INLIER increase vs d_theta=0 to be
         >= min_improve -- a real bias produces a large, monotone rise in
-        matched beams toward the window edge; noise does not.
+        matched beams toward the window edge; noise does not -- AND
+        best_n >= saturated_min_inliers as an absolute floor. The floor
+        matters precisely when n0 = 0: the relative increase is then inf
+        for ANY nonzero best_n, and without the floor a corner-aliasing
+        handful of matches (bias 1.2 rad probe: n0=0, best_n=4) would be
+        accepted; a rotation fit on a handful of points is noise.
 
     The applied step is clamped to +/-step_clamp UNCONDITIONALLY, on both
-    branches: the full 3-DOF ICP itself clamps yaw per tick (yaw_clamp_rad
-    in ScanMatchLocalizer), and a rotation-only fallback must never apply
-    a larger single-tick jump than the fully-constrained fit is allowed
-    to. Biases larger than step_clamp converge over successive ticks --
-    each call re-centers the search window on the corrected prior (see
-    test_repeated_ticks_converge_without_oscillation).
+    branches -- a saturating clamp: a bounded step is always applied, and
+    biases larger than step_clamp converge over successive ticks (each
+    call re-centers the search window on the corrected prior; see
+    test_repeated_ticks_converge_without_oscillation). This differs in
+    PHILOSOPHY from the full 3-DOF ICP, whose yaw_clamp_rad is a
+    reject-if-exceeds gate (an over-large correction is discarded
+    outright, prior returned); the fallback instead applies a deliberately
+    MORE conservative magnitude (0.1 < ~0.175 rad) each tick, which is
+    what lets it walk down large biases the full ICP would simply refuse.
+
+    Cost: one eval per grid point -- 41 at defaults (the d_theta=0 eval
+    seeds the loop and is not repeated); measured ~17 ms/call at
+    production scale (900 beams x 53 segments), growing with the number
+    of committed segments -- acceptable for <=10 Hz invocation on
+    rejected ticks only.
 
     Note: icp._beams_to_points and icp._associate never return None -- on
     empty input they return an empty (0,2) points array / dist=np.full(0,
@@ -121,8 +144,11 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
     best_dth, best_rms, best_n, best_k = 0.0, rms0, n0, 0
     steps = int(round(window / grid))
     for k in range(-steps, steps + 1):
+        if k == 0:
+            continue                      # seeded above from (rms0, n0)
         dth = k * grid
         rms, n_in = eval_at(dth)
+        # More inliers wins; equal inliers -> lower rms (negated for max-compare).
         if (n_in, -rms) > (best_n, -best_rms):
             best_dth, best_rms, best_n, best_k = dth, rms, n_in, k
 
@@ -135,7 +161,8 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
     saturated = abs(best_k) == steps
     if saturated:
         improve = math.inf if n0 == 0 else (best_n - n0) / n0
-        accepted = improve >= min_improve
+        accepted = (best_n >= saturated_min_inliers
+                    and improve >= min_improve)
     else:
         improve = 1.0 if not math.isfinite(rms0) else (
             0.0 if rms0 <= 0.0 else 1.0 - (best_rms / rms0))
