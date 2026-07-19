@@ -44,6 +44,114 @@ Cell = Tuple[int, int]
 # robot is in new territory -- fall back to the odom prior.
 _LOCAL_RADIUS: float = CELL_SIZE_M / 2.0   # = 1.0 m
 
+# --- yaw-only fallback (2026-07-19 spec) -------------------------------------
+# Junction cells have almost no walls, so the gates above deterministically
+# reject full ICP there and yaw bias stands uncorrected through dead-reckoning
+# windows (the central-junction trap's fuel). Wall DIRECTION is observable at
+# range even where 2-axis position is not (the 2026-06 fundamental wall was
+# position, never yaw), so when full ICP is unavailable we fit rotation ONLY.
+# A 1-DOF fit cannot drag position; x,y pass through bit-identical.
+YAW_WINDOW_RAD = 0.2      # search window for the residual scan
+YAW_GRID_STEP = 0.01      # 0.57deg resolution; convergence target is 0.02 rad
+YAW_MIN_INLIERS = 60      # beams that must land near reference at the optimum
+YAW_MIN_IMPROVE = 0.20    # required relative rms improvement vs d_theta = 0
+YAW_STEP_CLAMP = 0.1      # max applied per-tick correction (rad)
+
+
+def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
+                     window=YAW_WINDOW_RAD, grid=YAW_GRID_STEP,
+                     min_inliers=YAW_MIN_INLIERS, min_improve=YAW_MIN_IMPROVE,
+                     step_clamp=YAW_STEP_CLAMP):
+    """1-DOF fallback: grid-search d_theta against icp's reference. Position
+    NEVER changes.
+
+    Candidate selection (per d_theta): maximize inlier count (points within
+    icp's max_corr_dist_m), tie-broken by minimum rms. Inlier count is the
+    trustworthy signal here -- verified empirically against this module's
+    own perimeter-only fixture: with few correspondences the point-to-
+    segment rms is dominated by which few points happen to remain and is
+    NOT monotone across the search window, while inlier count rises
+    cleanly and monotonically as d_theta approaches the true correction
+    (even outside the window, short of full convergence).
+
+    Two acceptance branches, keyed on whether the optimum is interior to
+    the search window or saturates at its edge:
+
+      - Interior optimum (a genuine local minimum -- the true bias is
+        within +/-window): require best_n >= min_inliers AND the rms
+        improves by >= min_improve relative to d_theta=0. Applied in full;
+        an interior bias larger than step_clamp (e.g. 0.15 rad against a
+        0.1 rad clamp) still recovers in one call because the optimum is
+        trustworthy.
+
+      - Saturated optimum (best_n found at +/-window -- the search was
+        truncated and the true bias likely lies further out): the rms
+        ratio is unusable here (still noisy, no interior turning point --
+        verified against a 0.3 rad true bias) and the absolute min_inliers
+        floor is structurally unreachable (correspondences drop off
+        approaching the tail of a large, uncorrected bias). Instead
+        require the RELATIVE INLIER increase vs d_theta=0 to be
+        >= min_improve -- a real bias produces a large, monotone rise in
+        matched beams toward the window edge; noise does not. Only a
+        conservative +/-step_clamp nudge is applied (not the full
+        boundary offset), trusting the next tick's re-centered window to
+        close the remainder (see test_repeated_ticks_converge_without_oscillation).
+
+    Note: icp._beams_to_points and icp._associate never return None -- on
+    empty input they return an empty (0,2) points array / dist=np.full(0,
+    inf) respectively -- so the guards below key off len()/mask.sum()==0,
+    not identity/None checks."""
+    x, y, yaw = float(prior_pose[0]), float(prior_pose[1]), float(prior_pose[2])
+    max_corr = icp.max_corr_dist_m    # SAME correspondence threshold as full ICP
+
+    def eval_at(dth):
+        pts = icp._beams_to_points((x, y, yaw + dth), ranges, angle_min, angle_inc)
+        if pts.shape[0] == 0:
+            return math.inf, 0
+        foot, n, dist = icp._associate(pts)
+        mask = dist <= max_corr
+        n_in = int(mask.sum())
+        if n_in == 0:
+            return math.inf, 0
+        return float(np.sqrt(np.mean(dist[mask] ** 2))), n_in
+
+    rms0, n0 = eval_at(0.0)
+    best_dth, best_rms, best_n, best_k = 0.0, rms0, n0, 0
+    steps = int(round(window / grid))
+    for k in range(-steps, steps + 1):
+        dth = k * grid
+        rms, n_in = eval_at(dth)
+        if (n_in, -rms) > (best_n, -best_rms):
+            best_dth, best_rms, best_n, best_k = dth, rms, n_in, k
+
+    if best_n == 0:
+        return tuple(prior_pose), {'rejected': True,
+                                   'reason': 'yaw_only_declined',
+                                   'residual_rms': best_rms,
+                                   'n_inliers': best_n}
+
+    saturated = abs(best_k) == steps
+    if saturated:
+        improve = math.inf if n0 == 0 else (best_n - n0) / n0
+        accepted = improve >= min_improve
+    else:
+        improve = 1.0 if not math.isfinite(rms0) else (
+            0.0 if rms0 <= 0.0 else 1.0 - (best_rms / rms0))
+        accepted = best_n >= min_inliers and improve >= min_improve
+
+    if not accepted:
+        return tuple(prior_pose), {'rejected': True,
+                                   'reason': 'yaw_only_declined',
+                                   'residual_rms': best_rms,
+                                   'n_inliers': best_n}
+    applied = (max(-step_clamp, min(step_clamp, best_dth))
+               if saturated else best_dth)
+    return ((x, y, yaw + applied),
+            {'rejected': False, 'reason': 'yaw_only',
+             'fell_back': {'yaw_only'}, 'yaw_step': applied,
+             'saturated': saturated, 'improve': improve,
+             'residual_rms': best_rms, 'n_inliers': best_n})
+
 
 def _edge_segment(cell: Cell, d: str) -> Segment:
     """Grid-snapped centerline of the wall on edge (cell, d). Cell centre = (2c, 2r);
