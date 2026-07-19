@@ -128,6 +128,50 @@ P1 类自恢复定位残留按 20260721 已归档口径豁免)。
 - Tier-2 "不放弃 visited 边"规则一行不动。
 - 不改 STALL/front_block 机制(yaw-freshness-gate 负结果领地)。
 
+## 修案(2026-07-20,批次 1 全灭后,用户裁决 A 全修案)
+
+**触发**:统计门批次 1 = 3/3 TIMEOUT(20260720_{015156,025210,035224}),全部呈
+**30s 冻结循环**:62-79 次 `ESCAPE ... cell=(5,5) prev=(6,5) growth=0 win=30` 每次
+`UNSTICK exhausted -> stuck`,全程**零重开**。深度取证结论(附记 2 详录):
+
+- **陷阱由 P1 埋雷**:+340-440s 中央路口 ICP 拒配流楔死 (5,4)E hop(cross_track
+  0.71-0.92、yaw_err 至 0.57),hop_att=3 误标 **(5,4)E 假 loco 墙**——清跑全部
+  驶过的胜利路线边;5 个陷阱跑(新旧栈)全有,6 个清跑零标墙。
+- **冻结是 P3 回归**:假墙在连通分量内部(非切割边),切割式 `_unstick` 结构上
+  够不着;零增长分流撞空切割 → 终局 stuck 循环。旧栈同态以 90s 梯子游走并
+  反复局部恢复(11-23 格爆发),但小时帽内也 0/2 通关。
+- **反事实**:两个基线 TIMEOUT 跑都精确命中过同一冻结态(zero-growth ESC at
+  (5,5) prev=(6,5)),梯子倒退在 1-2 个 escape 内恢复 11-12 格——单个零增长窗
+  是**假**耗尽信号。快窗节拍器前提在空切割下失效(203 次快拍零地图变更);
+  一个完整 escape 周期实测占满 90s(gap p50=90.1)。
+- 三跑改判:**P1 根因入阱 + P3 回归锁死**(双标)。oracle 官方 4.5-7.2% 被驻留
+  稀释,live_rate 9-15% 为诚实值。
+
+**修案设计(组件 2 的零增长分支改为三路)**:
+
+1. **共享切割计算**:从 `_unstick` 提取 `_cut_edges()`(R + 未重开切割边列表)与
+   `_reopen_edge(c, d, tier_label, t)`(单边重开全套簿记 + `UNSTICK reopen` 事件,
+   tier 字段用传入标签);`_unstick` 改用两者,行为不变。
+2. **growth==0 三路分支**(按序):
+   - **cut 非空** → 现行为:armed 快窗,ESCAPE 事件 `divert=unstick cut_n=<n>`,
+     `return self._unstick(t)`。
+   - **cut 空 ∧ 存在非切割 loco 候选**(`locomotion_walls` 中未重开、in_grid 的边;
+     同款选择键 dexit→incident→确定性)→ **loco 重验**:armed 快窗,ESCAPE 事件
+     `divert=reverify cut_n=0`,`return self._reopen_edge(..., 'loco_reverify', t)`
+     ——毒源假墙(五个陷阱跑里恰为 (5,4)E)被单边重验,`reopened` 有界,真墙由
+     好位姿重感知重新上墙。
+   - **两者皆空** → **梯子回退**:恢复慢窗(`_no_progress_win = no_progress_s`),
+     落回原 ladder 尾部(tier2 give-up 判定 + can_reverse 倒退 / 否则 _unstick),
+     ESCAPE 事件 `divert=ladder cut_n=0`——物理重逼近是唯一剩余动作,冻结永不发生。
+3. **DIAG**:esc_fmt 追加 ` divert=%s cut_n=%s`(growth>0 路径 divert=ladder、
+   cut_n='-' 不计算);`UNSTICK exhausted` 行追加 ` R=%d noncut_loco=%d`。
+4. **测试**(追加 test_p3_routing_fix.py):空切割重验选边(含 dexit 序 + reopened
+   有界 + 真陷阱边 (5,4)E 场景)、无候选梯子回退(慢窗恢复 + backout)、
+   **冻结回归红铁证**(修案前代码反复零增长 escape 后 phase=='stuck';修案后
+   永不 stuck、每次以 backout 或重开收束)、既有 Task 3/4 测试零回归。
+5. **统计门从零重跑**(8 = 3+3+2),判定口径不变(零 P3 类;P1 类按已归档口径
+   豁免;新增签名:冻结循环 = P3 类回归,不得再现)。
+
 ## 附记(实现期决策记录)
 
 1. **Task 2 取证(2026-07-20)**:工具 `ros2_ws_tugbot_nav_20260722/tools/p3_forensics.py`
