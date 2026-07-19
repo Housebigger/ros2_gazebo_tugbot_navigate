@@ -39,6 +39,9 @@ def _dir_name(d) -> str:
     return {(1, 0): 'E', (-1, 0): 'W', (0, 1): 'N', (0, -1): 'S'}[d]
 
 
+NO_PROGRESS_FAST_S = 30.0   # exhausted-state watchdog window (pinned by the 175751/201541 forensics, Task 2)
+
+
 def within_commit_offset(ox, oy, tol: float) -> bool:
     """True if every REFERENCED axis offset (non-None) is within tol. Open axes (None) impose
     no constraint -- they cannot be wall-referenced."""
@@ -135,6 +138,9 @@ class MazeMotion:
         self.no_progress_s = 90.0             # window (calibrated in Task 6)
         self.confine_k = 6                    # max distinct cells in-window to count as "confined" (Task 6)
         self.max_escape_tier = 2
+        self.no_progress_fast_s = NO_PROGRESS_FAST_S  # exhausted-state fast window (P3 fix)
+        self._no_progress_win = self.no_progress_s    # current adaptive watchdog window
+        self._esc_visited_n = 0                       # len(visited) at the previous escape
         self.failed_hops = {}                 # (cell,dir) -> consecutive cross-occupation failed-hop count
         self.failed_hop_limit = 3
         self.events = []                      # DIAG: structured STALL/ESCAPE/UNSTICK strings (node drains)
@@ -151,7 +157,7 @@ class MazeMotion:
         if (self.phase != 'done' and self.cell != EXIT_CELL
                 and not self._escape_backout              # don't re-fire mid-escape reverse
                 and self.explore_t is not None
-                and (t - self.explore_t) > self.no_progress_s
+                and (t - self.explore_t) > self._no_progress_win
                 and self._confined(t)):
             return self._escape(pose, t)
         if self.phase == 'done' or self.cell == EXIT_CELL:
@@ -303,16 +309,18 @@ class MazeMotion:
             self.visited.add(self.cell)
             self.explore_t = t
             self.escape_tier = 0                         # real progress clears in-flight escalation
+            self._no_progress_win = self.no_progress_s   # growth -> restore the calm window
         if self.cell != self.last_seen_cell:             # cell-change bookkeeping
             self.prev_cell = self.last_seen_cell
             self.last_seen_cell = self.cell
             self.recent.append((t, self.cell))
 
     def _confined(self, t):
-        """True iff the robot stayed within <= confine_k distinct cells over the last no_progress_s
-        window. A tight ping-pong keeps a small rolling footprint (confined); a long legitimate
-        backtrack sweeps many distinct cells (not confined -> the watchdog stays silent)."""
-        self.recent = [(t2, c) for (t2, c) in self.recent if t2 >= t - self.no_progress_s]
+        """True iff the robot stayed within <= confine_k distinct cells over the last adaptive
+        watchdog window (_no_progress_win). A tight ping-pong keeps a small rolling footprint
+        (confined); a long legitimate backtrack sweeps many distinct cells (not confined -> the
+        watchdog stays silent)."""
+        self.recent = [(t2, c) for (t2, c) in self.recent if t2 >= t - self._no_progress_win]
         footprint = {c for (_, c) in self.recent}
         footprint.add(self.cell)
         return len(footprint) <= self.confine_k
@@ -437,46 +445,61 @@ class MazeMotion:
         return (0.0, 0.0, False)
 
     def _escape(self, pose, t):
-        """No-progress escape (top-of-step watchdog fired: no new ground for no_progress_s while
-        confined). Escalates: Tier 1 = decisive one-cell reverse to the adjacent known-open prev_cell
-        (fresh re-approach clears a position-dependent false front_block); Tier 2 = ALSO give up the
-        blocked forward edge (real brain wall, reopenable by _unstick) so flood/next_cell route to the
-        nearest optimistic frontier (flood already IS 'retreat to nearest unexplored junction'). No
-        valid reverse -> hand to _unstick AT MOST ONCE this tick (terminal; C2 revives next tick)."""
+        """No-progress escape (top-of-step watchdog fired: no new ground for the adaptive
+        window while confined). growth = visited cells gained since the PREVIOUS escape.
+        While the maze still yields new ground the escalation ladder is unchanged: Tier 1 =
+        decisive one-cell reverse to the adjacent known-open prev_cell; Tier 2 = ALSO give
+        up the blocked forward edge. ZERO growth between escapes is the exploration-
+        exhausted signal (20260719 P3 forensics: 23-25 escapes, near-all tier=2
+        gave_up_edge=False -- every neighbour VISITED, the reverse changes nothing): divert
+        straight to _unstick (single-edge re-open = a guaranteed map change) and drop the
+        watchdog to the fast window until visited grows again. No valid reverse -> hand to
+        _unstick AT MOST ONCE this tick (terminal; C2 revives next tick)."""
         x, y, yaw = pose
         self.escape_count += 1
         self.escape_tier = min(self.escape_tier + 1, self.max_escape_tier)
         self.explore_t = t                                   # reset on EVERY entry (no busy-re-fire)
+        growth = len(self.visited) - self._esc_visited_n
+        self._esc_visited_n = len(self.visited)
         pc = self.prev_cell
         man = None if pc is None else abs(pc[0] - self.cell[0]) + abs(pc[1] - self.cell[1])
         d_prev = (_dir_name((pc[0] - self.cell[0], pc[1] - self.cell[1]))
                   if (pc is not None and man == 1) else None)
         can_reverse = d_prev is not None and not self.brain.is_wall(self.cell, d_prev)
+        if growth == 0:                                      # EXHAUSTED: no new ground since last escape
+            self._no_progress_win = self.no_progress_fast_s  # fast cadence until visited grows
+            self.events.append("ESCAPE tier=%d count=%d cell=%s prev=%s can_reverse=%s "
+                               "gave_up_edge=%s growth=%d win=%.0f"  # DIAG
+                               % (self.escape_tier, self.escape_count, self.cell,
+                                  self.prev_cell, can_reverse, False, growth,
+                                  self._no_progress_win))
+            return self._unstick(t)                          # map-changing action, not a degenerate reverse
         gave_up = self.escape_tier >= 2 and self.hop_dir is not None
-        if gave_up:                                              # Tier 2+: GIVE UP the blocked edge
+        if gave_up:                                          # Tier 2+: GIVE UP the blocked edge
             dirn = _dir_name(self.hop_dir)
             nb = (self.cell[0] + DIRS[dirn][0], self.cell[1] + DIRS[dirn][1])
-            if nb not in self.visited:                           # never give up an edge to a VISITED cell
+            if nb not in self.visited:                       # never give up an edge to a VISITED cell
                 self.brain.mark(self.cell, dirn, is_wall=True)   # the real routing change (symmetric)
                 self._stamp_loco_wall(self.cell, dirn)           # provenance: _unstick reopens loco first
                 self.committed.discard(self.cell)
                 self.failed_hops.pop((self.cell, dirn), None)
             else:
-                gave_up = False                                  # visited edge stays open (accurate logging)
-        self.events.append("ESCAPE tier=%d count=%d cell=%s prev=%s can_reverse=%s gave_up_edge=%s"  # DIAG
+                gave_up = False                              # visited edge stays open (accurate logging)
+        self.events.append("ESCAPE tier=%d count=%d cell=%s prev=%s can_reverse=%s "
+                           "gave_up_edge=%s growth=%d win=%.0f"  # DIAG
                            % (self.escape_tier, self.escape_count, self.cell, self.prev_cell,
-                              can_reverse, gave_up))
-        if can_reverse:                                          # Tier 1 & 2: one-cell reverse to prev
+                              can_reverse, gave_up, growth, self._no_progress_win))
+        if can_reverse:                                      # Tier 1 & 2: one-cell reverse to prev
             dx, dy = DIRS[d_prev]
             self.backout_target = pc
-            self.backout_cardinal = math.atan2(-dy, -dx)         # face away from prev -> reverse into it
+            self.backout_cardinal = math.atan2(-dy, -dx)     # face away from prev -> reverse into it
             self.backout_start = (x, y)
             self.backout_deadline = t + self.backout_timeout_s
             self.center_start = None
             self._escape_backout = True
             self.phase = 'backout'
             return (0.0, 0.0, False)
-        return self._unstick(t)                                  # no reverse -> _unstick once (MF5)
+        return self._unstick(t)                              # no reverse -> _unstick once (MF5)
 
     def _turn(self, pose, t):
         yaw = pose[2]

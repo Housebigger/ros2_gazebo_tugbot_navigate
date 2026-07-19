@@ -483,7 +483,9 @@ def test_churn_escape_escalates_and_reroutes():
     assert b.next_cell((3, 3)) == (3, 4)              # baseline: routes forward N
     m._escape((6.0, 6.0, 0.0), 100.0)                 # fire 1 -> Tier 1 (edge stays open)
     assert m.escape_tier == 1 and not b.is_wall((3, 3), 'N')
-    m._escape((6.0, 6.0, 0.0), 200.0)                 # fire 2 (no new ground) -> Tier 2 gives up edge
+    m.visited.add((8, 8))                             # seed growth: keep the ladder path (P3 Task 4
+                                                      # diverts zero-growth escapes to _unstick)
+    m._escape((6.0, 6.0, 0.0), 200.0)                 # fire 2 -> Tier 2 gives up edge
     assert m.escape_tier == 2 and b.is_wall((3, 3), 'N')
     assert b.next_cell((3, 3)) != (3, 4)              # liveness: flood reroutes off the walled edge
     assert m.escape_count == 2
