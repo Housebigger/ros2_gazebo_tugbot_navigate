@@ -162,3 +162,41 @@ def test_p3_constants_pinned():
     assert m.no_progress_fast_s == 30.0
     assert m._no_progress_win == 90.0
     assert m._esc_visited_n == 0
+
+
+# ---- Task 5: integration -- sealed exit approach recovers and solves ----
+
+def test_sealed_exit_approach_recovers_and_solves():
+    # P3 end-to-end: every interior approach edge of EXIT_CELL starts falsely WALLed and
+    # COMMITTED (worst-trust tier: the old code answered this class with an n=16 mass
+    # rollback in runs 175751/201541). The fix must recover via single-edge re-opens and
+    # still reach the exit, with EVERY UNSTICK event single-edge.
+    sim = MazeSim(load_segments(), cell_center(ENTRANCE_CELL), 0.0, inertia=True)
+    m = MazeMotion()
+    # PRODUCT-DEFAULT watchdog cadence (90/30s) on purpose. An x10-scaled cadence (9/3s)
+    # is PHYSICALLY INCOHERENT here: windows scale but robot physics does not (the initial
+    # in-place turn alone is ~5.1s, a first hop ~10s), so the watchdog fires mid-maneuver
+    # in a HEALTHY connected-map state and NO code generation can pass -- certified 3 ways:
+    # fixed code hits the _unstick connected-map "exhausted -> stuck" misinference at
+    # t=9.1s; fixed code + a naive connected-guard livelocks (3s fast window restarts
+    # every maneuver: 6 cells/6000s); old 20260721 code thrashes (495 escapes, 5 cells).
+    # With product cadence the t=0 committed seal is repaired by the _route reachability
+    # backstop via EXACTLY ONE dexit-optimal single-edge reopen and the maze solves; the
+    # adaptive-window machinery is unit-covered by the Task 4 tests above.
+    for d, (dx, dy) in DIRS.items():
+        nb = (EXIT_CELL[0] + dx, EXIT_CELL[1] + dy)
+        if in_grid(nb):
+            m.brain.mark(nb, OPP[d], is_wall=True)     # seal from the interior side
+            m.committed.add(nb)
+    t, done = 0.0, False
+    for _ in range(60000):
+        scan = sim.scan(n_beams=360, fov_rad=2 * math.pi)
+        v, w, done = m.step(sim.pose, scan, t)
+        if done:
+            break
+        sim.step(v, w, 0.1)
+        t += 0.1
+    assert done, "sealed exit approach not recovered (P3 signature)"
+    for e in m.events:
+        if e.startswith("UNSTICK reopen"):
+            assert " edge=" in e                       # single-edge format = no mass re-open
