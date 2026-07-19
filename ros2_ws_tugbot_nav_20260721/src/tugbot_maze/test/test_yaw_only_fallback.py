@@ -41,6 +41,15 @@ def test_recovers_in_window_bias_and_freezes_xy(bias):
     est, info = yaw_only_correct(prior, ranges, amin, ainc, _icp_of(loc))
     assert info['rejected'] is False and 'yaw_only' in info['fell_back']
     assert est[0] == prior[0] and est[1] == prior[1]          # x,y bit-identical
+    if bias > YAW_STEP_CLAMP:
+        # The per-tick contract is NEVER more than YAW_STEP_CLAMP, on every
+        # path (matching the full ICP's own yaw_clamp_rad philosophy): the
+        # first call engages the clamp exactly (full step, correct sign);
+        # a SECOND call with the corrected prior closes the remainder.
+        assert est[2] - prior[2] == pytest.approx(-YAW_STEP_CLAMP, abs=1e-6)
+        est, info = yaw_only_correct(est, ranges, amin, ainc, _icp_of(loc))
+        assert info['rejected'] is False
+        assert est[0] == prior[0] and est[1] == prior[1]      # x,y bit-identical again
     resid = math.atan2(math.sin(est[2] - POSE_TRUE[2]), math.cos(est[2] - POSE_TRUE[2]))
     assert abs(resid) < 0.02, f'bias {bias} -> residual {resid}'
 

@@ -79,10 +79,7 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
 
       - Interior optimum (a genuine local minimum -- the true bias is
         within +/-window): require best_n >= min_inliers AND the rms
-        improves by >= min_improve relative to d_theta=0. Applied in full;
-        an interior bias larger than step_clamp (e.g. 0.15 rad against a
-        0.1 rad clamp) still recovers in one call because the optimum is
-        trustworthy.
+        improves by >= min_improve relative to d_theta=0.
 
       - Saturated optimum (best_n found at +/-window -- the search was
         truncated and the true bias likely lies further out): the rms
@@ -92,10 +89,15 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
         approaching the tail of a large, uncorrected bias). Instead
         require the RELATIVE INLIER increase vs d_theta=0 to be
         >= min_improve -- a real bias produces a large, monotone rise in
-        matched beams toward the window edge; noise does not. Only a
-        conservative +/-step_clamp nudge is applied (not the full
-        boundary offset), trusting the next tick's re-centered window to
-        close the remainder (see test_repeated_ticks_converge_without_oscillation).
+        matched beams toward the window edge; noise does not.
+
+    The applied step is clamped to +/-step_clamp UNCONDITIONALLY, on both
+    branches: the full 3-DOF ICP itself clamps yaw per tick (yaw_clamp_rad
+    in ScanMatchLocalizer), and a rotation-only fallback must never apply
+    a larger single-tick jump than the fully-constrained fit is allowed
+    to. Biases larger than step_clamp converge over successive ticks --
+    each call re-centers the search window on the corrected prior (see
+    test_repeated_ticks_converge_without_oscillation).
 
     Note: icp._beams_to_points and icp._associate never return None -- on
     empty input they return an empty (0,2) points array / dist=np.full(0,
@@ -144,8 +146,7 @@ def yaw_only_correct(prior_pose, ranges, angle_min, angle_inc, icp, *,
                                    'reason': 'yaw_only_declined',
                                    'residual_rms': best_rms,
                                    'n_inliers': best_n}
-    applied = (max(-step_clamp, min(step_clamp, best_dth))
-               if saturated else best_dth)
+    applied = max(-step_clamp, min(step_clamp, best_dth))   # UNCONDITIONAL
     return ((x, y, yaw + applied),
             {'rejected': False, 'reason': 'yaw_only',
              'fell_back': {'yaw_only'}, 'yaw_step': applied,
