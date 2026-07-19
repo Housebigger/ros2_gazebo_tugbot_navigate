@@ -401,6 +401,53 @@ class MazeMotion:
         nb = (c[0] + DIRS[d][0], c[1] + DIRS[d][1])
         return math.hypot(nb[0] - EXIT_CELL[0], nb[1] - EXIT_CELL[1])
 
+    def _cut_edges(self):
+        """(R, cut): R = the robot's reachable component; cut = the un-reopened WALL edges
+        from R to an in-grid cell OUTSIDE R (the walls that disconnect the map). Shared by
+        _unstick (repair picker) and _escape's zero-growth peek (an EMPTY cut means the map
+        is connected and _unstick would exhaust -- the batch-1 freeze precondition)."""
+        R = self._reachable_component(self.cell)
+        cut = [(c, d) for c in R for d, (dx, dy) in DIRS.items()
+               if self.brain.is_wall(c, d) and (c, d) not in self.reopened
+               and in_grid((c[0] + dx, c[1] + dy)) and (c[0] + dx, c[1] + dy) not in R]
+        return R, cut
+
+    def _loco_reverify_candidates(self):
+        """Un-reopened LOCOMOTION walls (both directed reps) with an in-grid far endpoint
+        that the brain still believes are walls -- the lowest-trust believed walls, eligible
+        for a single-edge zero-growth re-verify even when they DON'T cut the map (the
+        batch-1 poison (5,4)E sat INSIDE the connected component, so the cut peek alone
+        can never reach it)."""
+        cand = []
+        for (c, d) in self.locomotion_walls:
+            dx, dy = DIRS[d]
+            if ((c, d) not in self.reopened and in_grid((c[0] + dx, c[1] + dy))
+                    and self.brain.is_wall(c, d)):
+                cand.append((c, d))
+        return cand
+
+    def _reopen_edge(self, c, d, tier, t):
+        """Single-edge OPTIMISTIC re-open (edge -> OPEN) + full bookkeeping: both directed
+        reps enter `reopened` (the monotonic 1x bound) and leave locomotion_walls/
+        failed_hops; the cell is un-committed but KEPT in `sensed`, so the gate re-WALLs it
+        only from a GOOD re-sense. Resets the maneuver latches and drops to 'center' to
+        re-route / re-sense next tick. `tier` is the DIAG provenance label."""
+        dexit = self._edge_exit_dist((c, d))
+        nb = (c[0] + DIRS[d][0], c[1] + DIRS[d][1])
+        self.brain.mark(c, d, is_wall=False)     # re-open optimistically; a GOOD re-sense re-confirms
+        self.reopened.add((c, d)); self.reopened.add((nb, OPP[d]))   # both reps -> clean 1x bound
+        self.locomotion_walls.discard((c, d)); self.locomotion_walls.discard((nb, OPP[d]))
+        self.failed_hops.pop((c, d), None); self.failed_hops.pop((nb, OPP[d]), None)
+        self.committed.discard(c); self.corrob.pop(c, None)          # keep `sensed`: re-WALL needs good
+        self.center_start = None
+        self.align_start = None; self.latched_cardinal = None
+        self.settle_until = t + self.settle_s
+        self.escape_tier = 0                      # map mutation -> retry the cheap Tier-1 first
+        self.events.append("UNSTICK reopen cell=%s edge=(%s,%s) tier=%s dexit=%.2f"  # DIAG
+                           % (self.cell, c, d, tier, dexit))
+        self.phase = 'center'                      # explicit: re-route / re-sense next tick
+        return (0.0, 0.0, False)
+
     def _unstick(self, t):
         """Boxed (next_cell None) or exit-unreachable -> a false WALL cuts the robot's
         reachable component off from the exit. Re-open ONE cut edge (component -> outside)
@@ -414,10 +461,7 @@ class MazeMotion:
         re-open is OPTIMISTIC -> OPEN; the cell is un-committed but KEPT in `sensed`, so the
         gate re-WALLs it only from a GOOD re-sense. Bounded by self.reopened (both reps):
         when no un-reopened cut edge remains, the map is disconnected -> 'stuck'."""
-        R = self._reachable_component(self.cell)
-        cut = [(c, d) for c in R for d, (dx, dy) in DIRS.items()
-               if self.brain.is_wall(c, d) and (c, d) not in self.reopened
-               and in_grid((c[0] + dx, c[1] + dy)) and (c[0] + dx, c[1] + dy) not in R]
+        R, cut = self._cut_edges()
         tiers = (('loco', lambda e: e in self.locomotion_walls),
                  ('sensed', lambda e: e not in self.locomotion_walls
                                       and e[0] not in self.committed),
@@ -428,22 +472,9 @@ class MazeMotion:
                 continue
             c, d = min(cand, key=lambda e: (self._edge_exit_dist(e),
                                             0 if e[0] == self.cell else 1, e))
-            dexit = self._edge_exit_dist((c, d))
-            nb = (c[0] + DIRS[d][0], c[1] + DIRS[d][1])
-            self.brain.mark(c, d, is_wall=False)     # re-open optimistically; a GOOD re-sense re-confirms
-            self.reopened.add((c, d)); self.reopened.add((nb, OPP[d]))   # both reps -> clean 1x bound
-            self.locomotion_walls.discard((c, d)); self.locomotion_walls.discard((nb, OPP[d]))
-            self.failed_hops.pop((c, d), None); self.failed_hops.pop((nb, OPP[d]), None)
-            self.committed.discard(c); self.corrob.pop(c, None)          # keep `sensed`: re-WALL needs good
-            self.center_start = None
-            self.align_start = None; self.latched_cardinal = None
-            self.settle_until = t + self.settle_s
-            self.escape_tier = 0                      # map mutation -> retry the cheap Tier-1 first
-            self.events.append("UNSTICK reopen cell=%s edge=(%s,%s) tier=%s dexit=%.2f"  # DIAG
-                               % (self.cell, c, d, tier, dexit))
-            self.phase = 'center'                      # explicit: re-route / re-sense next tick
-            return (0.0, 0.0, False)
-        self.events.append("UNSTICK exhausted -> stuck cell=%s" % (self.cell,))  # DIAG
+            return self._reopen_edge(c, d, tier, t)
+        self.events.append("UNSTICK exhausted -> stuck cell=%s R=%d noncut_loco=%d"  # DIAG
+                           % (self.cell, len(R), len(self._loco_reverify_candidates())))
         self.phase = 'stuck'
         return (0.0, 0.0, False)
 
@@ -454,13 +485,21 @@ class MazeMotion:
         decisive one-cell reverse to the adjacent known-open prev_cell; Tier 2 = ALSO give
         up the blocked forward edge. ZERO growth between escapes is the exploration-
         exhausted signal (20260719 P3 forensics: 23-25 escapes, near-all tier=2
-        gave_up_edge=False -- every neighbour VISITED, the reverse changes nothing): divert
-        straight to _unstick (single-edge re-open = a guaranteed map change) and drop the
-        watchdog to the fast window until visited grows again; on that divert path
-        escape_tier is vestigial (still incremented for observability continuity, but the
-        action taken is the unstick divert, and the tier stays saturated across the
-        exhausted->stuck terminal loop). No valid reverse -> hand to
-        _unstick AT MOST ONCE this tick (terminal; C2 revives next tick)."""
+        gave_up_edge=False -- every neighbour VISITED, the reverse changes nothing) and
+        takes a THREE-WAY branch (amendment; batch-1 forensics: an unconditional divert to
+        _unstick froze 3/3 runs in a 30s exhausted->stuck->revive loop, 62-79 cycles of
+        zero map change, because the poison false wall (5,4)E sat INSIDE the connected
+        component -- empty cut): (1) peek the cut FIRST; a non-empty cut -> _unstick
+        (single-edge re-open = a guaranteed map change) under the fast window; (2) empty
+        cut -> re-verify the nearest-to-exit non-cut LOCOMOTION wall (the lowest-trust
+        tier; in every trap run that edge is literally the poison (5,4)E), single-edge and
+        reopened-bounded, also under the fast window (a map change happened); (3) no
+        candidates -> NOTHING is left to change, so the fast metronome is void: restore the
+        calm 90s window and fall through to the ordinary ladder reverse (the only remaining
+        action -- the freeze is structurally impossible). On paths (1)/(2) escape_tier is
+        vestigial (still incremented for observability continuity, but the action taken is
+        the divert). No valid reverse -> hand to _unstick AT MOST ONCE this tick (terminal;
+        C2 revives next tick)."""
         x, y, yaw = pose
         self.escape_count += 1
         self.escape_tier = min(self.escape_tier + 1, self.max_escape_tier)
@@ -473,13 +512,29 @@ class MazeMotion:
                   if (pc is not None and man == 1) else None)
         can_reverse = d_prev is not None and not self.brain.is_wall(self.cell, d_prev)
         esc_fmt = ("ESCAPE tier=%d count=%d cell=%s prev=%s can_reverse=%s "
-                   "gave_up_edge=%s growth=%d win=%.0f")     # DIAG (single copy, both emit sites)
+                   "gave_up_edge=%s growth=%d win=%.0f "
+                   "divert=%s cut_n=%s")                     # DIAG (single copy, all emit sites)
+        cut_n = '-'                                          # ladder w/o a peek: cut count unknown
         if growth == 0:                                      # EXHAUSTED: no new ground since last escape
-            self._no_progress_win = self.no_progress_fast_s  # fast cadence until visited grows
-            self.events.append(esc_fmt % (self.escape_tier, self.escape_count, self.cell,
-                                          self.prev_cell, can_reverse, False, growth,
-                                          self._no_progress_win))
-            return self._unstick(t)                          # map-changing action, not a degenerate reverse
+            _, cut = self._cut_edges()
+            if cut:                                          # something disconnects the map -> unstick it
+                self._no_progress_win = self.no_progress_fast_s
+                self.events.append(esc_fmt % (self.escape_tier, self.escape_count, self.cell,
+                                              self.prev_cell, can_reverse, False, growth,
+                                              self._no_progress_win, 'unstick', len(cut)))
+                return self._unstick(t)
+            cand = self._loco_reverify_candidates()
+            if cand:                                         # connected map, zero growth: some believed
+                c, d = min(cand, key=lambda e: (self._edge_exit_dist(e),        # wall is probably
+                                                0 if e[0] == self.cell else 1, e))  # false -- re-verify
+                self._no_progress_win = self.no_progress_fast_s                 # the lowest-trust one
+                self.events.append(esc_fmt % (self.escape_tier, self.escape_count, self.cell,
+                                              self.prev_cell, can_reverse, False, growth,
+                                              self._no_progress_win, 'reverify', 0))
+                return self._reopen_edge(c, d, 'loco_reverify', t)
+            self._no_progress_win = self.no_progress_s       # nothing to change: fast metronome is void;
+            cut_n = 0                                        # fall through to the ladder (reverse = the
+                                                             # only remaining action; freeze never happens)
         gave_up = self.escape_tier >= 2 and self.hop_dir is not None
         if gave_up:                                          # Tier 2+: GIVE UP the blocked edge
             dirn = _dir_name(self.hop_dir)
@@ -492,7 +547,8 @@ class MazeMotion:
             else:
                 gave_up = False                              # visited edge stays open (accurate logging)
         self.events.append(esc_fmt % (self.escape_tier, self.escape_count, self.cell, self.prev_cell,
-                                      can_reverse, gave_up, growth, self._no_progress_win))
+                                      can_reverse, gave_up, growth, self._no_progress_win,
+                                      'ladder', cut_n))
         if can_reverse:                                      # Tier 1 & 2: one-cell reverse to prev
             dx, dy = DIRS[d_prev]
             self.backout_target = pc

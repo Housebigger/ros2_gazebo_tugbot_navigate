@@ -200,3 +200,89 @@ def test_sealed_exit_approach_recovers_and_solves():
     for e in m.events:
         if e.startswith("UNSTICK reopen"):
             assert " edge=" in e                       # single-edge format = no mass re-open
+
+
+# ---- Amendment: three-way zero-growth branch (cut-peek / loco-reverify / ladder-fallback) ----
+
+def _drive_two_escapes(m, t2=200.0):
+    # first escape (growth>0 via _esc_visited_n==0) then a zero-growth second escape at t2
+    m._escape((10.0, 10.0, 0.0), 100.0)
+    m.phase = 'center'; m._escape_backout = False
+    return m._escape((10.0, 10.0, 0.0), t2)
+
+
+def test_zero_growth_empty_cut_reverifies_nearest_loco_wall():
+    # The batch-1 poison scenario: a false loco wall INSIDE the connected component
+    # (empty cut). The amendment must re-verify the nearest-to-exit non-cut loco wall
+    # instead of freezing. (5,4)E -> nb (6,4) dexit=6.40 beats (2,2)N -> (2,3) dexit=10.00.
+    m = MazeMotion(); m.cell = (5, 5); m.prev_cell = (6, 5)
+    m.visited.update({(5, 5), (6, 5)})
+    for (c, d) in [((5, 4), 'E'), ((2, 2), 'N')]:
+        m.brain.mark(c, d, is_wall=True)
+    m.locomotion_walls.update({((5, 4), 'E'), ((6, 4), 'W'), ((2, 2), 'N'), ((2, 3), 'S')})
+    _drive_two_escapes(m)
+    assert m.phase == 'center'                          # reopened, NOT stuck, NOT backout
+    assert ((5, 4), 'E') in m.reopened and ((6, 4), 'W') in m.reopened
+    assert m.brain._state((5, 4), 'E') != 'wall'
+    assert m.brain._state((2, 2), 'N') == 'wall'        # single-edge: far wall untouched
+    assert m._no_progress_win == m.no_progress_fast_s   # metronome armed (a map change happened)
+    assert ' tier=loco_reverify' in m.events[-1]
+    esc = [e for e in m.events if e.startswith('ESCAPE')][-1]
+    assert ' divert=reverify' in esc and ' cut_n=0' in esc
+
+
+def test_zero_growth_no_candidates_falls_back_to_ladder():
+    # Empty cut AND no loco candidates: the ladder reverse must fire (freeze is
+    # structurally impossible) and the calm window must be restored.
+    m = MazeMotion(); m.cell = (5, 5); m.prev_cell = (6, 5)
+    m.visited.update({(5, 5), (6, 5)})
+    _drive_two_escapes(m)
+    assert m.phase == 'backout' and m._escape_backout is True
+    assert m.backout_target == (6, 5)
+    assert m._no_progress_win == m.no_progress_s        # calm window restored
+    esc = [e for e in m.events if e.startswith('ESCAPE')][-1]
+    assert ' divert=ladder' in esc and ' cut_n=0' in esc
+
+
+def test_zero_growth_reverify_respects_reopened_bound():
+    m = MazeMotion(); m.cell = (5, 5); m.prev_cell = (6, 5)
+    m.visited.update({(5, 5), (6, 5)})
+    for (c, d) in [((5, 4), 'E'), ((2, 2), 'N')]:
+        m.brain.mark(c, d, is_wall=True)
+    m.locomotion_walls.update({((5, 4), 'E'), ((6, 4), 'W'), ((2, 2), 'N'), ((2, 3), 'S')})
+    m.reopened.update({((5, 4), 'E'), ((6, 4), 'W')})   # near edge already consumed
+    _drive_two_escapes(m)
+    assert ((2, 2), 'N') in m.reopened                  # next candidate taken
+    m2 = MazeMotion(); m2.cell = (5, 5); m2.prev_cell = (6, 5)
+    m2.visited.update({(5, 5), (6, 5)})
+    m2.brain.mark((5, 4), 'E', is_wall=True)
+    m2.locomotion_walls.update({((5, 4), 'E'), ((6, 4), 'W')})
+    m2.reopened.update({((5, 4), 'E'), ((6, 4), 'W')})  # ALL candidates consumed
+    _drive_two_escapes(m2)
+    assert m2.phase == 'backout'                        # bound respected -> ladder fallback
+
+
+def test_freeze_loop_regression_never_stuck():
+    # Batch-1 signature: repeated zero-growth escapes on a connected, candidate-free map
+    # must NEVER leave the robot in 'stuck' (pre-amendment code froze here forever).
+    m = MazeMotion(); m.cell = (5, 5); m.prev_cell = (6, 5)
+    m.visited.update({(5, 5), (6, 5)})
+    m._escape((10.0, 10.0, 0.0), 100.0)
+    for k in range(5):
+        m.phase = 'center'; m._escape_backout = False
+        m._escape((10.0, 10.0, 0.0), 200.0 + 100.0 * k)
+        assert m.phase != 'stuck'                       # the freeze is structurally gone
+        assert m.phase == 'backout'
+    assert m._no_progress_win == m.no_progress_s
+
+
+def test_divert_unstick_path_reports_cut_n():
+    # Cut exists (the Task-4 pocket): divert=unstick with the true cut count.
+    m = MazeMotion(); m.cell = (5, 5); m.prev_cell = (5, 6)
+    m.visited.update({(5, 5), (5, 6)})
+    _seal(m, _pocket_walls())
+    _drive_two_escapes(m)
+    assert m.phase == 'center' and len(m.reopened) == 2
+    esc = [e for e in m.events if e.startswith('ESCAPE')][-1]
+    assert ' divert=unstick' in esc and ' cut_n=6' in esc
+    assert m._no_progress_win == m.no_progress_fast_s
