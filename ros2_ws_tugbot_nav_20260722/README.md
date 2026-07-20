@@ -297,10 +297,12 @@ Results, stated honestly. The freeze class this phase targeted is gone: across
 all 10 runs on the amended stack (8 statistical-gate + 2 GUI acceptance) there
 is not one `UNSTICK exhausted`, `stuck`, or mass re-open -- against 62-79
 exhausted-freeze cycles in every one of the three pre-amendment runs that
-exposed the defect. Every zero-growth escape is justified by a logged empty
-cut, and
-the re-verify lever twice found and re-opened the recurring poison edge with a
-successful traversal afterwards. What did NOT improve is completion incidence:
+exposed the defect. Every zero-growth escape is justified by its logged cut
+state, and the re-verify lever hit the recurring poison edge in all four
+trapped gate runs (a fifth time in the GUI TIMEOUT), with a successful
+traversal afterwards in three of those four -- in the fourth the robot was
+already standing on the far side of the edge, so routing correctly preferred
+its exit-ward alternatives. What did NOT improve is completion incidence:
 the statistical gate ran 4 EXIT / 4 TIMEOUT, versus 8 EXIT / 12 runs on the
 predecessor stack (Fisher exact two-sided p = 0.648 - indistinguishable at
 these sample sizes). Every remaining TIMEOUT is localization-rooted (P1 class):
