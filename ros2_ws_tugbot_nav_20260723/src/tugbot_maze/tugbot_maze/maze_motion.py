@@ -35,8 +35,11 @@ def _norm(a: float) -> float:
     return math.atan2(math.sin(a), math.cos(a))
 
 
+DIRS_INV = {(1, 0): 'E', (-1, 0): 'W', (0, 1): 'N', (0, -1): 'S'}
+
+
 def _dir_name(d) -> str:
-    return {(1, 0): 'E', (-1, 0): 'W', (0, 1): 'N', (0, -1): 'S'}[d]
+    return DIRS_INV[d]
 
 
 NO_PROGRESS_FAST_S = 30.0   # exhausted-state watchdog window (pinned by the 175751/201541 forensics, Task 2)
@@ -312,6 +315,14 @@ class MazeMotion:
             self.escape_tier = 0                         # real progress clears in-flight escalation
             self._no_progress_win = self.no_progress_s   # growth -> restore the calm window
         if self.cell != self.last_seen_cell:             # cell-change bookkeeping
+            src = self.last_seen_cell
+            dx, dy = self.cell[0] - src[0], self.cell[1] - src[1]
+            if (dx, dy) in DIRS_INV:                      # adjacent step -> a single edge was crossed
+                d = DIRS_INV[(dx, dy)]
+                if self.brain.is_wall(src, d):            # believed track crossed a KNOWN wall
+                    self.events.append(                   # DIAG: earliest mislocalization symptom (Task B)
+                        "ILLEGAL_EDGE cell=%s prev=%s dir=%s committed=%s t=%.1f"
+                        % (self.cell, src, OPP[d], self.cell in self.committed, t))
             self.prev_cell = self.last_seen_cell
             self.last_seen_cell = self.cell
             self.recent.append((t, self.cell))
