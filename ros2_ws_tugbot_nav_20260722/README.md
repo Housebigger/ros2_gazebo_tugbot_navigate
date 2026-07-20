@@ -294,8 +294,11 @@ the exhausted line carries `R=` and `noncut_loco=`. `tools/p3_forensics.py`
 replays a run's escape/unstick timeline, cadence and per-window phase mix.
 
 Results, stated honestly. The freeze class this phase targeted is gone: across
-14 runs on the amended stack there is not one `UNSTICK exhausted`, `stuck`, or
-mass re-open, every zero-growth escape is justified by a logged empty cut, and
+all 10 runs on the amended stack (8 statistical-gate + 2 GUI acceptance) there
+is not one `UNSTICK exhausted`, `stuck`, or mass re-open -- against 62-79
+exhausted-freeze cycles in every one of the three pre-amendment runs that
+exposed the defect. Every zero-growth escape is justified by a logged empty
+cut, and
 the re-verify lever twice found and re-opened the recurring poison edge with a
 successful traversal afterwards. What did NOT improve is completion incidence:
 the statistical gate ran 4 EXIT / 4 TIMEOUT, versus 8 EXIT / 12 runs on the
