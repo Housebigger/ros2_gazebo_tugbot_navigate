@@ -366,11 +366,11 @@ class FloodFillSolver(Node):
                 self.motion.events.clear()
             if self.pose_diag and self._gt_pose is not None and self._sm_corrected is not None:
                 odom_base = self._lookup_tf(self.odom_frame, self.base_frame)
-                odom_world = (compose_2d(self._entrance_anchor, odom_base)
-                              if odom_base is not None else self._sm_corrected)
-                self.get_logger().info(
-                    'POSEDIAG gt=(%.3f, %.3f, %.3f) odom=(%.3f, %.3f, %.3f) '
-                    'solver=(%.3f, %.3f, %.3f)' % (self._gt_pose + odom_world + self._sm_corrected))
+                if odom_base is not None:                 # skip the tick rather than log solver-as-odom
+                    odom_world = compose_2d(self._entrance_anchor, odom_base)
+                    self.get_logger().info(
+                        'POSEDIAG gt=(%.3f, %.3f, %.3f) odom=(%.3f, %.3f, %.3f) '
+                        'solver=(%.3f, %.3f, %.3f)' % (self._gt_pose + odom_world + self._sm_corrected))
             self._prev_motion_cell, j = update_junctions(
                 self.junctions, self.brain, self.motion.cell, self._prev_motion_cell,
                 self.motion.sensed, t)

@@ -43,6 +43,11 @@ def test_decompose_lateral_error():
     assert d["lateral"] == __import__("pytest").approx(0.5, abs=1e-9)
 
 
+def test_malformed_and_nonposediag_return_none():
+    assert parse_posediag_line("garbage") is None
+    assert parse_posediag_line("[1784500000.5] POSEDIAG gt=(1.0, 2.0, 0.5)") is None
+
+
 def test_decompose_yaw_error_wraps():
     gt = (0.0, 0.0, 3.0)
     solver = (0.0, 0.0, -3.0)

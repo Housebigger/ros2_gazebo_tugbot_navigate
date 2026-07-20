@@ -24,7 +24,10 @@ def parse_posediag_line(line: str) -> Optional[Dict]:
     ms, mt = _STAMP.search(line), _TRIP.search(line)
     if not (ms and mt):
         return None
-    g = [float(x) for x in mt.groups()]
+    try:
+        g = [float(x) for x in mt.groups()]
+    except ValueError:
+        return None
     return {"t": float(ms.group(1)),
             "gt": (g[0], g[1], g[2]),
             "odom": (g[3], g[4], g[5]),
