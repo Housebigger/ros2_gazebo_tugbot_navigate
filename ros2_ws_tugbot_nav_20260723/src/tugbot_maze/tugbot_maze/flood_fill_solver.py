@@ -139,11 +139,21 @@ class FloodFillSolver(Node):
         self._scan_seq += 1
 
     def _gt_cb(self, msg):            # eval only -- stores ground truth for POSEDIAG, never for control
-        for tr in msg.transforms:
+        if not msg.transforms:
+            return
+        for tr in msg.transforms:     # named path: honoured if the bridge ever populates frame ids
             if 'anymal_c' in tr.child_frame_id or tr.child_frame_id == 'base_link':
                 t, q = tr.transform.translation, tr.transform.rotation
                 self._gt_pose = (t.x, t.y, quat_to_yaw(q.x, q.y, q.z, q.w))
                 return
+        # The gz dynamic_pose/info -> TFMessage bridge leaves EVERY child_frame_id/frame_id ''
+        # (empty) here (observed 2026-07-21): the Pose_V carries the robot's 14 links unnamed.
+        # transforms[0] is the model-root WORLD pose (z~=0.51 base height, maze-world x/y that
+        # tracks the robot); transforms[1:] are child links relative to the base. So fall back to
+        # the model root. Eval-only, still under the pose_diag-gated subscription; never control.
+        tr = msg.transforms[0]
+        t, q = tr.transform.translation, tr.transform.rotation
+        self._gt_pose = (t.x, t.y, quat_to_yaw(q.x, q.y, q.z, q.w))
 
     def _lookup_tf(self, parent, child):
         try:
