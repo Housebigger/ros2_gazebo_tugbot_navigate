@@ -1,4 +1,4 @@
-# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260721`
+# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260722`
 
 ROS 2 (Jazzy) + Gazebo Harmonic stack that drives an **ANYmal C quadruped** — as of this
 20260717 iteration the dog **physically walks**: gravity is on, all 54 CERBERUS collision
@@ -105,7 +105,7 @@ this iteration's acceptance is the *legged-locomotion* result above.
 ## How to run
 
 ```bash
-cd ros2_ws_tugbot_nav_20260721
+cd ros2_ws_tugbot_nav_20260722
 source /opt/ros/jazzy/setup.bash && colcon build --symlink-install && source install/setup.bash
 
 # New: online_slam — no interior map fed, self-builds the reference while driving:
@@ -156,7 +156,7 @@ The wrapper does three things a bare `ros2 launch` does **not**:
 `maze_dfs`, so `explorer_type:=flood_fill` is **mandatory** or the flood-fill node never starts:
 
 ```bash
-cd ros2_ws_tugbot_nav_20260721
+cd ros2_ws_tugbot_nav_20260722
 source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     headless:=false use_rviz:=true \
@@ -255,6 +255,58 @@ Result over the acceptance campaign (8 headless + 1 GUI): 7 clean completions
 remaining TIMEOUTs traced to routing-layer causes (exploration-graph
 exhaustion), not localization — see the failure taxonomy in
 `docs/superpowers/specs/2026-07-19-yaw-only-fallback-design.md`.
+
+## Routing layer: exhaustion recovery (20260722)
+
+The exploration graph can exhaust itself: every neighbour is visited, so the
+escape ladder's tier-2 "give up the blocked edge" is structurally blocked and
+the 90 s no-progress watchdog degenerates into a reverse-and-return ping-pong
+that changes nothing. Forensics on two TIMEOUT runs measured the cost: 23-25
+escapes at a metronomic 90.1 s cadence, 88% of the run inside the escape
+regime, ~1650-1900 s of pure dead time. Two changes in `maze_motion.py` attack
+that, with the rest of the navigation chain frozen:
+
+- **Single-edge exit-directed UNSTICK.** `_unstick` used to re-open every cut
+  edge of a trust tier at once (one observed rollback re-opened 16 committed
+  walls and cost minutes of re-sensing). It now re-opens exactly ONE edge per
+  invocation: within the first non-empty trust tier (locomotion -> non-committed
+  sensed -> committed, order unchanged) it picks the edge whose far endpoint is
+  geometrically nearest `EXIT_CELL`, ties preferring edges incident to the
+  current cell. The `reopened` bound (both directed reps) and the
+  exhausted-means-disconnected -> `stuck` termination are unchanged.
+- **Zero-growth escape escalation, three-way.** `growth` = cells added to
+  `visited` since the previous escape. `growth > 0` keeps the old ladder
+  byte-identical. `growth == 0` is the exhaustion signal and branches on what
+  map-layer action is actually available: a non-empty cut set diverts to the
+  single-edge `_unstick` (fast 30 s window armed); an empty cut with a non-cut
+  locomotion wall still believed re-verifies that wall instead (single-edge,
+  `reopened`-bounded, nearest-to-exit first) -- a false hop-failure wall sitting
+  INSIDE the connected component is invisible to cut-based unsticking, and in
+  every trapped run that wall was the same edge on the winning route; with
+  neither available the calm 90 s window is restored and the ordinary ladder
+  reverse runs, so a physical re-approach is always the fallback and the robot
+  can never freeze.
+
+Observability: the ESCAPE log line carries `growth=`, `win=` (the adaptive
+window in force), `divert=` (`unstick` / `reverify` / `ladder`) and `cut_n=`;
+UNSTICK reopens carry `edge=`, `tier=` (incl. `loco_reverify`) and `dexit=`;
+the exhausted line carries `R=` and `noncut_loco=`. `tools/p3_forensics.py`
+replays a run's escape/unstick timeline, cadence and per-window phase mix.
+
+Results, stated honestly. The freeze class this phase targeted is gone: across
+14 runs on the amended stack there is not one `UNSTICK exhausted`, `stuck`, or
+mass re-open, every zero-growth escape is justified by a logged empty cut, and
+the re-verify lever twice found and re-opened the recurring poison edge with a
+successful traversal afterwards. What did NOT improve is completion incidence:
+the statistical gate ran 4 EXIT / 4 TIMEOUT, versus 8 EXIT / 12 runs on the
+predecessor stack (Fisher exact two-sided p = 0.648 - indistinguishable at
+these sample sizes). Every remaining TIMEOUT is localization-rooted (P1 class):
+a rejection-streak wedge marks a false wall while the believed pose is
+0.7-0.9 m off centre, or a mislocalized sensing episode stamps OPEN onto a real
+wall and the routing layer has no lever for a believed-OPEN edge. That is the
+next phase's target, not this one's. See
+`docs/superpowers/specs/2026-07-19-p3-routing-fix-design.md` for the failure
+taxonomy and the full gate record.
 
 ## Architecture (`src/tugbot_maze/`)
 
