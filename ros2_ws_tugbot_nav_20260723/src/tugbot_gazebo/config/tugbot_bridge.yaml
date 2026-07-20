@@ -119,3 +119,9 @@
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "gz.msgs.PointCloudPacked"
   direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/gt/dynamic_pose"
+  gz_topic_name: "/world/tugbot_maze_world_20260528_clean_scaled2x/dynamic_pose/info"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: "GZ_TO_ROS"

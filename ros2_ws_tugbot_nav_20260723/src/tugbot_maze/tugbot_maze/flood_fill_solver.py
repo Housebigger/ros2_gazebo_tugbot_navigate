@@ -16,6 +16,7 @@ from sensor_msgs.msg import LaserScan, PointCloud2
 from std_msgs.msg import String
 from nav_msgs.msg import OccupancyGrid
 from visualization_msgs.msg import MarkerArray
+from tf2_msgs.msg import TFMessage
 import tf2_ros
 from rclpy.qos import QoSProfile, DurabilityPolicy
 
@@ -60,6 +61,8 @@ class FloodFillSolver(Node):
         self.entrance_y = float(self.declare_parameter('entrance_y', 0.0).value)
         self.entrance_yaw = float(self.declare_parameter('entrance_yaw', 0.0).value)
         self._entrance_anchor = (self.entrance_x, self.entrance_y, self.entrance_yaw)
+        self.pose_diag = bool(self.declare_parameter('pose_diag', False).value)
+        self._gt_pose = None          # latest ground-truth world pose (eval only; NEVER used for control)
         self.hop_timeout_s = float(self.declare_parameter('hop_timeout_s', 25.0).value)
         self.cruise_v = float(self.declare_parameter('cruise_v', 0.3).value)
         # Sense a cell only when centered within this radius and settled (clean geometry).
@@ -98,6 +101,8 @@ class FloodFillSolver(Node):
         self._prev_motion_cell = None
         self.scan_msg: Optional[LaserScan] = None
         self.create_subscription(LaserScan, self.scan_topic, self._scan_cb, 10)
+        if self.pose_diag:            # eval scaffold: ground-truth pose, logged only
+            self.create_subscription(TFMessage, '/gt/dynamic_pose', self._gt_cb, 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_nav', 10)
         self.goal_events_pub = self.create_publisher(String, self.goal_events_topic, 10)
         self.tf_buffer = tf2_ros.Buffer()
@@ -132,6 +137,13 @@ class FloodFillSolver(Node):
     def _scan_cb(self, msg):
         self.scan_msg = msg
         self._scan_seq += 1
+
+    def _gt_cb(self, msg):            # eval only -- stores ground truth for POSEDIAG, never for control
+        for tr in msg.transforms:
+            if 'anymal_c' in tr.child_frame_id or tr.child_frame_id == 'base_link':
+                t, q = tr.transform.translation, tr.transform.rotation
+                self._gt_pose = (t.x, t.y, quat_to_yaw(q.x, q.y, q.z, q.w))
+                return
 
     def _lookup_tf(self, parent, child):
         try:
@@ -352,6 +364,13 @@ class FloodFillSolver(Node):
                 for ev in self.motion.events:
                     self.get_logger().info(ev)
                 self.motion.events.clear()
+            if self.pose_diag and self._gt_pose is not None and self._sm_corrected is not None:
+                odom_base = self._lookup_tf(self.odom_frame, self.base_frame)
+                odom_world = (compose_2d(self._entrance_anchor, odom_base)
+                              if odom_base is not None else self._sm_corrected)
+                self.get_logger().info(
+                    'POSEDIAG gt=(%.3f, %.3f, %.3f) odom=(%.3f, %.3f, %.3f) '
+                    'solver=(%.3f, %.3f, %.3f)' % (self._gt_pose + odom_world + self._sm_corrected))
             self._prev_motion_cell, j = update_junctions(
                 self.junctions, self.brain, self.motion.cell, self._prev_motion_cell,
                 self.motion.sensed, t)
