@@ -321,6 +321,8 @@ class MazeMotion:
                 d = DIRS_INV[(dx, dy)]
                 if self.brain.is_wall(src, d):            # believed track crossed a KNOWN wall
                     self.events.append(                   # DIAG: earliest mislocalization symptom (Task B)
+                        # dir is the crossed edge in the ARRIVED-IN cell's frame (OPP of the step);
+                        # is_wall is symmetric, so is_wall(src,'E') and printed dir=W are the same edge
                         "ILLEGAL_EDGE cell=%s prev=%s dir=%s committed=%s t=%.1f"
                         % (self.cell, src, OPP[d], self.cell in self.committed, t))
             self.prev_cell = self.last_seen_cell

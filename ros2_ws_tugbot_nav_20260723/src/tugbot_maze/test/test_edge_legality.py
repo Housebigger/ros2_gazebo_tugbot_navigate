@@ -20,6 +20,7 @@ def test_illegal_transition_across_known_wall_emits_event():
     ev = [e for e in m.events if e.startswith('ILLEGAL_EDGE')]
     assert len(ev) == 1
     assert 'cell=(6, 5)' in ev[0] and 'prev=(5, 5)' in ev[0] and 'dir=W' in ev[0]
+    assert 'committed=False' in ev[0]
 
 
 def test_illegal_event_reports_committed_state():
@@ -47,3 +48,12 @@ def test_detector_does_not_change_routing_state():
     m.cell = (6, 5)
     m._track_cell(5.0)
     assert m.prev_cell == (5, 5) and m.last_seen_cell == (6, 5)
+
+
+def test_second_track_cell_same_tick_does_not_refire():
+    m = MazeMotion(); m.cell = (5, 5); m.last_seen_cell = (5, 5)
+    m.brain.mark((5, 5), 'E', is_wall=True)
+    m.cell = (6, 5)
+    m._track_cell(1.0)
+    m._track_cell(1.0)                                  # second call, same cell -> guard closed
+    assert len([e for e in m.events if e.startswith('ILLEGAL_EDGE')]) == 1
