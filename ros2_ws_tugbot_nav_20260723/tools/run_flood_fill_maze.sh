@@ -57,6 +57,7 @@ ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     headless:="${HEADLESS}" use_rviz:="${USE_RVIZ}" \
     explorer_type:=flood_fill entry_direct_distance_m:=2.0 \
     pose_source:="${POSE_SOURCE}" sense_debug:="${SENSE_DEBUG}" \
+    pose_diag:="${POSE_DIAG:-false}" \
     junction_log_dir:="$ART" \
     > "$ART/launch.log" 2>&1 &
 LAUNCH_PID=$!
