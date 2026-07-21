@@ -44,6 +44,21 @@ def odom_prior(last_corrected: Pose2D, last_odom: Pose2D, cur_odom: Pose2D) -> P
     return compose_2d(last_corrected, delta)
 
 
+def apply_odom_yaw_gate(est, odom_map, prior, bound):
+    """Reject an ICP-accepted pose whose yaw disagrees with the drift-free odom yaw by more
+    than `bound` rad, returning the odom-propagated prior instead. `odom_map` is the pure-odom
+    pose in the map frame (compose_2d(entrance_anchor, odom_base)); its yaw is drift-free.
+
+    This compares against the RAW odom orientation, unlike the inner ICP's per-step yaw clamp
+    which compares against the previous corrected pose (itself drifting) -- so it catches the
+    cumulative alias migration (sub-threshold accepts walking the pose into a ~90-degree/one-cell
+    grid alias) that the per-step clamp misses. Returns (pose, gated: bool)."""
+    d = est[2] - odom_map[2]
+    if abs(math.atan2(math.sin(d), math.cos(d))) > bound:
+        return prior, True
+    return est, False
+
+
 def yaw_to_quat(yaw: float) -> Tuple[float, float, float, float]:
     """(x, y, z, w) quaternion for a planar yaw (rad)."""
     return (0.0, 0.0, math.sin(yaw / 2.0), math.cos(yaw / 2.0))

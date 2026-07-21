@@ -26,7 +26,8 @@ from tugbot_maze.map_memory import MapMemory
 from tugbot_maze.maze_motion import MazeMotion
 from tugbot_maze.junction_log import JunctionLog, update_junctions
 from tugbot_maze.pose_tracking import (
-    compose_2d, quat_to_yaw, odom_prior, yaw_to_quat, map_to_odom)
+    compose_2d, quat_to_yaw, odom_prior, yaw_to_quat, map_to_odom,
+    apply_odom_yaw_gate)
 from tugbot_maze.flood_fill_viz import self_built_wall_markerarray
 from tugbot_maze.scatter_cloud import ScatterCloud
 from tugbot_maze.radar_occupancy import RadarOccupancyGrid
@@ -35,6 +36,10 @@ from tugbot_maze.maze_sim import load_segments, outer_segments
 from tugbot_maze.online_scan_match_localizer import (
     OnlineScanMatchLocalizer, confirmed_wall_segments, local_reference_cells)
 from tugbot_maze.wall_follow_control import entering_done
+
+# reject ICP accepts yawing > this from the drift-free odom prior (localization-root-cause
+# Task 5; calibrated: clean |ydis| max 0.297, alias pin ~1.5)
+YDIS_GATE_RAD = 0.5
 
 
 class FloodFillSolver(Node):
@@ -226,6 +231,19 @@ class FloodFillSolver(Node):
             self.get_logger().warning('%s correct() failed: %r; using odom prior'
                                       % (self.pose_source, e))
             est, info = prior, {'rejected': True, 'error': repr(e)}
+        if not info.get('rejected'):
+            # Odom-prior yaw-consistency gate: reject an ICP accept whose yaw disagrees with
+            # the drift-free odom yaw by > YDIS_GATE_RAD, keeping the odom-propagated prior.
+            # Catches the cumulative sub-threshold accepts walking the pose into a ~90-degree
+            # grid alias that the inner ICP per-step clamp (vs the drifting prior) misses.
+            odom_map = compose_2d(self._entrance_anchor, odom_base)
+            gated_est, yaw_gated = apply_odom_yaw_gate(est, odom_map, prior, YDIS_GATE_RAD)
+            if yaw_gated:
+                self.get_logger().info(          # DIAG: aliased accept rejected (Task 5)
+                    'YAW_GATE ydis=%.3f est_yaw=%.3f odom_yaw=%.3f'
+                    % (est[2] - odom_map[2], est[2], odom_map[2]))
+                info['yaw_gate'] = True
+            est = gated_est
         self._sm_corrected = est
         self._sm_last_odom = odom_base
         self._sm_seq = self._scan_seq
