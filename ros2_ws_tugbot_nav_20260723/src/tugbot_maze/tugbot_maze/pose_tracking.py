@@ -47,8 +47,14 @@ def odom_prior(last_corrected: Pose2D, last_odom: Pose2D, cur_odom: Pose2D) -> P
 def apply_odom_yaw_gate(est: Pose2D, odom_map: Pose2D, prior: Pose2D,
                         bound: float) -> Tuple[Pose2D, bool]:
     """Reject an ICP-accepted pose whose yaw disagrees with the drift-free odom yaw by more
-    than `bound` rad, returning the odom-propagated prior instead. `odom_map` is the pure-odom
-    pose in the map frame (compose_2d(entrance_anchor, odom_base)); its yaw is drift-free.
+    than `bound` rad. `odom_map` is the pure-odom pose in the map frame
+    (compose_2d(entrance_anchor, odom_base)); its yaw is drift-free.
+
+    On a gate fire this RECOVERS the yaw -- returns the prior POSITION but with the yaw snapped
+    to the drift-free odom yaw -- rather than just keeping the prior. A capped-but-not-recovered
+    ~0.5 rad residual (the bound) still translated to ~0.7 m of position error and grazed the
+    (6,4) junction; snapping the yaw clears that residual. Keeping the prior position is safe
+    because odom position is drift-free and the error has not accumulated at the first gate fire.
 
     This compares against the RAW odom orientation, unlike the inner ICP's per-step yaw clamp
     which compares against the previous corrected pose (itself drifting) -- so it catches the
@@ -56,7 +62,7 @@ def apply_odom_yaw_gate(est: Pose2D, odom_map: Pose2D, prior: Pose2D,
     grid alias) that the per-step clamp misses. Returns (pose, gated: bool)."""
     d = est[2] - odom_map[2]
     if abs(math.atan2(math.sin(d), math.cos(d))) > bound:
-        return prior, True
+        return (prior[0], prior[1], odom_map[2]), True    # recover: snap yaw to the drift-free odom yaw
     return est, False
 
 

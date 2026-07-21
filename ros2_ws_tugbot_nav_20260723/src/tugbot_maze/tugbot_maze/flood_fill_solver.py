@@ -233,9 +233,10 @@ class FloodFillSolver(Node):
             est, info = prior, {'rejected': True, 'error': repr(e)}
         if not info.get('rejected'):
             # Odom-prior yaw-consistency gate: reject an ICP accept whose yaw disagrees with
-            # the drift-free odom yaw by > YDIS_GATE_RAD, keeping the odom-propagated prior.
-            # Catches the cumulative sub-threshold accepts walking the pose into a ~90-degree
-            # grid alias that the inner ICP per-step clamp (vs the drifting prior) misses.
+            # the drift-free odom yaw by > YDIS_GATE_RAD, recovering by snapping the yaw to the
+            # drift-free odom yaw (prior position kept). Catches the cumulative sub-threshold
+            # accepts walking the pose into a ~90-degree grid alias that the inner ICP per-step
+            # clamp (vs the drifting prior) misses.
             odom_map = compose_2d(self._entrance_anchor, odom_base)
             gated_est, yaw_gated = apply_odom_yaw_gate(est, odom_map, prior, YDIS_GATE_RAD)
             if yaw_gated:

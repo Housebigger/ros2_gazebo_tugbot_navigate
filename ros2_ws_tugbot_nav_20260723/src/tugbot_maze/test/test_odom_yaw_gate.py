@@ -19,16 +19,24 @@ def test_clean_ceiling_still_passes():
     assert gated is False and out == est
 
 
-def test_alias_accept_is_rejected_and_prior_kept():
-    # est yaw ~pi/2 off odom (the alias) -> reject, return the odom-propagated prior.
+def test_alias_accept_snaps_yaw_to_odom():
+    # est yaw ~pi/2 off odom (the alias) -> gate, recover: prior position + odom yaw.
     est = (5.0, 3.0, 1.57); odom_map = (2.0, 1.0, 0.02); prior = (2.0, 1.0, 0.01)
     out, gated = apply_odom_yaw_gate(est, odom_map, prior, 0.5)
-    assert gated is True and out == prior
+    assert gated is True and out == (2.0, 1.0, 0.02)
 
 
 def test_negative_alias_is_rejected():
     est = (0.0, 0.0, -1.57); odom_map = (0.0, 0.0, 0.02); prior = (0.0, 0.0, 0.01)
-    assert apply_odom_yaw_gate(est, odom_map, prior, 0.5)[1] is True
+    out, gated = apply_odom_yaw_gate(est, odom_map, prior, 0.5)
+    assert gated is True and out == (0.0, 0.0, 0.02)
+
+
+def test_gate_snaps_yaw_not_prior_yaw():
+    # prior yaw deliberately != odom_map yaw -> recovered yaw comes from odom_map, not prior.
+    est = (0.0, 0.0, 1.57); odom_map = (0.0, 0.0, 0.10); prior = (3.0, 4.0, 0.40)
+    out, gated = apply_odom_yaw_gate(est, odom_map, prior, 0.5)
+    assert gated is True and out == (3.0, 4.0, 0.10)
 
 
 def test_wrap_around_pi():
