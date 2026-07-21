@@ -44,7 +44,8 @@ def odom_prior(last_corrected: Pose2D, last_odom: Pose2D, cur_odom: Pose2D) -> P
     return compose_2d(last_corrected, delta)
 
 
-def apply_odom_yaw_gate(est, odom_map, prior, bound):
+def apply_odom_yaw_gate(est: Pose2D, odom_map: Pose2D, prior: Pose2D,
+                        bound: float) -> Tuple[Pose2D, bool]:
     """Reject an ICP-accepted pose whose yaw disagrees with the drift-free odom yaw by more
     than `bound` rad, returning the odom-propagated prior instead. `odom_map` is the pure-odom
     pose in the map frame (compose_2d(entrance_anchor, odom_base)); its yaw is drift-free.

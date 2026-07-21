@@ -241,7 +241,8 @@ class FloodFillSolver(Node):
             if yaw_gated:
                 self.get_logger().info(          # DIAG: aliased accept rejected (Task 5)
                     'YAW_GATE ydis=%.3f est_yaw=%.3f odom_yaw=%.3f'
-                    % (est[2] - odom_map[2], est[2], odom_map[2]))
+                    % (math.atan2(math.sin(est[2] - odom_map[2]), math.cos(est[2] - odom_map[2])),
+                       est[2], odom_map[2]))
                 info['yaw_gate'] = True
             est = gated_est
         self._sm_corrected = est

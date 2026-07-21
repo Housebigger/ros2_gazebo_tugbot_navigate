@@ -26,6 +26,11 @@ def test_alias_accept_is_rejected_and_prior_kept():
     assert gated is True and out == prior
 
 
+def test_negative_alias_is_rejected():
+    est = (0.0, 0.0, -1.57); odom_map = (0.0, 0.0, 0.02); prior = (0.0, 0.0, 0.01)
+    assert apply_odom_yaw_gate(est, odom_map, prior, 0.5)[1] is True
+
+
 def test_wrap_around_pi():
     # est yaw 3.0, odom yaw -3.0 -> raw diff 6.0 but wrapped is -0.283 (< 0.5) -> pass.
     est = (0.0, 0.0, 3.0); odom_map = (0.0, 0.0, -3.0); prior = (0.0, 0.0, -3.0)
