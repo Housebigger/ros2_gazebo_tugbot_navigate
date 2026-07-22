@@ -18,7 +18,7 @@ def test_beam_endpoint_applies_offset():
 def test_inside_footprint():
     assert inside_footprint(0.1, 0.0) is True        # mid-body
     assert inside_footprint(-0.1, 0.0) is True        # rear region (symmetric stance, no gripper any more)
-    # exactly on the rear face (FOOT_X_REAR = -0.49): inside_footprint's rectangle test uses <= on
+    # exactly on the rear face (FOOT_X_REAR = -0.15): inside_footprint's rectangle test uses <= on
     # both bounds, so a boundary point is inclusive (True) -- assert that documented behavior
     # explicitly.
     assert inside_footprint(FOOT_X_REAR, 0.0) is True

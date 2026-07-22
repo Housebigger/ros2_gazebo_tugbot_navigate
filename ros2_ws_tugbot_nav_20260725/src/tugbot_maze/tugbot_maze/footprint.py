@@ -38,7 +38,9 @@ def front_gap(ranges, angle_min, angle_inc, *, half_w: float = FOOT_HALF_W,
 def rear_gap(ranges, angle_min, angle_inc, *, half_w: float = FOOT_HALF_W,
              side_pad: float = 0.05, scan_offset_x: float = SCAN_OFFSET_X) -> float:
     """Min clearance BEHIND the rear face (FOOT_X_REAR) over beams within the body width AND behind
-    the rear face. inf if none. Gates reverse v -- this is what finally protects the gripper."""
+    the rear face. inf if none. Gates reverse v, protecting the rear face. (Note: front_gap and
+    rear_gap currently have no runtime caller in this workspace -- the live consumer of the
+    footprint rectangle is the offline true-collision oracle, maze_sim.collides.)"""
     g = math.inf
     for i, r in enumerate(ranges):
         if r is None or not math.isfinite(r) or r <= 0.05:
