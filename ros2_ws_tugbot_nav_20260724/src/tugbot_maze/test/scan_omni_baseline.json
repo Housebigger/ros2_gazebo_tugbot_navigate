@@ -1,0 +1,13 @@
+{
+  "angle_increment": 0.006989082787185907,
+  "angle_max": 3.1415927410125732,
+  "angle_min": -3.1415927410125732,
+  "frame_id": "anymal_c/base/scan_omni",
+  "n_bins": 900,
+  "observed_inf_bins": 564,
+  "observed_nan_bins": 0,
+  "range_max": 100.0,
+  "range_min": 0.20000000298023224,
+  "scan_time": 0.0,
+  "time_increment": 0.0
+}
