@@ -7,6 +7,8 @@ construction -- no ROS node state, no rclpy.init needed (mirrors scatter_cloud's
 old contract, generalized to 3D)."""
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 from sensor_msgs.msg import PointCloud2, PointField
 
@@ -85,7 +87,9 @@ class CloudMap3D:
         msg.row_step = 12 * msg.width
         msg.is_dense = True
         if self._voxels:
-            keys = np.array(sorted(self._voxels), dtype=np.float64)
+            arr = np.fromiter(itertools.chain.from_iterable(self._voxels),
+                              dtype=np.int64, count=3 * len(self._voxels)).reshape(-1, 3)
+            keys = arr[np.lexsort((arr[:, 2], arr[:, 1], arr[:, 0]))].astype(np.float64)
             msg.data = (keys * self.voxel_m).astype('<f4').tobytes()
         else:
             msg.data = b''

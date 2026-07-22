@@ -102,3 +102,16 @@ def test_should_publish_growth_and_period():
     assert should_publish(100.0, 101.5, 5, 1.0) is True     # growth AND period elapsed
     assert should_publish(100.0, 101.5, 0, 1.0) is False    # no growth
     assert should_publish(100.0, 100.4, 5, 1.0) is False    # growth but inside throttle window
+
+
+def test_add_cloud_frame_contract_with_rotated_translated_T():
+    # Range filter is SENSOR-frame (pre-transform); z clip is MAP-frame (post-transform).
+    qx, qy, qz, qw = _quat_yaw(math.pi / 2.0)
+    T = transform_to_matrix(10.0, 0.0, -0.5, qx, qy, qz, qw)
+    m = CloudMap3D(voxel_m=0.05, usable_range_m=8.0, z_min=-1.0, z_max=3.0)
+    pts = np.array([
+        [7.9, 0.0, 0.0],    # sensor norm 7.9 <= 8 kept, even though map x = 10 (far): sensor-frame filter
+        [1.0, 0.0, 0.4],    # map z = 0.4 - 0.5 = -0.1 in [-1, 3]: kept
+        [1.0, 0.0, -0.6],   # map z = -0.6 - 0.5 = -1.1 < -1.0: clipped (a pre-transform clip would keep it)
+    ])
+    assert m.add_cloud(pts, T) == 2
