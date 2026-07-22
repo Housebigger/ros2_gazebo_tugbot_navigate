@@ -651,7 +651,7 @@ class NPointTurnRunner:
         return (0.0, 0.0, True)
 ```
 
-- [ ] **Step 3: 全测通过(`10 passed`)+ commit**
+- [ ] **Step 3: 全测通过(`9 passed`;计划初稿误记 10——嵌入的测试文件实为 9 个,Task 2 实施期核实)+ commit**
 
 ```bash
 cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_navigate
@@ -838,7 +838,7 @@ python3 -m pytest src/tugbot_maze/test/test_maze_motion_sim.py -q 2>&1 | tail -2
 python3 -m pytest src -q 2>&1 | tail -2
 ```
 
-Expected: 前两组全绿;motion 文件全绿(既有 13 + 2 新;ackermann 全解测试离线可跑数十秒);全套件 **`4 failed, 528 passed`**(515 + 1 契约净增 + 10 maneuvers + 2 motion,零 xfailed/xpassed,名单=资产契约四件)。任何偏差 STOP 报告。
+Expected: 前两组全绿;motion 文件全绿(既有 13 + 2 新;ackermann 全解测试离线可跑数十秒);全套件 **`4 failed, 527 passed`**(515 + 1 契约净增 + 9 maneuvers + 2 motion,零 xfailed/xpassed,名单=资产契约四件;Task 2 提交消息里的 "10 unit tests" 是同源错账,以此处为准)。任何偏差 STOP 报告。
 
 ```bash
 cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_navigate
@@ -889,6 +889,6 @@ EOF
 
 - Spec 覆盖:§4.1→Task 1;§4.2→Tasks 2-3;§4.3 预算→Task 5(2400s);§5 可动面=本计划触碰面一致;§6.1→Tasks 1-3、6.2→Task 4、6.3→Task 5、6.4→Task 6;§7 两处"不臆测"(插件 PID/倒车符号)→Task 4 实录钉定。
 - 几何自查:2.4 曲率 × 0.45m 段 = 1.08 rad;90° 两段(1.08+0.49)、180° 三段(1.08+1.08+0.98)与测试断言一致;runner 的段间 pause 实现(advance 时返回一次 (0,0) 并置 pause_until)保证换向零速窗。
-- 套件算术:515 +1(契约 11→12)+10(maneuvers)+2(motion)= 528。
+- 套件算术:515 +1(契约 11→12)+9(maneuvers,初稿误记 10)+2(motion)= 527。
 - 类型一致:`Segment=(v_sign, curvature, arc_len)` 三元组在 planner/simulate/runner/测试间一致;`command(t) -> (v, w, exhausted)`;`rotate_to_face` 关键字在 hop/maze_motion 调用一致。
 - 风险预置:offline 全解测试若因 K turn 慢而超 60000 步,先量步数再调上限(取证,不放宽断言)。
