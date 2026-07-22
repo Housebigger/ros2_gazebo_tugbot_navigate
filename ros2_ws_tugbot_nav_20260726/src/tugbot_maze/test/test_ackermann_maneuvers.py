@@ -2,7 +2,7 @@
 import math
 
 from tugbot_maze.ackermann_maneuvers import (
-    NPointTurnRunner, plan_n_point_turn, simulate_segments)
+    NPointTurnRunner, plan_n_point_turn, simulate_segments, clamp_to_ackermann)
 
 
 def _final_yaw(segs, yaw0=0.0):
@@ -79,3 +79,16 @@ def test_runner_pauses_between_segments():
         moving_prev = abs(v) > 0.0
         t += 0.05
     assert saw_pause_after_motion
+
+
+def test_clamp_passes_normal_driving_untouched():
+    assert clamp_to_ackermann(0.4, 0.5) == (0.4, 0.5)      # cruise cap 0.96 > 0.5
+    assert clamp_to_ackermann(0.3, 0.0) == (0.3, 0.0)      # straight
+    assert clamp_to_ackermann(-0.3, -0.4) == (-0.3, -0.4)  # reverse arc within cap
+
+
+def test_clamp_projects_pivot_to_slow_arc():
+    v, w = clamp_to_ackermann(0.0, -0.5)
+    assert v == 0.08 and abs(w) <= v * 2.4 + 1e-12 and w < 0    # pivot -> slow tight arc
+    v2, w2 = clamp_to_ackermann(0.02, 0.5)
+    assert v2 == 0.08 and w2 == min(0.5, v2 * 2.4)

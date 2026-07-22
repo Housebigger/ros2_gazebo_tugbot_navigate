@@ -29,6 +29,7 @@ from tugbot_maze.hop_controller import (
     centering_command, grid_cross_track,
     side_distances, corridor_follow_command, profiled_turn_command, backout_command)
 from tugbot_maze.map_memory import MapMemory
+from tugbot_maze.ackermann_maneuvers import NPointTurnRunner, clamp_to_ackermann
 
 
 def _norm(a: float) -> float:
@@ -78,6 +79,7 @@ class MazeMotion:
                  max_backout_attempts: int = 2,
                  grid_fallback_max_m: float = 0.40,
                  pose_is_absolute: bool = False,
+                 ackermann: bool = False,
                  mem: Optional['MapMemory'] = None):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.mem = mem if mem is not None else MapMemory(self.brain)
@@ -108,6 +110,16 @@ class MazeMotion:
         # (offline drift harness, odom_locked) -> gate inert, wall-referenced centering remains
         # the drift corrector.
         self.pose_is_absolute = pose_is_absolute
+        # Ackermann chassis cannot rotate in place: cardinal turns are executed as N-point
+        # turn programs (ackermann_maneuvers), and centering skips its rotate-to-face branch.
+        self.ackermann = ackermann
+        self._ack_turn = None            # active NPointTurnRunner program (None = none in flight)
+        if self.ackermann:
+            # N-point turns converge over 2-3 replan programs with steering-rack pauses
+            # (Task-2 review analysis): the in-place-turn timeouts are far too tight.
+            self.center_timeout_s *= 4.0
+            self.align_timeout_s *= 4.0
+            self.turn_timeout_s *= 4.0
         self.max_cross_steer = 0.35      # cap on the cross-track-induced heading deviation (junctions)
         self.safety_radius = 0.70        # LIDAR clearance: within this, the keep-out overrides the cap + slows
         self.keepout_max_cross_steer = 0.8   # emergency steer authority when a wall is within safety_radius
@@ -156,7 +168,15 @@ class MazeMotion:
         self._last_drive_v = 0.0              # DIAG: last corridor v (to spot wedge_stop, v~=0)
         self.wedge_realign_yaw = 0.4          # |yaw_err|>=this => follower turns in place (v~=0), not a pin
 
-    def step(self, pose, scan, t) -> Tuple[float, float, bool]:
+    def step(self, pose, scan, t):
+        """Public entry: in Ackermann mode every emitted command is projected into
+        the feasible set (no pivots) -- one choke point instead of per-law fixes."""
+        v, w, done = self._step_inner(pose, scan, t)
+        if self.ackermann:
+            v, w = clamp_to_ackermann(v, w)
+        return v, w, done
+
+    def _step_inner(self, pose, scan, t) -> Tuple[float, float, bool]:
         yaw = pose[2]                                   # measured yaw rate (for PD damping)
         if self.prev_t is not None and t > self.prev_t:
             self.yaw_rate = _norm(yaw - self.prev_yaw) / (t - self.prev_t)
@@ -219,7 +239,8 @@ class MazeMotion:
         v, w, centered = centering_command((x, y, yaw), ox, oy,
                                            tol=self.center_tol_m, yaw_tol=self.yaw_tol_rad,
                                            w_max=self.turn_w_max, kp_ang=self.kp_turn,
-                                           kd_ang=self.kd_turn, yaw_rate=self.yaw_rate)
+                                           kd_ang=self.kd_turn, yaw_rate=self.yaw_rate,
+                                           rotate_to_face=not self.ackermann)
         if not centered and (t - self.center_start) < self.center_timeout_s:
             self.settle_until = t + self.settle_s
             return (v, w, False)
@@ -234,10 +255,14 @@ class MazeMotion:
         aligned = abs(yaw_err) <= self.yaw_tol_rad
         if not aligned and (t - self.align_start) < self.align_timeout_s:
             self.settle_until = t + self.settle_s
+            if self.ackermann:
+                v, w = self._ackermann_turn_cmd(yaw, self.latched_cardinal, t)
+                return (v, w, False)
             w = profiled_turn_command(yaw, self.latched_cardinal, self.yaw_rate,
                                       ang_decel=self.ang_decel, turn_w_max=self.turn_w_max,
                                       kd=self.kd_turn)
             return (0.0, w, False)
+        self._ack_turn = None
         if t < self.settle_until:
             return (0.0, 0.0, False)
         # Re-anchor (bounded + hysteresis), then exit/committed checks.
@@ -386,6 +411,7 @@ class MazeMotion:
             self.backout_deadline = t + self.backout_timeout_s
             self.backout_count += 1
             self.center_start = None
+            self._ack_turn = None
             self.phase = 'backout'
             return (0.0, 0.0, False)
         self.hop_target = nxt
@@ -585,6 +611,7 @@ class MazeMotion:
             self.backout_deadline = t + self.backout_timeout_s
             self.center_start = None
             self._escape_backout = True
+            self._ack_turn = None
             self.phase = 'backout'
             return (0.0, 0.0, False)
         return self._unstick(t)                              # no reverse -> _unstick once (MF5)
@@ -603,12 +630,27 @@ class MazeMotion:
             self.hop_deadline = t + self.hop_timeout_s
             self.progress_pose = (pose[0], pose[1]); self.progress_t = t   # wedge-detector baseline
             self.turn_start = None
+            self._ack_turn = None
             self.phase = 'drive'
             return (0.0, 0.0, False)
+        if self.ackermann:
+            v, w = self._ackermann_turn_cmd(yaw, self.target_cardinal, t)
+            return (v, w, False)
         w = profiled_turn_command(yaw, self.target_cardinal, self.yaw_rate,
                                   ang_decel=self.ang_decel, turn_w_max=self.turn_w_max,
                                   kd=self.kd_turn)        # decel profile: no latency overshoot
         return (0.0, w, False)
+
+    def _ackermann_turn_cmd(self, yaw, target_cardinal, t):
+        """Drive the N-point-turn runner toward target_cardinal. Lazily (re)plans when
+        the target changes or the previous program ran out before reaching tolerance
+        (the caller's aligned/settled checks decide completion, same as in-place mode)."""
+        if self._ack_turn is None or self._ack_turn.target != target_cardinal:
+            self._ack_turn = NPointTurnRunner(yaw, target_cardinal, t)
+        v, w, exhausted = self._ack_turn.command(t)
+        if exhausted:
+            self._ack_turn = None      # replan from the current yaw on the next tick
+        return v, w
 
     def _stall_event(self, reason, perp, moved, marked, x, y, yaw):
         """DIAG: record WHY a drive hop stalled + the sensor state, to pinpoint the doorway pin

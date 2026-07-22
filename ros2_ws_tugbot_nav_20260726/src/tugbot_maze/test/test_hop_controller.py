@@ -168,6 +168,17 @@ def test_hop_drive_holds_heading_straight():
     assert v > 0.0 and abs(w) < 1e-6
 
 
+def test_centering_skips_rotate_to_face_when_disabled():
+    # Lateral-only offset at yaw=0 (offset axis perpendicular to heading): with
+    # rotate_to_face=True the primitive rotates in place; with False (Ackermann)
+    # it must NOT rotate -- it reports done and leaves lateral centering to the
+    # corridor pursuit.
+    v, w, done = centering_command((0.0, 0.0, 0.0), None, 0.4, rotate_to_face=True)
+    assert w != 0.0 and v == 0.0 and not done
+    v, w, done = centering_command((0.0, 0.0, 0.0), None, 0.4, rotate_to_face=False)
+    assert (v, w, done) == (0.0, 0.0, True)
+
+
 def test_hop_drive_steers_back_toward_heading_while_moving():
     # yaw drifted +0.2 rad off the north cardinal -> steer negative to correct, still moving
     v, w = hop_drive_command((1.5, 4.0, math.pi / 2 + 0.2), math.pi / 2)

@@ -102,3 +102,23 @@ class NPointTurnRunner:
             self.pause_until = t + self.pause_s
             return (0.0, 0.0, False)
         return (0.0, 0.0, True)
+
+
+def clamp_to_ackermann(v: float, w: float, *,
+                       max_curvature: float = MAX_CURVATURE,
+                       v_floor: float = 0.08) -> Tuple[float, float]:
+    """Project a (v, w) command into the Ackermann-feasible set: the car cannot
+    pivot, so a meaningful steering demand requires wheel speed. Floors |v| when
+    |w| > ~0 (keeping v's sign; a pure rotation becomes a slow forward arc --
+    the same thing the gz AckermannSteering plugin would physically do with it),
+    then caps |w| at |v| * max_curvature (the steering-limit curvature). At
+    cruise (v=0.4) the cap is 0.96 rad/s > every steering law's w_max, so
+    normal driving is untouched; only the pivot-shaped collapse regime changes
+    (the DRIVE-phase near-wall keep-out law emitted v=0, w=-0.5 -- the third
+    in-place source the full-solve invariant test caught)."""
+    if abs(w) <= 1e-3:
+        return v, w
+    if abs(v) < v_floor:
+        v = math.copysign(v_floor, v if abs(v) > 1e-9 else 1.0)
+    w_cap = abs(v) * max_curvature
+    return v, max(-w_cap, min(w_cap, w))

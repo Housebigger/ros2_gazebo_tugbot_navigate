@@ -30,7 +30,8 @@ def centering_command(pose, ox: Optional[float], oy: Optional[float], *,
                       v_max: float = 0.4, w_max: float = 0.5,
                       kp_ang: float = 1.5, kp_lin: float = 0.8,
                       v_min: float = 0.06, kd_ang: float = 0.0,
-                      yaw_rate: float = 0.0) -> Tuple[float, float, bool]:
+                      yaw_rate: float = 0.0,
+                      rotate_to_face: bool = True) -> Tuple[float, float, bool]:
     """Re-center the robot to the current cell centre one cardinal axis at a time.
 
     (ox, oy) is the robot's offset from the cell centre in MAP axes (+x=E, +y=N), as
@@ -40,7 +41,11 @@ def centering_command(pose, ox: Optional[float], oy: Optional[float], *,
     (an along-heading overshoot) -- reversing retreats into the just-traversed, clear
     corridor and avoids the ~180deg in-place rotation that sweeps the asymmetric rear
     gripper into a near wall. Rotate-to-face is used only when the axis is perpendicular to
-    the heading (lateral centering). done=True when every referenced axis is within tol."""
+    the heading (lateral centering); rotate_to_face=False (Ackermann: no in-place turns)
+    skips that axis instead and tries the next-largest, falling through to done=True if
+    every remaining correction would need an in-place rotation (the corridor pursuit
+    re-centers laterally on the next hop). done=True when every referenced axis is within
+    tol."""
     cands = []
     if ox is not None and abs(ox) > tol:
         cands.append(('x', ox))
@@ -48,28 +53,29 @@ def centering_command(pose, ox: Optional[float], oy: Optional[float], *,
         cands.append(('y', oy))
     if not cands:
         return (0.0, 0.0, True)
-    axis, off = max(cands, key=lambda c: abs(c[1]))
-    # Unit vector of the motion that reduces `off` along the correction axis (toward the centre).
-    if axis == 'x':
-        dx, dy = (-1.0 if off > 0 else 1.0), 0.0
-    else:
-        dx, dy = 0.0, (-1.0 if off > 0 else 1.0)
     yaw = pose[2]
-    a = math.cos(yaw) * dx + math.sin(yaw) * dy      # +1 centre ahead, -1 centre behind, 0 perpendicular
-    speed = min(v_max, max(v_min, kp_lin * abs(off)))
-    # Anti-parallel: the centre is behind along the heading (an along-travel overshoot). Reverse-
-    # translate to null it -- retreats into the just-traversed, clear corridor -- instead of the
-    # ~180deg in-place rotation that sweeps the asymmetric rear gripper into a near wall (the (3,9)
-    # graze). A diff-drive robot cannot strafe, but it can reverse.
-    if a <= -_PARALLEL_COS:
-        return (-speed, 0.0, False)
-    # Perpendicular / not-yet-aligned: face the axis cardinal first, then drive forward (unchanged).
-    want = math.atan2(dy, dx)
-    dyaw = _norm(want - yaw)
-    if abs(dyaw) > yaw_tol:
-        w = kp_ang * dyaw - kd_ang * yaw_rate                         # PD: damp latency overshoot
-        return (0.0, max(-w_max, min(w_max, w)), False)
-    return (speed, 0.0, False)                                        # aligned -> drive forward to null
+    for axis, off in sorted(cands, key=lambda c: -abs(c[1])):
+        if axis == 'x':
+            dx, dy = (-1.0 if off > 0 else 1.0), 0.0
+        else:
+            dx, dy = 0.0, (-1.0 if off > 0 else 1.0)
+        yaw = pose[2]
+        a = math.cos(yaw) * dx + math.sin(yaw) * dy      # +1 centre ahead, -1 centre behind, 0 perpendicular
+        speed = min(v_max, max(v_min, kp_lin * abs(off)))
+        # Anti-parallel: reverse-translate (works on diff-drive AND Ackermann).
+        if a <= -_PARALLEL_COS:
+            return (-speed, 0.0, False)
+        want = math.atan2(dy, dx)
+        dyaw = _norm(want - yaw)
+        if abs(dyaw) > yaw_tol:
+            if not rotate_to_face:
+                continue          # Ackermann: no in-place facing; try the other axis or give up
+            w = kp_ang * dyaw - kd_ang * yaw_rate                     # PD: damp latency overshoot
+            return (0.0, max(-w_max, min(w_max, w)), False)
+        return (speed, 0.0, False)                                    # aligned -> drive to null
+    # Every remaining correction would need an in-place rotation: accept the offset and
+    # let the corridor pursuit re-center during the next hop (Ackermann mode).
+    return (0.0, 0.0, True)
 
 
 def cross_track_offset(ox: Optional[float], oy: Optional[float], hop_dir) -> float:

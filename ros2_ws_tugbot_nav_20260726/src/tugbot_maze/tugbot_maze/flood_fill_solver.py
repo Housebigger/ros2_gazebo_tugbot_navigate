@@ -72,6 +72,7 @@ class FloodFillSolver(Node):
         self.front_block_m = float(self.declare_parameter('front_block_m', 0.7).value)
         self.junction_log_dir = str(self.declare_parameter('junction_log_dir', '').value)
         self.junction_log_path = os.path.join(self.junction_log_dir or 'log', 'junctions.json')
+        self.ackermann_drive = bool(self.declare_parameter('ackermann_drive', True).value)
 
         self.brain = FloodFillBrain(exit_cell=EXIT_CELL)
         self.mem = MapMemory(self.brain)
@@ -82,6 +83,7 @@ class FloodFillSolver(Node):
                                  front_block_m=self.front_block_m,
                                  hop_timeout_s=self.hop_timeout_s,
                                  pose_is_absolute=self.pose_source in ('online_slam', 'scan_match'),
+                                 ackermann=self.ackermann_drive,
                                  mem=self.mem)
         self.junctions = JunctionLog()
         self._scan_seq = 0

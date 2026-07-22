@@ -213,3 +213,31 @@ def test_pose_is_absolute_defaults_false():
     assert sig.parameters['pose_is_absolute'].default is False
 
 
+def test_ackermann_defaults_false():
+    import inspect
+    from tugbot_maze.maze_motion import MazeMotion
+    sig = inspect.signature(MazeMotion.__init__)
+    assert sig.parameters['ackermann'].default is False
+
+
+def test_ackermann_full_solve_never_commands_in_place():
+    """Full offline solve with ackermann=True (zero drift): reaches the exit,
+    zero collisions, and NO emitted command is an in-place rotation
+    (|w|>0.02 with |v|<0.01) -- the constraint the gz AckermannSteering
+    plugin physically enforces. MazeSim integrates (v,w) kinematically, so
+    the assertion, not the sim, carries the Ackermann semantics."""
+    sim = MazeSim(load_segments(), cell_center(ENTRANCE_CELL), 0.0, inertia=True)
+    m = MazeMotion(ackermann=True)
+    t, done = 0.0, False
+    for _ in range(60000):
+        scan = sim.scan(n_beams=360, fov_rad=2 * math.pi)
+        v, w, done = m.step(sim.reported_pose, scan, t)
+        assert not (abs(w) > 0.02 and abs(v) < 0.01), f'in-place rotation at t={t:.1f}'
+        sim.step(v, w, 0.1)
+        assert not sim.collides(*sim.pose), f'collision at t={t:.1f}'
+        t += 0.1
+        if done:
+            break
+    assert done, 'ackermann offline solve did not reach the exit'
+
+
