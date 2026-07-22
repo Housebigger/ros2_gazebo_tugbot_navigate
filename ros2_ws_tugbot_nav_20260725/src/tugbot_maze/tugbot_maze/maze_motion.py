@@ -22,9 +22,9 @@ from typing import Optional, Tuple
 
 from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, CELL_SIZE_M, pose_to_cell, in_grid, DIRS, OPP,
-    open_exits)
+    open_exits, cell_center)
 from tugbot_maze.cell_walls import sense_cell_walls, cell_wall_perp_dist
-from tugbot_maze.wall_localize import cell_center_offset, perimeter_offset
+from tugbot_maze.wall_localize import cell_center_offset, perimeter_offset, gate_offset_against_pose
 from tugbot_maze.hop_controller import (
     centering_command, grid_cross_track,
     side_distances, corridor_follow_command, profiled_turn_command, backout_command)
@@ -77,6 +77,7 @@ class MazeMotion:
                  backout_v: float = 0.30, backout_timeout_s: float = 12.0,
                  max_backout_attempts: int = 2,
                  grid_fallback_max_m: float = 0.40,
+                 pose_is_absolute: bool = False,
                  mem: Optional['MapMemory'] = None):
         self.brain = brain if brain is not None else FloodFillBrain(exit_cell=EXIT_CELL)
         self.mem = mem if mem is not None else MapMemory(self.brain)
@@ -103,6 +104,10 @@ class MazeMotion:
         self.backout_v = backout_v; self.backout_timeout_s = backout_timeout_s
         self.max_backout_attempts = max_backout_attempts
         self.grid_fallback_max_m = grid_fallback_max_m   # clamp on the open-junction odom fallback
+        # absolute (ICP-corrected) pose -> the stale-scan offset gate is active; raw-odom pose
+        # (offline drift harness, odom_locked) -> gate inert, wall-referenced centering remains
+        # the drift corrector.
+        self.pose_is_absolute = pose_is_absolute
         self.max_cross_steer = 0.35      # cap on the cross-track-induced heading deviation (junctions)
         self.safety_radius = 0.70        # LIDAR clearance: within this, the keep-out overrides the cap + slows
         self.keepout_max_cross_steer = 0.8   # emergency steer authority when a wall is within safety_radius
@@ -206,6 +211,9 @@ class MazeMotion:
             self.center_start = t
         ox, oy = cell_center_offset(ranges, amin, ainc, yaw)
         ox, oy = self._perimeter_reanchor(x, y, ranges, amin, ainc, yaw, ox, oy)
+        if self.pose_is_absolute:
+            ccx, ccy = cell_center(self.cell)
+            ox, oy, _ = gate_offset_against_pose(ox, oy, x, y, ccx, ccy)   # stale-scan guard (4b)
         v, w, centered = centering_command((x, y, yaw), ox, oy,
                                            tol=self.center_tol_m, yaw_tol=self.yaw_tol_rad,
                                            w_max=self.turn_w_max, kp_ang=self.kp_turn,
@@ -241,7 +249,11 @@ class MazeMotion:
         # position-driven (boundary-straddle), not yaw -- so position is the commit criterion.
         ox, oy = cell_center_offset(ranges, amin, ainc, yaw)
         ox, oy = self._perimeter_reanchor(x, y, ranges, amin, ainc, yaw, ox, oy)
-        pos_ok = within_commit_offset(ox, oy, self.commit_offset_tol)
+        offsets_clean = True
+        if self.pose_is_absolute:
+            ccx, ccy = cell_center(self.cell)
+            ox, oy, offsets_clean = gate_offset_against_pose(ox, oy, x, y, ccx, ccy)
+        pos_ok = offsets_clean and within_commit_offset(ox, oy, self.commit_offset_tol)   # stale scan -> fail closed (4b)
         taxis = 0 if (self.hop_dir and self.hop_dir[0] != 0) else 1
         coord = x if taxis == 0 else y
         not_straddling = within_cell_core(coord, self.cell[taxis], self.boundary_margin_m)

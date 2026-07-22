@@ -93,6 +93,33 @@ def cell_center_offset(ranges, angle_min, angle_inc, yaw, *,
     return (axis(r['E'], r['W']), axis(r['N'], r['S']))
 
 
+def gate_offset_against_pose(ox: Optional[float], oy: Optional[float],
+                             pose_x: float, pose_y: float,
+                             center_x: float, center_y: float, *,
+                             tol: float = 0.35
+                             ) -> Tuple[Optional[float], Optional[float], bool]:
+    """Cross-check the wall-referenced center offset against the pose-derived one.
+
+    Returns (ox, oy, clean): a wall-derived component disagreeing with
+    (pose - cell_center) by more than tol is dropped to None and clean goes
+    False. The two disagree when a pipeline stall leaves the scan stale while
+    the robot keeps moving (20260722 forensics: two 6.4s MATCH gaps vs the
+    5.00s cadence bracketed a wall graze at (10,6) -- the stale east wall
+    read ~0.7m far and flipped ox from +0.31 to -0.42, steering INTO the
+    wall; at the quadruped's 0.23 m/s the same stall stayed inside tolerance,
+    the kinematic buggy's 0.4 m/s doubled it). Clean-run agreement is
+    ~0.02-0.15 m, the stale contradiction 0.73 m; tol=0.35 splits them.
+    The absolute pose is trustworthy here post the odom-yaw gate (c52e951);
+    consumers use `clean` to fail CLOSED on the sense-commit quality gate."""
+    clean = True
+    px, py = pose_x - center_x, pose_y - center_y
+    if ox is not None and abs(ox - px) > tol:
+        ox, clean = None, False
+    if oy is not None and abs(oy - py) > tol:
+        oy, clean = None, False
+    return ox, oy, clean
+
+
 def heading_snap(yaw: float) -> Tuple[float, float]:
     """Nearest cardinal yaw and the signed, normalized rotation to reach it."""
     snapped = round(yaw / (math.pi / 2.0)) * (math.pi / 2.0)

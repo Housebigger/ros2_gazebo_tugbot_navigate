@@ -81,6 +81,7 @@ class FloodFillSolver(Node):
                                  hop_arrive_slack_m=self.hop_arrive_slack_m,
                                  front_block_m=self.front_block_m,
                                  hop_timeout_s=self.hop_timeout_s,
+                                 pose_is_absolute=self.pose_source in ('online_slam', 'scan_match'),
                                  mem=self.mem)
         self.junctions = JunctionLog()
         self._scan_seq = 0

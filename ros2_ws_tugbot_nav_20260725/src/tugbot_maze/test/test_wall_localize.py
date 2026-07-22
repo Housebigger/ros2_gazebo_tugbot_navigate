@@ -1,6 +1,6 @@
 import math
 from tugbot_maze.maze_sim import MazeSim, load_segments
-from tugbot_maze.wall_localize import cell_center_offset, heading_snap, HALF_CORRIDOR_M, perimeter_offset
+from tugbot_maze.wall_localize import cell_center_offset, heading_snap, HALF_CORRIDOR_M, perimeter_offset, gate_offset_against_pose
 
 H = HALF_CORRIDOR_M  # 0.88
 
@@ -109,3 +109,32 @@ def test_perimeter_offset_north_axis_in_top_row():
     assert 1 in out
     true_y, implied = out[1]
     assert abs(true_y - 18.5) < 0.12 and implied == 9
+
+
+def test_gate_passes_agreeing_offsets_through():
+    # pose (20.31, 11.99) in cell centered (20, 12): pose-derived (+0.31, -0.01).
+    ox, oy, clean = gate_offset_against_pose(0.30, -0.02, 20.31, 11.99, 20.0, 12.0)
+    assert (ox, oy, clean) == (0.30, -0.02, True)
+
+
+def test_gate_drops_stale_scan_contradiction():
+    # The 20260722 (10,6) graze numbers: wall-derived ox=-0.42 vs pose-derived +0.31
+    # (disagreement 0.73 > 0.35) -> ox dropped, clean False; oy agrees and survives.
+    ox, oy, clean = gate_offset_against_pose(-0.42, -0.02, 20.31, 11.99, 20.0, 12.0)
+    assert ox is None and oy == -0.02 and clean is False
+
+
+def test_gate_passes_none_components():
+    ox, oy, clean = gate_offset_against_pose(None, None, 20.31, 11.99, 20.0, 12.0)
+    assert (ox, oy, clean) == (None, None, True)
+
+
+def test_gate_axes_independent():
+    ox, oy, clean = gate_offset_against_pose(0.30, 0.60, 20.31, 11.99, 20.0, 12.0)
+    assert ox == 0.30 and oy is None and clean is False    # oy disagrees by 0.61 > 0.35
+
+
+def test_gate_boundary_exact_tol_not_dropped():
+    # pose-derived ox = +0.31; wall-derived -0.04 -> diff exactly 0.35: strict > keeps it.
+    ox, oy, clean = gate_offset_against_pose(-0.04, None, 20.31, 12.0, 20.0, 12.0)
+    assert ox == -0.04 and clean is True
