@@ -1,0 +1,135 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <model name="mr_buggy3">
+    <static>false</static>
+    <self_collide>false</self_collide>
+    <!-- Kinematic chassis (recipe = the archived 20260716 anymal kinematic phase):
+         gravity off + ZERO collision bodies (collision truth lives in the offline
+         true-footprint oracle; gravity-off + collisions is an archived attitude-bomb
+         trap) + VelocityControl gliding the model at the commanded twist. Wheels are
+         fixed decorative visuals -- the steered-axle drive (0.41 m min turn radius,
+         no in-place turns) was removed; a physical steered-axle drive is a deferred
+         phase. -->
+    <link name="base">
+      <gravity>false</gravity>
+      <inertial>
+        <mass>3.0</mass>
+        <inertia>
+          <ixx>0.0054</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.0252</iyy><iyz>0</iyz><izz>0.0252</izz>
+        </inertia>
+      </inertial>
+      <visual name="base_visual">
+        <pose>.1371 0 -.0115 -0.018 0 1.5707</pose>
+        <geometry><mesh><uri>model://mr_buggy3/meshes/BaseReduced.dae</uri></mesh></geometry>
+      </visual>
+      <visual name="top_visual">
+        <pose>.1371 0 -.0115 -0.018 0 1.5707</pose>
+        <geometry><mesh><uri>model://mr_buggy3/meshes/TopReduced.dae</uri></mesh></geometry>
+      </visual>
+      <visual name="wheel_fr_visual">
+        <pose>.112 -.10 0 0 0 0</pose>
+        <geometry><mesh><uri>model://mr_buggy3/meshes/Wheel.dae</uri></mesh></geometry>
+      </visual>
+      <visual name="wheel_fl_visual">
+        <pose>.112 .10 0 0 0 3.14159</pose>
+        <geometry><mesh><uri>model://mr_buggy3/meshes/Wheel.dae</uri></mesh></geometry>
+      </visual>
+      <visual name="wheel_rr_visual">
+        <pose>-.1135 -.10 0 0 0 0</pose>
+        <geometry><mesh><uri>model://mr_buggy3/meshes/Wheel.dae</uri></mesh></geometry>
+      </visual>
+      <visual name="wheel_rl_visual">
+        <pose>-.1135 .10 0 0 0 3.14159</pose>
+        <geometry><mesh><uri>model://mr_buggy3/meshes/Wheel.dae</uri></mesh></geometry>
+      </visual>
+      <sensor name="lidar_3d" type="gpu_lidar">
+        <!-- Centered: SCAN_OFFSET_X=0 contract. Specs field-identical to the
+             anymal_c lidar_3d; only the mount height differs (0.30 m mast above
+             the 0.12 m body: ground ring starts ~1.1 m out, walls painted to
+             ~2.4 m at 8 m usable range). -->
+        <pose>0 0 0.30 0 0 0</pose>
+        <topic>/lidar/points</topic>
+        <always_on>1</always_on>
+        <visualize>false</visualize>
+        <update_rate>10</update_rate>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>1800</samples>
+              <resolution>1.0</resolution>
+              <min_angle>-3.14159</min_angle>
+              <max_angle>3.14159</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>16</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.261799</min_angle>
+              <max_angle>0.261799</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.05</min>
+            <max>100</max>
+            <resolution>0.01</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </lidar>
+      </sensor>
+      <sensor name="camera_front" type="camera">
+        <always_on>1</always_on>
+        <update_rate>20</update_rate>
+        <!-- Faces +x = travel direction; perched on the body front, above the
+             0.12 m hood so the view is clear. Optics identical to the dog's
+             camera_4-spec front camera. -->
+        <pose>0.12 0 0.15 0 0 0</pose>
+        <topic>/camera/front/image</topic>
+        <camera name="camera_front">
+          <horizontal_fov>2.19911</horizontal_fov>
+          <camera_info_topic>/camera/front/camera_info</camera_info_topic>
+          <lens>
+            <intrinsics>
+              <fx>183.43</fx>
+              <fy>183.43</fy>
+              <cx>360.5</cx>
+              <cy>270.5</cy>
+              <s>0</s>
+            </intrinsics>
+          </lens>
+          <image>
+            <width>720</width>
+            <height>540</height>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>100</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+      </sensor>
+    </link>
+    <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+      <topic>/cmd_vel</topic>
+    </plugin>
+    <!-- robot_base_frame=base_link is a TF child-frame LABEL only (the link is
+         'base'); kept to preserve the odom->base_link contract for the nav stack
+         (same trick as anymal_c). No xyz_offset: body-frame post-multiply
+         teleports (archived trap). -->
+    <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
+      <odom_frame>odom</odom_frame>
+      <robot_base_frame>base_link</robot_base_frame>
+      <odom_topic>/odom</odom_topic>
+      <tf_topic>/tf</tf_topic>
+      <odom_publish_frequency>30</odom_publish_frequency>
+      <dimensions>3</dimensions>
+    </plugin>
+  </model>
+</sdf>
