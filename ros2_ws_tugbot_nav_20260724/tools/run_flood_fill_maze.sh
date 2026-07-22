@@ -41,7 +41,7 @@ kill_all_sim() {
                behavior_server smoother_server route_server waypoint_follower \
                velocity_smoother collision_monitor lifecycle_manager map_server amcl \
                maze_explorer maze_solver wall_follow_solver frontier_explorer maze_goal_monitor \
-               flood_fill_solver locomotion_controller scan_slice_projector \
+               flood_fill_solver locomotion_controller scan_slice_projector cloud_map_accumulator \
                robot_state_publisher static_transform_publisher component_container rviz; do
         pkill -9 -f "$pat" 2>/dev/null
     done
@@ -75,7 +75,7 @@ done
 
 echo "[FLOODFILL] result=$RESULT" | tee -a "$ART/run_meta.txt"
 echo "$RESULT" > "$ART/result.txt"
-grep -aE "EXIT_REACHED|HOP_BACKUP|JUNCTION|DIAG|SENSE|flood_fill_solver|LOCO|FALL_DETECTED" "$ART/launch.log" | tail -80 > "$ART/flood_fill_tail.txt" 2>/dev/null
+grep -aE "EXIT_REACHED|HOP_BACKUP|JUNCTION|DIAG|SENSE|flood_fill_solver|LOCO|FALL_DETECTED|CLOUDMAP" "$ART/launch.log" | tail -80 > "$ART/flood_fill_tail.txt" 2>/dev/null
 
 kill -INT "$LAUNCH_PID" 2>/dev/null
 sleep 5

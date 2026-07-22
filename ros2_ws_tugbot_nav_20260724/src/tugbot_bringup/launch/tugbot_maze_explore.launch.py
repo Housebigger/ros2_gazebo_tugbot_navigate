@@ -221,6 +221,15 @@ def generate_launch_description():
         condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'flood_fill'"])),
     )
 
+    cloud_map_accumulator = Node(
+        package='tugbot_maze', executable='cloud_map_accumulator', name='cloud_map_accumulator',
+        output='screen',
+        parameters=[{'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}],
+        condition=IfCondition(PythonExpression([
+            "'", explorer_type, "' == 'flood_fill' and '",
+            LaunchConfiguration('pose_source'), "' == 'online_slam'"])),
+    )
+
     locomotion_controller = Node(
         package='tugbot_maze', executable='locomotion_controller', name='locomotion_controller',
         parameters=[{
@@ -364,7 +373,7 @@ def generate_launch_description():
         DeclareLaunchArgument('corridor_max_nav2_fails', default_value='6', description='GCN: max Nav2 failures per corridor before declaring it exhausted.'),
         DeclareLaunchArgument('corridor_max_reactive', default_value='5', description='GCN: max reactive drive attempts per corridor.'),
         maze_slam_nav_launch,
-        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node, flood_fill_solver_node]),
+        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node, flood_fill_solver_node, cloud_map_accumulator]),
         TimerAction(period=14.0, actions=[maze_goal_monitor]),
         locomotion_controller,
     ])
