@@ -864,6 +864,8 @@ EOF
 
 ---
 
+> **裁决记录(Task 3 执行期)**:①端到端不变量测试抓出**计划外第三个原地转源**——DRIVE 相近墙 keep-out 律在 near_wall<safety_radius 时把油门压 0 同时 ω 打满(diff-drive 合法、阿克曼禁止)。裁决=不逐律追修,在 `MazeMotion.step` 出口加**单一可行域投影** `clamp_to_ackermann`(|ω|>ε 时 |v| 垫底 0.08、ω 封顶 |v|×2.4;巡航 0.4 时封顶 0.96 高于一切转向律的 w_max,正常行驶零扰动)——离线行为与 gz 插件物理行为同构。②超时缩放裁决(承 Task 2 审查):ackermann 模式 center/align/turn 三超时 ×4(4/6/5 → 16/24/20s),多程序 N 点收敛需 ~8-12s/次转向。③套件预期随 +2 投影单测再修正(实施者复算为准)。
+
 ### Task 4: 首启冒烟(主会话,240-300s)
 
 - [ ] `bash tools/run_flood_fill_maze.sh 300 true false online_slam`(后台=主会话后台,允许)。
