@@ -1,0 +1,127 @@
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/cmd_vel"
+  gz_topic_name: "/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/odom"
+  gz_topic_name: "/odom"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/tf"
+  gz_topic_name: "/tf"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/model/anymal_c/joint/LF_HAA/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/LF_HAA/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/LF_HFE/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/LF_HFE/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/LF_KFE/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/LF_KFE/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/RF_HAA/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/RF_HAA/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/RF_HFE/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/RF_HFE/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/RF_KFE/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/RF_KFE/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/LH_HAA/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/LH_HAA/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/LH_HFE/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/LH_HFE/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/LH_KFE/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/LH_KFE/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/RH_HAA/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/RH_HAA/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/RH_HFE/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/RH_HFE/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/model/anymal_c/joint/RH_KFE/cmd_pos"
+  gz_topic_name: "/model/anymal_c/joint/RH_KFE/0/cmd_pos"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: "ROS_TO_GZ"
+
+- ros_topic_name: "/camera/front/image"
+  gz_topic_name: "/camera/front/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/camera/front/camera_info"
+  gz_topic_name: "/camera/front/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/lidar/points"
+  # gz-sim's gpu_lidar sensor plugin publishes gz.msgs.LaserScan on the
+  # sensor's own <topic> ("/lidar/points") and auto-creates a SEPARATE
+  # "<topic>/points" topic for the actual gz.msgs.PointCloudPacked cloud
+  # (verified live: `gz topic -i -t /lidar/points` -> LaserScan publisher;
+  # `gz topic -i -t /lidar/points/points` -> PointCloudPacked publisher).
+  # Bridging gz_topic_name "/lidar/points" against PointCloudPacked is a
+  # silent type mismatch (gz transport never delivers it) -- point at the
+  # real "/points" topic instead.
+  gz_topic_name: "/lidar/points/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/gt/dynamic_pose"
+  gz_topic_name: "/world/tugbot_maze_world_20260528_clean_scaled2x/dynamic_pose/info"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: "GZ_TO_ROS"
