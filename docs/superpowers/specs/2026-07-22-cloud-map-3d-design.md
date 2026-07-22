@@ -29,8 +29,10 @@
 
 `CloudMap3D` 类,镜像 ScatterCloud 风格(纯 NumPy + sensor_msgs 消息构造,无 rclpy 节点态,可离线测):
 
-- `__init__(voxel_m=0.05, usable_range_m=8.0, z_min=-0.2, z_max=3.0)`。
+- `__init__(voxel_m=0.05, usable_range_m=8.0, z_min=-1.0, z_max=3.0)`。
 - `add_cloud(points_sensor_xyz, T_map_sensor) -> int`:传感器系预滤(`norm(p) <= usable_range_m`、有限值),4×4 齐次变换到 map 系,map 系 z 裁剪 `[z_min, z_max]`(防杂散/地下反射),`round(p / voxel_m)` 三维整键入 set,返回新增体素数。
+- **z 基准修正(实现期)**:odom 系锚在 spawn 位姿(z=0.62),map 系里**地面 ≈ −0.62**,故 z_min 取 **−1.0**——spec 初稿的 −0.2 隐含"map z=0 在地面"的错误假设,会把地面整个裁掉。
+- **导出实现修正(质量审查)**:40 万体素时 Python `sorted()` 导出 ~760ms 会卡回调线程,改 `np.fromiter + np.lexsort`(字节级同输出,~264ms 实测)。
 - `to_pointcloud2(frame_id='map', stamp) -> PointCloud2`:体素键 ×voxel_m 还原为 xyz-float32,确定序(sorted),与 ScatterCloud 导出同构。
 - `__len__` = 体素数。
 - 体量上界:迷宫墙面+地面 ≈ 30–40 万体素,消息 ~4MB——RViz 与 DDS 无压力。
@@ -68,7 +70,7 @@
 ## 6. 验收标准
 
 1. **单测**(离线,`pytest`):CloudMap3D 手算齐次变换对拍(含带 roll/pitch 的位姿)、体素去重、`to_pointcloud2` 与 `add_cloud` 互逆、空帧/全无效帧安全、z 裁剪与量程滤波生效;节点侧纯逻辑(节流/仅增长才发)可测部分测。既有全套件零新增失败(基线 7 failed / 492 passed / 3 xfailed,名单不变)。
-2. **headless×2**(PRIME,online_slam):EXIT_REACHED + oracle 0.000% + `/maze/cloud_map_3d` 末态体素数 > 50,000(保守下界:全程仅地面即远超此数;跑内录制末条 latched 消息断言 width,证明图确实在长)+ 无新增 ERROR 级日志。
+2. **headless×2**(PRIME,online_slam):EXIT_REACHED + oracle 0.000% + `/maze/cloud_map_3d` 末态体素数 > 50,000(保守下界:全程仅地面即远超此数;断言机制=grep launch.log 末条 `CLOUDMAP voxels=N` 日志——节点每次发布记一行,与录制 latched 消息证据等价且无需配对 DDS 域的录制进程)+ 无新增 ERROR 级日志。
 3. **GUI 验收**(用户):3D 图随狗行进逐步长出、与 Lidar3D 实时帧贴合(无重影/涂抹)、高度染色可辨墙面与地面;旧三件显示已不在。
 
 ## 7. 风险与诚实边界
