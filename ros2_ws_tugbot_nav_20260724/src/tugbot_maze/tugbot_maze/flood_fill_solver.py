@@ -12,13 +12,10 @@ from typing import Optional
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, TransformStamped
-from sensor_msgs.msg import LaserScan, PointCloud2
+from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
-from nav_msgs.msg import OccupancyGrid
-from visualization_msgs.msg import MarkerArray
 from tf2_msgs.msg import TFMessage
 import tf2_ros
-from rclpy.qos import QoSProfile, DurabilityPolicy
 
 from tugbot_maze.flood_fill_brain import (
     FloodFillBrain, ENTRANCE_CELL, EXIT_CELL, pose_to_cell)
@@ -28,9 +25,6 @@ from tugbot_maze.junction_log import JunctionLog, update_junctions
 from tugbot_maze.pose_tracking import (
     compose_2d, quat_to_yaw, odom_prior, yaw_to_quat, map_to_odom,
     apply_odom_yaw_gate)
-from tugbot_maze.flood_fill_viz import self_built_wall_markerarray
-from tugbot_maze.scatter_cloud import ScatterCloud
-from tugbot_maze.radar_occupancy import RadarOccupancyGrid
 from tugbot_maze.scan_match_localizer import ScanMatchLocalizer
 from tugbot_maze.maze_sim import load_segments, outer_segments
 from tugbot_maze.online_scan_match_localizer import (
@@ -113,22 +107,6 @@ class FloodFillSolver(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
-        _walls_qos = QoSProfile(depth=1)
-        _walls_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL   # latch for late RViz joins
-        self.walls_pub = self.create_publisher(MarkerArray, '/maze/self_built_walls', _walls_qos)
-        self.map_pub = self.create_publisher(OccupancyGrid, '/maze/self_built_map', _walls_qos)
-        # Radar-scatter overlay (online_slam only): accumulate live scan returns into a
-        # map-frame scatter cloud and republish (throttled) on top of the self-built map.
-        self.scatter_pub = self.create_publisher(PointCloud2, '/maze/scatter_cloud', _walls_qos)
-        self.scatter_period_s = float(self.declare_parameter('scatter_period_s', 0.5).value)
-        self._scatter = ScatterCloud(voxel_m=0.05)
-        self._scatter_last_pub = None
-        # Radar-accumulated occupancy map (online_slam only): ray-cast each scan into a
-        # log-odds grid so /maze/self_built_map grows in a radar-scatter style, not blocks.
-        self._radar = (RadarOccupancyGrid(self._perimeter_segments, resolution=0.05)
-                       if self.pose_source == 'online_slam' else None)
-        self._radar_last_pub = None
-        self._walls_key = None
 
         self.phase = 'startup'        # startup | entering | driving | done
         self.start_xy = None
@@ -276,79 +254,6 @@ class FloodFillSolver(Node):
         tmsg.transform.rotation.w = qw
         self.tf_broadcaster.sendTransform(tmsg)
 
-    def _publish_self_built_walls(self):
-        """online_slam: publish the confirmed self-built walls as a MarkerArray so RViz
-        shows the walls the robot built. Republished only when the sensed/committed set
-        grows (cheap change-key), never allowed to kill the node. (The occupancy map itself
-        is published separately by _publish_radar_map.)"""
-        if self.pose_source != 'online_slam':
-            return
-        # Cheap growth trigger: republish when a cell is newly sensed/committed. Can lag by
-        # <=1 cell if `committed` shrinks or a wall is refined within an already-sensed cell --
-        # viz-only, self-heals on the next new cell.
-        key = (len(self.motion.sensed), len(self.motion.committed))
-        if key == self._walls_key:
-            return
-        try:
-            cells = self.motion.sensed | self.motion.committed
-            interior = confirmed_wall_segments(self.brain, cells)
-            stamp = self.get_clock().now().to_msg()
-            arr = self_built_wall_markerarray(
-                list(self._perimeter_segments) + interior,
-                frame_id=self.map_frame, stamp=stamp)
-            self.walls_pub.publish(arr)
-            self._walls_key = key    # advance only on success -> retry on transient failure
-        except Exception as e:                       # viz must never crash the solver
-            self.get_logger().warning('self-built walls publish failed: %r' % e)
-
-    def _publish_scatter_cloud(self, now):
-        """online_slam: accumulate the live scan into a map-frame scatter cloud (same ICP
-        pose + projection the localizer uses) and republish (throttled) as a PointCloud2.
-        Pure viz -- read-only on _sm_corrected/scan_msg, never allowed to kill the node."""
-        if self.pose_source != 'online_slam':
-            return
-        if self._sm_corrected is None or self.scan_msg is None:
-            return
-        try:
-            s = self.scan_msg
-            added = self._scatter.add_scan(
-                self._sm_corrected, s.ranges, s.angle_min, s.angle_increment)
-            # Publish the first frame, then at most every scatter_period_s AND only when the
-            # cloud actually grew. Intentional: on a content-static stretch we skip redundant
-            # republishes of an unchanged cloud; the next growth publishes the full set, so
-            # nothing is ever lost (cadence just lags past the nominal period until growth).
-            due = (self._scatter_last_pub is None or
-                   (now - self._scatter_last_pub).nanoseconds / 1e9 >= self.scatter_period_s)
-            if due and (added > 0 or self._scatter_last_pub is None):
-                self.scatter_pub.publish(
-                    self._scatter.to_pointcloud2(frame_id=self.map_frame,
-                                                 stamp=now.to_msg()))
-                self._scatter_last_pub = now
-        except Exception as e:                       # viz must never crash the solver
-            self.get_logger().warning('scatter cloud publish failed: %r' % e)
-
-    def _publish_radar_map(self, now):
-        """online_slam: ray-cast the live scan into the radar occupancy grid (same ICP pose
-        + projection the localizer uses) and republish (throttled) as the OccupancyGrid on
-        /maze/self_built_map. Pure viz -- read-only on _sm_corrected/scan_msg, never crashes."""
-        if self.pose_source != 'online_slam' or self._radar is None:
-            return
-        if self._sm_corrected is None or self.scan_msg is None:
-            return
-        try:
-            s = self.scan_msg
-            self._radar.integrate_scan(
-                self._sm_corrected, s.ranges, s.angle_min, s.angle_increment)
-            due = (self._radar_last_pub is None or
-                   (now - self._radar_last_pub).nanoseconds / 1e9 >= self.scatter_period_s)
-            if due:      # the map evolves continuously -> republish every period while driving
-                self.map_pub.publish(
-                    self._radar.to_occupancy_grid(frame_id=self.map_frame,
-                                                  stamp=now.to_msg()))
-                self._radar_last_pub = now
-        except Exception as e:                       # viz must never crash the solver
-            self.get_logger().warning('radar map publish failed: %r' % e)
-
     def _flush_junctions(self):
         try:
             self.junctions.flush(self.junction_log_path)
@@ -407,9 +312,6 @@ class FloodFillSolver(Node):
                 self.get_logger().info('JUNCTION cell=%s exits=%s order=%d visits=%d'
                                        % (tuple(j['cell']), j['exits'],
                                           j['discovery_index'], j['visits']))
-            self._publish_self_built_walls()
-            self._publish_scatter_cloud(now)
-            self._publish_radar_map(now)
             if done and self.phase != 'done':
                 self.phase = 'done'
                 self.get_logger().info('EXIT_REACHED (flood_fill_solver)')
