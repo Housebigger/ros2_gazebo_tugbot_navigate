@@ -3,8 +3,8 @@ lidar cloud (finite, range<=usable), transform by a 4x4 map<-sensor matrix, clip
 to a sane map-frame z band (the odom frame is anchored at the spawn pose z=0.62,
 so the GROUND sits near map z=-0.62 -- z_min must stay below it), and dedup into
 an integer voxel set exported as an xyz-float32 PointCloud2. Pure NumPy + msg
-construction -- no ROS node state, no rclpy.init needed (mirrors scatter_cloud's
-old contract, generalized to 3D)."""
+construction -- no ROS node state, no rclpy.init needed (generalizes the removed
+2D scatter_cloud module's contract to 3D)."""
 from __future__ import annotations
 
 import itertools

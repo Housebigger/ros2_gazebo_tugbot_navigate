@@ -88,8 +88,7 @@ class FloodFillSolver(Node):
         self._sm_last_odom = None
         self._sm_seq = -1
         self._sm_info = None
-        # perimeter walls (online_slam only): the localizer's fixed reference AND the base of
-        # the self-built-walls marker -- read once here, reused for both.
+        # perimeter walls (online_slam only): the localizer's fixed ICP reference -- read once here.
         self._perimeter_segments = outer_segments() if self.pose_source == 'online_slam' else []
         if self.pose_source == 'scan_match':
             self.localizer = ScanMatchLocalizer(load_segments())          # fed the full map (baseline)

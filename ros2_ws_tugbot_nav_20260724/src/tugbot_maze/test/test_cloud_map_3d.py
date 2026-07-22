@@ -1,5 +1,6 @@
 """CloudMap3D: map-frame 3D voxel accumulation. Pure NumPy + msg construction,
-mirrors test_scatter_cloud.py conventions (no rclpy.init needed)."""
+pure-msg test conventions (no rclpy.init needed; style inherited from the
+removed 2D scatter tests)."""
 import math
 import struct
 
