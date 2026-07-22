@@ -569,6 +569,8 @@ python3 -m pytest src -q 2>&1 | grep FAILED
 
 Expected: `10 failed, 500 passed, 3 xfailed`,名单不变。**裁决规则**:小 footprint 可能让 6 个 wall_follow 基线失败翻绿(离线 sim 碰撞变少)——若失败名单**仅在 wall_follow 组内减少**,STOP 不 commit,原样报告翻绿名单等裁决(那是诚实的改善,但冻结名单必须显式重冻,不许静默);名单出现**任何新增**同样 STOP。
 
+> **裁决结果(2026-07-22,执行期)**:规则如预期触发——6 个 wall_follow 全翻绿(真几何改善)、外圈作弊夹具新失败(其断言以腿式包络为前提,实测小车 1611 界外样本重开通道)、3 个 xfail 变 xpass(理由串全引腿式包络)。协调者显式重冻:作弊夹具续写"第三代"历史记录(`..._reopened_by_buggy_footprint`,断 outside > 0)、三个 xfail 标记退役、**新冻结基线 = 4 failed(全为 legacy maze 资产契约)/ 509 passed / 0 xfailed**。
+
 - [ ] **Step 5: Commit**
 
 ```bash
