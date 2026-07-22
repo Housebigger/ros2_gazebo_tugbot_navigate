@@ -84,3 +84,28 @@ def test_camera_front_forward_and_spec():
     assert float(pose[0]) > 0.0 and abs(float(pose[5])) < 0.3    # faces +x travel direction
     assert '<topic>/camera/front/image</topic>' in b
     assert '<width>720</width>' in b and '<height>540</height>' in b
+
+
+def test_world_spawns_buggy_not_dog():
+    world = (_ws_src() / 'tugbot_gazebo' / 'worlds'
+             / 'tugbot_maze_world_20260528_clean_scaled2x.sdf').read_text()
+    assert 'model://mr_buggy3' in world
+    assert 'model://anymal_c' not in world       # dog assets stay in repo but are not spawned
+    m = re.search(r'<uri>model://mr_buggy3</uri>\s*<name>mr_buggy3</name>\s*<pose>([^<]+)</pose>', world)
+    assert m is not None
+    x, y, z = (float(v) for v in m.group(1).split()[:3])
+    assert (x, y) == (-11.011, -9.025)           # entrance spawn, same xy as the dog
+    assert abs(z - 0.04) < 1e-9                  # wheel radius 0.0365 + clearance (original model's own z)
+
+
+def test_bridge_has_no_dog_joint_topics():
+    bridge = (_ws_src() / 'tugbot_gazebo' / 'config' / 'tugbot_bridge.yaml').read_text()
+    assert 'anymal_c/joint' not in bridge        # 12 legged cmd_pos entries removed
+    assert '/cmd_vel' in bridge                  # VelocityControl feed stays
+    assert '/lidar/points/points' in bridge      # cloud split-topic entry stays
+
+
+def test_static_tfs_point_at_buggy_frames():
+    launch = (_ws_src() / 'tugbot_gazebo' / 'launch' / 'tugbot_gazebo.launch.py').read_text()
+    assert 'mr_buggy3/base/lidar_3d' in launch and 'anymal_c/base/lidar_3d' not in launch
+    assert 'mr_buggy3/base/camera_front' in launch and 'anymal_c/base/camera_front' not in launch

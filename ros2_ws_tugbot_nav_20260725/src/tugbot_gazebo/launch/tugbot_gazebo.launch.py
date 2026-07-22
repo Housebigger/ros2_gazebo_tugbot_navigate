@@ -74,9 +74,9 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='lidar_3d_static_tf',
         arguments=[
-            '--x', '0.0', '--y', '0.0', '--z', '0.35',
+            '--x', '0.0', '--y', '0.0', '--z', '0.30',
             '--roll', '0.0', '--pitch', '0.0', '--yaw', '0.0',
-            '--frame-id', 'base_link', '--child-frame-id', 'anymal_c/base/lidar_3d',
+            '--frame-id', 'base_link', '--child-frame-id', 'mr_buggy3/base/lidar_3d',
         ],
         parameters=[{'use_sim_time': use_sim_time}],
         output='screen',
@@ -87,9 +87,9 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='camera_front_static_tf',
         arguments=[
-            '--x', '0.45', '--y', '0.0', '--z', '0.20',
+            '--x', '0.12', '--y', '0.0', '--z', '0.15',
             '--roll', '0.0', '--pitch', '0.0', '--yaw', '0.0',
-            '--frame-id', 'base_link', '--child-frame-id', 'anymal_c/base/camera_front',
+            '--frame-id', 'base_link', '--child-frame-id', 'mr_buggy3/base/camera_front',
         ],
         parameters=[{'use_sim_time': use_sim_time}],
         output='screen',

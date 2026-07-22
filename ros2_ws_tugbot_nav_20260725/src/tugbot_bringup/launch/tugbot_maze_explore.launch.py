@@ -230,15 +230,6 @@ def generate_launch_description():
             LaunchConfiguration('pose_source'), "' == 'online_slam'"])),
     )
 
-    locomotion_controller = Node(
-        package='tugbot_maze', executable='locomotion_controller', name='locomotion_controller',
-        parameters=[{
-            'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
-            'model_name': 'anymal_c',
-        }],
-        output='screen',
-    )
-
     frontier_explorer = Node(
         package='tugbot_exploration',
         executable='frontier_explorer',
@@ -375,5 +366,4 @@ def generate_launch_description():
         maze_slam_nav_launch,
         TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node, flood_fill_solver_node, cloud_map_accumulator]),
         TimerAction(period=14.0, actions=[maze_goal_monitor]),
-        locomotion_controller,
     ])
