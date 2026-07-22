@@ -1,0 +1,370 @@
+import os
+
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+
+
+def generate_launch_description():
+    bringup_share = get_package_share_directory('tugbot_bringup')
+    maze_share = get_package_share_directory('tugbot_maze')
+    navigation_share = get_package_share_directory('tugbot_navigation')
+
+    explorer_type = LaunchConfiguration('explorer_type')
+    phase16_nav2_progress_profile = LaunchConfiguration('phase16_nav2_progress_profile')
+    phase25a_local_cost_relief_profile = LaunchConfiguration('phase25a_local_cost_relief_profile')
+    phase25b_costcritic_relief_profile = LaunchConfiguration('phase25b_costcritic_relief_profile')
+    phase25d_costcritic_mid_profile = LaunchConfiguration('phase25d_costcritic_mid_profile')
+    phase25e_costcritic_compromise_profile = LaunchConfiguration('phase25e_costcritic_compromise_profile')
+    candidate_costcritic_275_profile = LaunchConfiguration('candidate_costcritic_275_profile')
+    phase26p_mppi_diagnostics_profile = LaunchConfiguration('phase26p_mppi_diagnostics_profile')
+    phase26p_candidate_mppi_diagnostics_profile = LaunchConfiguration('phase26p_candidate_mppi_diagnostics_profile')
+    floodfill_nav2_params = os.path.join(navigation_share, 'config', 'nav2_slam_floodfill_params.yaml')
+    nav2_params_file = PythonExpression([
+        "'", floodfill_nav2_params, "' if '", explorer_type, "' == 'flood_fill' else ",
+        # ^ new clause ends with "else " (NO trailing quote); the existing chain's leading "'"
+        #   (next line) supplies the opening quote. A trailing quote here -> `else ''<path>` ->
+        #   launch eval SyntaxError (which py_compile does NOT catch).
+        "'",
+        os.path.join(navigation_share, 'config', 'nav2_slam_phase26p_candidate_mppi_diagnostics_params.yaml'),
+        "' if '",
+        phase26p_candidate_mppi_diagnostics_profile,
+        "' == 'true' else '",
+        os.path.join(navigation_share, 'config', 'nav2_slam_phase26p_mppi_diagnostics_params.yaml'),
+        "' if '",
+        phase26p_mppi_diagnostics_profile,
+        "' == 'true' else '",
+        os.path.join(navigation_share, 'config', 'nav2_slam_candidate_costcritic_275_params.yaml'),
+        "' if '",
+        candidate_costcritic_275_profile,
+        "' == 'true' else '",
+        os.path.join(navigation_share, 'config', 'nav2_slam_phase25e_costcritic_compromise_params.yaml'),
+        "' if '",
+        phase25e_costcritic_compromise_profile,
+        "' == 'true' else '",
+        os.path.join(navigation_share, 'config', 'nav2_slam_phase25d_costcritic_mid_params.yaml'),
+        "' if '",
+        phase25d_costcritic_mid_profile,
+        "' == 'true' else '",
+        os.path.join(navigation_share, 'config', 'nav2_slam_phase25b_costcritic_relief_params.yaml'),
+        "' if '",
+        phase25b_costcritic_relief_profile,
+        "' == 'true' else '",
+        os.path.join(navigation_share, 'config', 'nav2_slam_phase25a_local_cost_relief_params.yaml'),
+        "' if '",
+        phase25a_local_cost_relief_profile,
+        "' == 'true' else '",
+        os.path.join(navigation_share, 'config', 'nav2_slam_phase16_progress_params.yaml'),
+        "' if '",
+        phase16_nav2_progress_profile,
+        "' == 'true' else '",
+        LaunchConfiguration('params_file'),
+        "'",
+    ])
+
+    online_slam_slam_params = os.path.join(navigation_share, 'config', 'slam_toolbox_params_online_slam.yaml')
+    slam_params_selected = PythonExpression([
+        "'", online_slam_slam_params, "' if '", LaunchConfiguration('pose_source'),
+        "' == 'online_slam' else '", LaunchConfiguration('slam_params_file'), "'"])
+
+    maze_slam_nav_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(bringup_share, 'launch', 'tugbot_maze_slam_nav.launch.py')),
+        launch_arguments={
+            'world_sdf': LaunchConfiguration('world_sdf'),
+            'slam_params_file': slam_params_selected,
+            'params_file': nav2_params_file,
+            'rviz_config': LaunchConfiguration('rviz_config'),
+            'use_sim_time': LaunchConfiguration('use_sim_time'),
+            'autostart': LaunchConfiguration('autostart'),
+            'headless': LaunchConfiguration('headless'),
+            'use_rviz': LaunchConfiguration('use_rviz'),
+            'use_composition': LaunchConfiguration('use_composition'),
+            'use_respawn': LaunchConfiguration('use_respawn'),
+            'log_level': LaunchConfiguration('log_level'),
+        }.items(),
+    )
+
+    maze_dfs_explorer = Node(
+        package='tugbot_maze',
+        executable='maze_explorer',
+        name='maze_explorer',
+        output='screen',
+        condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'maze_dfs'"])),
+        parameters=[{
+            'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
+            'map_topic': '/map',
+            'base_frame': 'base_link',
+            'map_frame': 'map',
+            'action_name': '/navigate_to_pose',
+            'state_topic': '/maze/explorer_state',
+            'goal_events_topic': LaunchConfiguration('goal_events_topic'),
+            'scan_topic': '/scan',
+            'goal_pose_topic': '/goal_pose',
+            'dispatch_readiness_required_lifecycle_nodes': LaunchConfiguration('dispatch_readiness_required_lifecycle_nodes'),
+            'dispatch_readiness_near_robot_radius_m': ParameterValue(LaunchConfiguration('dispatch_readiness_near_robot_radius_m'), value_type=float),
+            'dispatch_readiness_min_map_known_ratio': ParameterValue(LaunchConfiguration('dispatch_readiness_min_map_known_ratio'), value_type=float),
+            'dispatch_readiness_min_map_free_ratio': ParameterValue(LaunchConfiguration('dispatch_readiness_min_map_free_ratio'), value_type=float),
+            'dispatch_readiness_min_local_costmap_known_ratio': ParameterValue(LaunchConfiguration('dispatch_readiness_min_local_costmap_known_ratio'), value_type=float),
+            'dispatch_readiness_min_local_costmap_free_ratio': ParameterValue(LaunchConfiguration('dispatch_readiness_min_local_costmap_free_ratio'), value_type=float),
+            'dispatch_readiness_min_scan_finite_count': ParameterValue(LaunchConfiguration('dispatch_readiness_min_scan_finite_count'), value_type=int),
+            'dispatch_readiness_max_local_costmap_age_sec': ParameterValue(LaunchConfiguration('dispatch_readiness_max_local_costmap_age_sec'), value_type=float),
+            'startup_warmup_no_dispatch': ParameterValue(LaunchConfiguration('startup_warmup_no_dispatch'), value_type=bool),
+            'entrance_x': ParameterValue(LaunchConfiguration('entrance_x'), value_type=float),
+            'entrance_y': ParameterValue(LaunchConfiguration('entrance_y'), value_type=float),
+            'entrance_yaw': ParameterValue(LaunchConfiguration('entrance_yaw'), value_type=float),
+            'exit_x': ParameterValue(LaunchConfiguration('exit_x'), value_type=float),
+            'exit_y': ParameterValue(LaunchConfiguration('exit_y'), value_type=float),
+            'exit_radius': ParameterValue(LaunchConfiguration('exit_radius'), value_type=float),
+            'clearance_radius_m': ParameterValue(LaunchConfiguration('clearance_radius_m'), value_type=float),
+            'open_direction_lookahead_m': ParameterValue(LaunchConfiguration('open_direction_lookahead_m'), value_type=float),
+            'min_open_distance_m': ParameterValue(LaunchConfiguration('min_open_distance_m'), value_type=float),
+            'branch_goal_step_m': ParameterValue(LaunchConfiguration('branch_goal_step_m'), value_type=float),
+            'min_goal_step_m': ParameterValue(LaunchConfiguration('min_goal_step_m'), value_type=float),
+            'goal_timeout_sec': ParameterValue(LaunchConfiguration('goal_timeout_sec'), value_type=float),
+            'near_exit_goal_timeout_sec': ParameterValue(LaunchConfiguration('near_exit_goal_timeout_sec'), value_type=float),
+            'near_exit_timeout_extension_radius_m': ParameterValue(LaunchConfiguration('near_exit_timeout_extension_radius_m'), value_type=float),
+            'near_exit_fallback_enabled': ParameterValue(LaunchConfiguration('near_exit_fallback_enabled'), value_type=bool),
+            'near_exit_fallback_trigger_radius_m': ParameterValue(LaunchConfiguration('near_exit_fallback_trigger_radius_m'), value_type=float),
+            'near_exit_terminal_acceptance_radius_m': ParameterValue(LaunchConfiguration('near_exit_terminal_acceptance_radius_m'), value_type=float),
+            'near_exit_micro_goal_min_step_m': ParameterValue(LaunchConfiguration('near_exit_micro_goal_min_step_m'), value_type=float),
+            'near_exit_micro_goal_max_step_m': ParameterValue(LaunchConfiguration('near_exit_micro_goal_max_step_m'), value_type=float),
+            'near_exit_fallback_max_attempts': ParameterValue(LaunchConfiguration('near_exit_fallback_max_attempts'), value_type=int),
+            'near_exit_fallback_require_clean_topology': ParameterValue(LaunchConfiguration('near_exit_fallback_require_clean_topology'), value_type=bool),
+            'near_exit_fallback_require_path_alignment': ParameterValue(LaunchConfiguration('near_exit_fallback_require_path_alignment'), value_type=bool),
+            'near_exit_fallback_robot_to_path_max_m': ParameterValue(LaunchConfiguration('near_exit_fallback_robot_to_path_max_m'), value_type=float),
+            'near_exit_fallback_cmd_near_zero_min_sec': ParameterValue(LaunchConfiguration('near_exit_fallback_cmd_near_zero_min_sec'), value_type=float),
+            'goal_settle_sec': ParameterValue(LaunchConfiguration('goal_settle_sec'), value_type=float),
+            'backtrack_goal_tolerance_m': ParameterValue(LaunchConfiguration('backtrack_goal_tolerance_m'), value_type=float),
+            'lateral_centering_search_m': ParameterValue(LaunchConfiguration('lateral_centering_search_m'), value_type=float),
+            'allow_reverse_branch_goals': ParameterValue(LaunchConfiguration('allow_reverse_branch_goals'), value_type=bool),
+            'reverse_branch_angle_threshold_deg': ParameterValue(LaunchConfiguration('reverse_branch_angle_threshold_deg'), value_type=float),
+            'blacklist_radius_m': ParameterValue(LaunchConfiguration('blacklist_radius_m'), value_type=float),
+            'max_failures_per_branch': ParameterValue(LaunchConfiguration('max_failures_per_branch'), value_type=int),
+            'max_backtrack_failures_per_node': ParameterValue(LaunchConfiguration('max_backtrack_failures_per_node'), value_type=int),
+            'max_goals': ParameterValue(LaunchConfiguration('max_goals'), value_type=int),
+            'entry_direct_enabled': ParameterValue(LaunchConfiguration('entry_direct_enabled'), value_type=bool),
+            'entry_direct_distance_m': ParameterValue(LaunchConfiguration('entry_direct_distance_m'), value_type=float),
+            'exploration_bonus_weight': ParameterValue(LaunchConfiguration('exploration_bonus_weight'), value_type=float),
+            'distance_to_exit_weight': ParameterValue(LaunchConfiguration('distance_to_exit_weight'), value_type=float),
+            'guided_corridor_mode': ParameterValue(LaunchConfiguration('guided_corridor_mode'), value_type=bool),
+            'corridor_goal_step_m': ParameterValue(LaunchConfiguration('corridor_goal_step_m'), value_type=float),
+            'corridor_advance_tolerance_m': ParameterValue(LaunchConfiguration('corridor_advance_tolerance_m'), value_type=float),
+            'corridor_max_nav2_fails': ParameterValue(LaunchConfiguration('corridor_max_nav2_fails'), value_type=int),
+            'corridor_max_reactive': ParameterValue(LaunchConfiguration('corridor_max_reactive'), value_type=int),
+        }],
+    )
+
+    maze_solver_node = Node(
+        package='tugbot_maze',
+        executable='maze_solver',
+        name='maze_solver',
+        output='screen',
+        condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'tremaux'"])),
+        parameters=[{
+            'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
+            'map_topic': '/map',
+            'scan_topic': '/scan',
+            'base_frame': 'base_link',
+            'map_frame': 'map',
+            'action_name': '/navigate_to_pose',
+            'goal_events_topic': LaunchConfiguration('goal_events_topic'),
+            'exit_x': ParameterValue(LaunchConfiguration('exit_x'), value_type=float),
+            'exit_y': ParameterValue(LaunchConfiguration('exit_y'), value_type=float),
+            'exit_radius': ParameterValue(LaunchConfiguration('exit_radius'), value_type=float),
+            'entrance_yaw': ParameterValue(LaunchConfiguration('entrance_yaw'), value_type=float),
+            'entry_direct_distance_m': ParameterValue(LaunchConfiguration('entry_direct_distance_m'), value_type=float),
+            'clearance_radius_m': ParameterValue(LaunchConfiguration('clearance_radius_m'), value_type=float),
+            'open_direction_lookahead_m': ParameterValue(LaunchConfiguration('open_direction_lookahead_m'), value_type=float),
+            'min_open_distance_m': ParameterValue(LaunchConfiguration('min_open_distance_m'), value_type=float),
+            'branch_goal_step_m': ParameterValue(LaunchConfiguration('branch_goal_step_m'), value_type=float),
+            'goal_timeout_sec': ParameterValue(LaunchConfiguration('goal_timeout_sec'), value_type=float),
+            'max_goals': ParameterValue(LaunchConfiguration('max_goals'), value_type=int),
+        }],
+    )
+
+    wall_follow_solver_node = Node(
+        package='tugbot_maze',
+        executable='wall_follow_solver',
+        name='wall_follow_solver',
+        output='screen',
+        condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'wall_follower'"])),
+        parameters=[{
+            'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
+            'scan_topic': '/scan',
+            'base_frame': 'base_link',
+            'map_frame': 'map',
+            'goal_events_topic': LaunchConfiguration('goal_events_topic'),
+            'exit_x': ParameterValue(LaunchConfiguration('exit_x'), value_type=float),
+            'exit_y': ParameterValue(LaunchConfiguration('exit_y'), value_type=float),
+            'exit_radius': ParameterValue(LaunchConfiguration('exit_radius'), value_type=float),
+            'entry_direct_distance_m': ParameterValue(LaunchConfiguration('entry_direct_distance_m'), value_type=float),
+            'follow_side': LaunchConfiguration('follow_side'),
+        }],
+    )
+
+    flood_fill_solver_node = Node(
+        package='tugbot_maze', executable='flood_fill_solver', name='flood_fill_solver',
+        output='screen',
+        parameters=[{'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
+                     'pose_source': LaunchConfiguration('pose_source'),
+                     'sense_debug': ParameterValue(LaunchConfiguration('sense_debug'), value_type=bool),
+                     'pose_diag': ParameterValue(LaunchConfiguration('pose_diag'), value_type=bool),
+                     'junction_log_dir': LaunchConfiguration('junction_log_dir'),
+                     'entrance_x': ParameterValue(LaunchConfiguration('entrance_x'), value_type=float),
+                     'entrance_y': ParameterValue(LaunchConfiguration('entrance_y'), value_type=float),
+                     'entrance_yaw': ParameterValue(LaunchConfiguration('entrance_yaw'), value_type=float)}],
+        condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'flood_fill'"])),
+    )
+
+    locomotion_controller = Node(
+        package='tugbot_maze', executable='locomotion_controller', name='locomotion_controller',
+        parameters=[{
+            'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
+            'model_name': 'anymal_c',
+        }],
+        output='screen',
+    )
+
+    frontier_explorer = Node(
+        package='tugbot_exploration',
+        executable='frontier_explorer',
+        name='frontier_explorer',
+        output='screen',
+        condition=IfCondition(PythonExpression(["'", explorer_type, "' == 'frontier'"])),
+        parameters=[{
+            'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
+            'map_topic': '/map',
+            'base_frame': 'base_link',
+            'map_frame': 'map',
+            'action_name': '/navigate_to_pose',
+            'spin_action_name': '/spin',
+            'exploration_strategy': LaunchConfiguration('exploration_strategy'),
+            'max_goals': ParameterValue(LaunchConfiguration('max_goals'), value_type=int),
+            'enable_cleanup_mode': ParameterValue(LaunchConfiguration('enable_cleanup_mode'), value_type=bool),
+            'save_map': ParameterValue(LaunchConfiguration('save_map'), value_type=bool),
+            'map_save_path': LaunchConfiguration('map_save_path'),
+            'perimeter_enable_initial_spin': False,
+            'cleanup_spin_after_goal': False,
+            'enable_recovery_scan': False,
+        }],
+    )
+
+    maze_goal_monitor = Node(
+        package='tugbot_maze',
+        executable='maze_goal_monitor',
+        name='maze_goal_monitor',
+        output='screen',
+        parameters=[{
+            'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
+            'map_frame': 'map',
+            'base_frame': 'base_link',
+            'exit_x': ParameterValue(LaunchConfiguration('exit_x'), value_type=float),
+            'exit_y': ParameterValue(LaunchConfiguration('exit_y'), value_type=float),
+            'exit_radius': ParameterValue(LaunchConfiguration('exit_radius'), value_type=float),
+            'success_topic': '/maze/exit_reached',
+        }],
+    )
+
+    return LaunchDescription([
+        DeclareLaunchArgument('world_sdf', default_value=os.path.join(get_package_share_directory('tugbot_gazebo'), 'worlds', 'tugbot_maze_world_20260528_clean_scaled2x.sdf'), description='Gazebo maze world SDF. Phase35-pre default is the human-accepted scaled clean world.'),
+        DeclareLaunchArgument('slam_params_file', default_value=os.path.join(navigation_share, 'config', 'slam_toolbox_params.yaml'), description='slam_toolbox params YAML.'),
+        DeclareLaunchArgument('params_file', default_value=os.path.join(navigation_share, 'config', 'nav2_slam_params.yaml'), description='Nav2 params YAML for live SLAM maze navigation.'),
+        DeclareLaunchArgument('phase16_nav2_progress_profile', default_value='false', description='Use Phase 16 Nav2 progress/controller tolerance profile while keeping DFS branch geometry unchanged.'),
+        DeclareLaunchArgument('phase25a_local_cost_relief_profile', default_value='false', description='Use Phase 25A local-cost inflation relief profile while keeping branch/progress settings unchanged.'),
+        DeclareLaunchArgument('phase25b_costcritic_relief_profile', default_value='false', description='Use Phase 25B MPPI CostCritic relief profile while keeping branch/progress/local-costmap settings unchanged.'),
+        DeclareLaunchArgument('phase25d_costcritic_mid_profile', default_value='false', description='Use Phase 25D MPPI CostCritic midpoint profile while keeping branch/progress/local-costmap settings unchanged.'),
+        DeclareLaunchArgument('phase25e_costcritic_compromise_profile', default_value='false', description='Use Phase 25E MPPI CostCritic compromise profile while keeping branch/progress/local-costmap settings unchanged.'),
+        DeclareLaunchArgument('candidate_costcritic_275_profile', default_value='false', description='Use candidate baseline MPPI CostCritic 2.75 profile while keeping canonical nav2_slam_params.yaml unchanged.'),
+        DeclareLaunchArgument('phase26p_mppi_diagnostics_profile', default_value='false', description='Use Phase 26P diagnostics-only MPPI evidence profile; preserves baseline MPPI cost/velocity semantics.'),
+        DeclareLaunchArgument('phase26p_candidate_mppi_diagnostics_profile', default_value='false', description='Use Phase 26P diagnostics-only MPPI evidence profile over candidate 2.75 semantics.'),
+        DeclareLaunchArgument('rviz_config', default_value=os.path.join(bringup_share, 'rviz', 'tugbot_nav.rviz'), description='RViz config.'),
+        DeclareLaunchArgument('maze_config', default_value=os.path.join(maze_share, 'config', 'maze_20260528_scaled_instance.yaml'), description='Active scaled2x maze metadata YAML. Phase41 separates world_frame_truth for Gazebo markers from map_frame_truth for ROS runtime truth.'),
+        DeclareLaunchArgument('use_sim_time', default_value='true', description='Use simulation time.'),
+        DeclareLaunchArgument('autostart', default_value='true', description='Autostart slam_toolbox and Nav2 lifecycle nodes.'),
+        DeclareLaunchArgument('headless', default_value='true', description='Run Gazebo server only by default.'),
+        DeclareLaunchArgument('use_rviz', default_value='false', description='Start RViz.'),
+        DeclareLaunchArgument('use_composition', default_value='False', description='Use Nav2 composed bringup.'),
+        DeclareLaunchArgument('use_respawn', default_value='False', description='Respawn Nav2 nodes if they crash.'),
+        DeclareLaunchArgument('log_level', default_value='info', description='Nav2 log level.'),
+        DeclareLaunchArgument('explorer_type', default_value='maze_dfs', description='Explorer implementation: maze_dfs, frontier, tremaux, wall_follower, or flood_fill.'),
+        DeclareLaunchArgument('pose_source', default_value='online_slam', description="flood_fill localization source: 'online_slam' (DEFAULT; validated on the anymal_c dog), 'scan_match' (ICP vs the known wall map; A/B upper bound -- KNOWN BROKEN on anymal_c: its bootstrap inherits slam_toolbox's identity map->odom, which only matched the map frame under tugbot's spawn-zeroed odom), 'odom_locked' (freeze map->odom at startup, then wheel odometry only), or 'slam' (live map->base_link)."),
+        DeclareLaunchArgument('sense_debug', default_value='false', description='flood_fill: log per-cell sensed walls + min LIDAR ranges (diagnostics).'),
+        DeclareLaunchArgument('pose_diag', default_value='false', description='flood_fill: eval-only POSEDIAG (gt/odom/solver) logging; ground truth NEVER enters control (localization-root-cause Task A).'),
+        DeclareLaunchArgument('junction_log_dir', default_value='', description='flood_fill: directory for the per-run junctions.json artifact (empty -> <cwd>/log).'),
+        DeclareLaunchArgument('follow_side', default_value='left', description='Wall-follower hand for explorer_type:=wall_follower: left or right. The maze_sim guarantee proof selected left as faster and robust.'),
+        DeclareLaunchArgument('exploration_strategy', default_value='perimeter_then_frontier', description='Fallback inherited 0514 frontier/perimeter strategy when explorer_type:=frontier.'),
+        DeclareLaunchArgument('max_goals', default_value='350', description='Maximum exploration goals.'),
+        DeclareLaunchArgument('enable_cleanup_mode', default_value='true', description='Enable inherited frontier residual unknown cleanup.'),
+        DeclareLaunchArgument('save_map', default_value='false', description='Save the live SLAM map after exploration finishes.'),
+        DeclareLaunchArgument('map_save_path', default_value=os.path.join(navigation_share, 'maps', 'maze', 'maze_slam_trial'), description='Maze map save prefix without suffix.'),
+        # Phase41 Convention A: maze_explorer and maze_goal_monitor consume ROS
+        # map-frame truth. Gazebo SDF spawn and visual markers remain in world
+        # coordinates documented in the active metadata world_frame_truth block.
+        # entrance_* is the MAP-frame pose of the ODOM ORIGIN at bootstrap
+        # (_sm_corrected = entrance_anchor o odom). Tugbot's DiffDrive odom
+        # zeroed at the spawn (= map origin), so 0/0/0 was right. The anymal_c
+        # OdometryPublisher is WORLD-anchored (odom == world pose; its
+        # xyz_offset param composes in the BODY frame and rotates with yaw --
+        # unusable), and the maze world spawns at world (-11.011, -9.025), so
+        # the world/odom origin sits at map (11.011, 9.025).
+        DeclareLaunchArgument('entrance_x', default_value='11.011', description='Map-frame x of the odom origin (world origin for anymal_c).'),
+        DeclareLaunchArgument('entrance_y', default_value='9.025', description='Map-frame y of the odom origin (world origin for anymal_c).'),
+        DeclareLaunchArgument('entrance_yaw', default_value='0.0', description='Map-frame yaw of the odom origin.'),
+        DeclareLaunchArgument('exit_x', default_value='21.072562', description='Phase41 map_frame_truth exit x coordinate = world exit x - world entrance x.'),
+        DeclareLaunchArgument('exit_y', default_value='18.083566', description='Phase41 map_frame_truth exit y coordinate = world exit y - world entrance y.'),
+        DeclareLaunchArgument('exit_radius', default_value='1.2', description='Phase41 map_frame_truth exit radius; unchanged from world_frame_truth.'),
+        DeclareLaunchArgument('clearance_radius_m', default_value='0.38', description='Maze DFS local occupancy clearance radius.'),
+        DeclareLaunchArgument('open_direction_lookahead_m', default_value='1.6', description='Maze DFS local direction lookahead.'),
+        DeclareLaunchArgument('min_open_distance_m', default_value='0.55', description='Minimum local opening distance.'),
+        DeclareLaunchArgument('branch_goal_step_m', default_value='1.5', description='Preferred DFS branch goal distance.'),
+        DeclareLaunchArgument('min_goal_step_m', default_value='0.45', description='Minimum DFS branch goal distance.'),
+        DeclareLaunchArgument('goal_timeout_sec', default_value='45.0', description='Timeout per Nav2 goal.'),
+        DeclareLaunchArgument('goal_events_topic', default_value='/maze/goal_events', description='Structured per-goal diagnostic events topic.'),
+        DeclareLaunchArgument('dispatch_readiness_required_lifecycle_nodes', default_value='/controller_server,/planner_server,/bt_navigator', description='Comma-separated lifecycle nodes that must be active before maze_explorer dispatch-entry topology sampling.'),
+        DeclareLaunchArgument('dispatch_readiness_near_robot_radius_m', default_value='1.0', description='Radius around robot for map/local-costmap readiness ratios before topology sampling.'),
+        DeclareLaunchArgument('dispatch_readiness_min_map_known_ratio', default_value='0.70', description='Minimum /map known ratio near robot before maze_explorer topology sampling.'),
+        DeclareLaunchArgument('dispatch_readiness_min_map_free_ratio', default_value='0.50', description='Minimum /map free ratio near robot before maze_explorer topology sampling.'),
+        DeclareLaunchArgument('dispatch_readiness_min_local_costmap_known_ratio', default_value='0.95', description='Minimum local costmap known ratio near robot before maze_explorer topology sampling.'),
+        DeclareLaunchArgument('dispatch_readiness_min_local_costmap_free_ratio', default_value='0.50', description='Minimum local costmap free ratio near robot before maze_explorer topology sampling.'),
+        DeclareLaunchArgument('dispatch_readiness_min_scan_finite_count', default_value='120', description='Minimum finite LaserScan ranges before maze_explorer topology sampling.'),
+        DeclareLaunchArgument('dispatch_readiness_max_local_costmap_age_sec', default_value='5.0', description='Maximum local costmap sample age before maze_explorer topology sampling.'),
+        DeclareLaunchArgument('startup_warmup_no_dispatch', default_value='false', description='Diagnostics-only guard: when dispatch-entry readiness passes, keep maze_explorer in STARTUP_WARMUP_NO_DISPATCH and do not perform topology sampling or goal dispatch.'),
+        DeclareLaunchArgument('near_exit_goal_timeout_sec', default_value='55.0', description='Near-exit Nav2 goal timeout used when the active target is close to the exit.'),
+        DeclareLaunchArgument('near_exit_timeout_extension_radius_m', default_value='1.0', description='Near-exit target distance threshold for extending DFS goal timeout.'),
+        DeclareLaunchArgument('near_exit_fallback_enabled', default_value='true', description='Enable Phase27-alt near-exit terminal acceptance / micro-goal fallback.'),
+        DeclareLaunchArgument('near_exit_fallback_trigger_radius_m', default_value='5.0', description='Robot-to-exit distance threshold for considering Phase27-alt fallback.'),
+        DeclareLaunchArgument('near_exit_terminal_acceptance_radius_m', default_value='2.5', description='Robot-to-exit distance for terminal acceptance fallback.'),
+        DeclareLaunchArgument('near_exit_micro_goal_min_step_m', default_value='0.20', description='Minimum bounded near-exit micro-goal step.'),
+        DeclareLaunchArgument('near_exit_micro_goal_max_step_m', default_value='0.35', description='Maximum bounded near-exit micro-goal step.'),
+        DeclareLaunchArgument('near_exit_fallback_max_attempts', default_value='8', description='Maximum near-exit micro-goal fallback attempts per run.'),
+        DeclareLaunchArgument('near_exit_fallback_require_clean_topology', default_value='false', description='Require zero blocked branches and zero blacklisted goals before near-exit fallback.'),
+        DeclareLaunchArgument('near_exit_fallback_require_path_alignment', default_value='false', description='Require robot-to-path alignment when that diagnostic is available.'),
+        DeclareLaunchArgument('near_exit_fallback_robot_to_path_max_m', default_value='0.15', description='Maximum robot-to-path distance for near-exit fallback when measured.'),
+        DeclareLaunchArgument('near_exit_fallback_cmd_near_zero_min_sec', default_value='3.0', description='Minimum near-zero cmd duration evidence when no recent Nav2 failure is available.'),
+        DeclareLaunchArgument('goal_settle_sec', default_value='1.5', description='Settle/cooldown time after each Nav2 result before analyzing the next node.'),
+        DeclareLaunchArgument('backtrack_goal_tolerance_m', default_value='0.35', description='Tolerance for considering a backtrack target reached.'),
+        DeclareLaunchArgument('lateral_centering_search_m', default_value='0.9', description='Lateral search distance for centering branch goals.'),
+        DeclareLaunchArgument('allow_reverse_branch_goals', default_value='true', description='Allow DFS to choose branch goals behind the current robot heading.'),
+        DeclareLaunchArgument('reverse_branch_angle_threshold_deg', default_value='135.0', description='Directions beyond this yaw delta are treated as reverse when reverse goals are disabled.'),
+        DeclareLaunchArgument('blacklist_radius_m', default_value='0.5', description='Radius for suppressing repeated bad goals.'),
+        DeclareLaunchArgument('max_failures_per_branch', default_value='5', description='Repeated Nav2 failures before a branch becomes blocked.'),
+        DeclareLaunchArgument('max_backtrack_failures_per_node', default_value='4', description='Repeated backtrack failures before skipping a junction.'),
+        DeclareLaunchArgument('entry_direct_enabled', default_value='true', description='Enable ENTRY_DIRECT bypass for first goal dispatch from entrance.'),
+        DeclareLaunchArgument('entry_direct_distance_m', default_value='1.5', description='Straight-line distance for ENTRY_DIRECT first goal into maze.'),
+        DeclareLaunchArgument('exploration_bonus_weight', default_value='0.5', description='Exploration novelty bonus weight; 0.0 = pure greedy exit-seeking, higher = more exploration.'),
+        DeclareLaunchArgument('distance_to_exit_weight', default_value='0.3', description='Weight for distance-to-exit penalty in branch scoring. 0.3 gives moderate exit bias; 0.5 is too greedy and prevents broad exploration.'),
+        DeclareLaunchArgument('guided_corridor_mode', default_value='false', description='Enable Guided Corridor Navigation (GCN): follow pre-computed BFS corridor sequence instead of blind DFS.'),
+        DeclareLaunchArgument('corridor_goal_step_m', default_value='1.5', description='GCN: goal step distance along each corridor.'),
+        DeclareLaunchArgument('corridor_advance_tolerance_m', default_value='1.0', description='GCN: tolerance for considering a corridor target reached.'),
+        DeclareLaunchArgument('corridor_max_nav2_fails', default_value='6', description='GCN: max Nav2 failures per corridor before declaring it exhausted.'),
+        DeclareLaunchArgument('corridor_max_reactive', default_value='5', description='GCN: max reactive drive attempts per corridor.'),
+        maze_slam_nav_launch,
+        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node, flood_fill_solver_node]),
+        TimerAction(period=14.0, actions=[maze_goal_monitor]),
+        locomotion_controller,
+    ])
