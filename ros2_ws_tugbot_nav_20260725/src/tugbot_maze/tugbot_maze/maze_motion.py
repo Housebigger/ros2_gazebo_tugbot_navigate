@@ -212,6 +212,8 @@ class MazeMotion:
         ox, oy = cell_center_offset(ranges, amin, ainc, yaw)
         ox, oy = self._perimeter_reanchor(x, y, ranges, amin, ainc, yaw, ox, oy)
         if self.pose_is_absolute:
+            # Gate runs AFTER the perimeter reanchor: in absolute mode the pose is the
+            # trusted quantity, so a perimeter override disagreeing >tol is vetoed too.
             ccx, ccy = cell_center(self.cell)
             ox, oy, _ = gate_offset_against_pose(ox, oy, x, y, ccx, ccy)   # stale-scan guard (4b)
         v, w, centered = centering_command((x, y, yaw), ox, oy,

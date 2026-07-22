@@ -202,7 +202,7 @@ def test_scan_match_solves_under_drift_that_desyncs_raw_odom():
     assert not collided, "robot collided during the scan-match solve"
 
 
-def test_offline_harness_runs_with_raw_odom_pose_gate_inert():
+def test_pose_is_absolute_defaults_false():
     """The drift-stress harness feeds RAW drifted odom as pose; the stale-scan
     offset gate (4b) must stay inert here (pose_is_absolute defaults False) --
     wall-referenced centering is the drift corrector in this regime. Production
