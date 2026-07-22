@@ -29,8 +29,10 @@
 
 `CloudMap3D` 类,镜像 ScatterCloud 风格(纯 NumPy + sensor_msgs 消息构造,无 rclpy 节点态,可离线测):
 
-- `__init__(voxel_m=0.05, usable_range_m=8.0, z_min=-0.2, z_max=3.0)`。
+- `__init__(voxel_m=0.05, usable_range_m=8.0, z_min=-1.0, z_max=3.0)`。
 - `add_cloud(points_sensor_xyz, T_map_sensor) -> int`:传感器系预滤(`norm(p) <= usable_range_m`、有限值),4×4 齐次变换到 map 系,map 系 z 裁剪 `[z_min, z_max]`(防杂散/地下反射),`round(p / voxel_m)` 三维整键入 set,返回新增体素数。
+- **z 基准修正(实现期)**:odom 系锚在 spawn 位姿(z=0.62),map 系里**地面 ≈ −0.62**,故 z_min 取 **−1.0**——spec 初稿的 −0.2 隐含"map z=0 在地面"的错误假设,会把地面整个裁掉。
+- **导出实现修正(质量审查)**:40 万体素时 Python `sorted()` 导出 ~760ms 会卡回调线程,改 `np.fromiter + np.lexsort`(字节级同输出,~264ms 实测)。
 - `to_pointcloud2(frame_id='map', stamp) -> PointCloud2`:体素键 ×voxel_m 还原为 xyz-float32,确定序(sorted),与 ScatterCloud 导出同构。
 - `__len__` = 体素数。
 - 体量上界:迷宫墙面+地面 ≈ 30–40 万体素,消息 ~4MB——RViz 与 DDS 无压力。
@@ -68,7 +70,7 @@
 ## 6. 验收标准
 
 1. **单测**(离线,`pytest`):CloudMap3D 手算齐次变换对拍(含带 roll/pitch 的位姿)、体素去重、`to_pointcloud2` 与 `add_cloud` 互逆、空帧/全无效帧安全、z 裁剪与量程滤波生效;节点侧纯逻辑(节流/仅增长才发)可测部分测。既有全套件零新增失败(基线 7 failed / 492 passed / 3 xfailed,名单不变)。
-2. **headless×2**(PRIME,online_slam):EXIT_REACHED + oracle 0.000% + `/maze/cloud_map_3d` 末态体素数 > 50,000(保守下界:全程仅地面即远超此数;跑内录制末条 latched 消息断言 width,证明图确实在长)+ 无新增 ERROR 级日志。
+2. **headless×2**(PRIME,online_slam):EXIT_REACHED + oracle 0.000% + `/maze/cloud_map_3d` 末态体素数 > 50,000(保守下界:全程仅地面即远超此数;断言机制=grep launch.log 末条 `CLOUDMAP voxels=N` 日志——节点每次发布记一行,与录制 latched 消息证据等价且无需配对 DDS 域的录制进程)+ 无新增 ERROR 级日志。
 3. **GUI 验收**(用户):3D 图随狗行进逐步长出、与 Lidar3D 实时帧贴合(无重影/涂抹)、高度染色可辨墙面与地面;旧三件显示已不在。
 
 ## 7. 风险与诚实边界
@@ -76,3 +78,10 @@
 - **TF 时刻取最新而非逐帧插值**:ICP 修正落地瞬间,累积云会有单帧级"旧位姿点"混入;体素去重吸收其大部分。若 GUI 见可辨重影,后手是按 cloud 时间戳查 TF(tf2 buffer 有历史)——一行改动,不预做(YAGNI)。
 - **latched 4MB 消息**:RViz 晚连也能拿到全图;DDS 对大 latched 消息在本机 localhost 已有 walls 先例,若见传输报错则降为 volatile+定期重发。
 - **占据栅格信息丢失是真丢失**:全清后"已探明空闲区/未知区"再无产品呈现;用户已裁决接受,若以后要在 3D 侧重建(记 backlog,不在本阶段)。
+
+## 附记(实施期)
+
+1. **统计门通过(2026-07-22,headless×2,PRIME/online_slam)**:两跑均 EXIT_REACHED、oracle **0.000%**(142/165 样本零碰撞,live_rate 同 0)、零 `[ERROR]` 日志;CLOUDMAP 末态体素 **2,289,212 / 2,470,002**(发布 677/767 次,节点全程存活)。工件:`log/flood_fill_run_20260722_180642`、`log/flood_fill_run_20260722_182002`。
+2. **体量估计修正(诚实记录)**:spec 预估 30-40 万体素/~4MB 消息,实测 **~2.3-2.5M 体素/~28-30MB latched 消息**——差一个量级。原因:表面被测距高斯噪声 + 走行位姿抖动刷厚成数体素壳层(估计只按理想单层表面算)。三道门在此体量下仍全过(headless);若 GUI 端渲染迟滞,一行后手=调大 `CloudMap3D(voxel_m)`(0.05→0.075/0.10 约降 3-8×)。
+3. **测试基线修正**:20260723 实测基线为 10 failed / 494 passed / 3 xfailed(计划初稿的 7/492 过期);Task 3 后为 10 / 489 / 3(−18 删 +13 新),失败名单逐名冻结不变。
+4. **GUI 验收结论(2026-07-22,用户)**:GUI 跑日志门同过(EXIT_REACHED、oracle 0.000%/140 样本、2,154,122 体素、零 ERROR);用户判定**建图链本身达标,但四足平台运动摇晃过大、限制 3D 图质量上限**(与附记 2 的表面壳层成因一致)。用户裁决:本分支按"通过,带已知平台局限"合并;**下一阶段换轮式平台 MR-Buggy3(运动学底盘)**专攻建图质量,3D 建图链平台无关、原样沿用。
