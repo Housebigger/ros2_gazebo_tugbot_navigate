@@ -68,6 +68,23 @@ def apply_odom_yaw_gate(est: Pose2D, odom_map: Pose2D, prior: Pose2D,
     return est, False
 
 
+def apply_odom_pos_gate(est: Pose2D, odom_map: Pose2D,
+                        bound: float) -> Tuple[Pose2D, bool]:
+    """Reject an ICP-accepted pose whose POSITION disagrees with the drift-free odom
+    position by more than `bound` m. The 2 m grid can alias the position by exactly
+    one cell while the yaw stays clean (measured 2026-07-23 on the physical Ackermann
+    car: |odom-solver| bimodal -- clean p99 0.182 / max 0.822, aliased pinned ~2.0,
+    the 0.5-1.5 band empty -- so bound=1.0, a half cell, splits the modes with wide
+    margin); the odom-yaw gate is structurally blind to it. On a fire this RECOVERS:
+    the position snaps to the drift-free odom position and the accepted yaw is kept
+    (yaw is healthy in this failure mode). Same sanctioned odom dependency and
+    recovery pattern as apply_odom_yaw_gate; the drift-free-odom premise is
+    sim-specific (world-anchored OdometryPublisher) exactly as documented there."""
+    if math.hypot(est[0] - odom_map[0], est[1] - odom_map[1]) > bound:
+        return (odom_map[0], odom_map[1], est[2]), True   # recover: snap position, keep yaw
+    return est, False
+
+
 def yaw_to_quat(yaw: float) -> Tuple[float, float, float, float]:
     """(x, y, z, w) quaternion for a planar yaw (rad)."""
     return (0.0, 0.0, math.sin(yaw / 2.0), math.cos(yaw / 2.0))

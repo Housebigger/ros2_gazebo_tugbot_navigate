@@ -2,7 +2,7 @@
 drift-free odom yaw by more than the bound, keeping the odom-propagated prior. Calibrated
 bound 0.5 rad (clean-run |ydis| max 0.297; alias pin ~1.5). localization-root-cause Task 5."""
 import math
-from tugbot_maze.pose_tracking import apply_odom_yaw_gate
+from tugbot_maze.pose_tracking import apply_odom_yaw_gate, apply_odom_pos_gate
 
 
 def test_healthy_correction_passes():
@@ -52,3 +52,27 @@ def test_bound_is_exclusive_boundary():
     assert apply_odom_yaw_gate(est, odom_map, prior, 0.5)[1] is False
     est2 = (0.0, 0.0, 0.5001)
     assert apply_odom_yaw_gate(est2, odom_map, prior, 0.5)[1] is True
+
+
+def test_pos_gate_passes_clean_correction():
+    # Clean-mode agreement (measured p99 0.182): a small ICP correction passes through.
+    est, gated = apply_odom_pos_gate((10.1, 12.05, 0.4), (10.0, 12.0, 0.39), 1.0)
+    assert est == (10.1, 12.05, 0.4) and gated is False
+
+
+def test_pos_gate_recovers_one_cell_alias():
+    # The 20260723 aliased mode: believed pose one cell (~2.0m) from the drift-free odom
+    # position with healthy yaw -> position snaps to odom, the accepted yaw is KEPT.
+    est, gated = apply_odom_pos_gate((16.0, 14.0, 0.02), (14.0, 14.0, 0.01), 1.0)
+    assert est == (14.0, 14.0, 0.02) and gated is True
+
+
+def test_pos_gate_boundary_exact_bound_not_gated():
+    est, gated = apply_odom_pos_gate((15.0, 14.0, 0.0), (14.0, 14.0, 0.0), 1.0)
+    assert gated is False                        # strict >: exactly 1.0m passes
+
+
+def test_pos_gate_diagonal_distance():
+    # Euclidean, not per-axis: (0.8, 0.8) -> 1.13m > 1.0 -> gated.
+    est, gated = apply_odom_pos_gate((14.8, 14.8, 1.5), (14.0, 14.0, 1.5), 1.0)
+    assert est == (14.0, 14.0, 1.5) and gated is True

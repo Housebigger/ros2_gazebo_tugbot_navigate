@@ -24,7 +24,7 @@ from tugbot_maze.maze_motion import MazeMotion
 from tugbot_maze.junction_log import JunctionLog, update_junctions
 from tugbot_maze.pose_tracking import (
     compose_2d, quat_to_yaw, odom_prior, yaw_to_quat, map_to_odom,
-    apply_odom_yaw_gate)
+    apply_odom_yaw_gate, apply_odom_pos_gate)
 from tugbot_maze.scan_match_localizer import ScanMatchLocalizer
 from tugbot_maze.maze_sim import load_segments, outer_segments
 from tugbot_maze.online_scan_match_localizer import (
@@ -34,6 +34,10 @@ from tugbot_maze.wall_follow_control import entering_done
 # reject ICP accepts yawing > this from the drift-free odom prior (localization-root-cause
 # Task 5; calibrated: clean |ydis| max 0.297, alias pin ~1.5)
 YDIS_GATE_RAD = 0.5
+
+# reject ICP accepts displacing the position > this from the drift-free odom position
+# (ackermann-physics 5b; calibrated: clean p99 0.182/max 0.822, one-cell alias pin ~2.0)
+POS_GATE_M = 1.0
 
 
 class FloodFillSolver(Node):
@@ -225,6 +229,16 @@ class FloodFillSolver(Node):
                     % (math.atan2(math.sin(est[2] - odom_map[2]), math.cos(est[2] - odom_map[2])),
                        est[2], odom_map[2]))
             est = gated_est
+            # Odom-prior position-consistency gate (position mirror of the yaw gate): the
+            # 2m grid can alias the position by one cell with the yaw clean (POSEDIAG
+            # 2026-07-23: bimodal 0.18-clean vs 2.0-aliased); recover by snapping to the
+            # drift-free odom position, keeping the accepted yaw.
+            est, pos_gated = apply_odom_pos_gate(est, odom_map, POS_GATE_M)
+            if pos_gated:
+                self.get_logger().info(
+                    'POS_GATE pdis=%.3f est=(%.2f, %.2f) odom=(%.2f, %.2f)'
+                    % (math.hypot(gated_est[0] - odom_map[0], gated_est[1] - odom_map[1]),
+                       gated_est[0], gated_est[1], odom_map[0], odom_map[1]))
         self._sm_corrected = est
         self._sm_last_odom = odom_base
         self._sm_seq = self._scan_seq
