@@ -16,15 +16,15 @@ def test_beam_endpoint_applies_offset():
 
 
 def test_inside_footprint():
-    assert inside_footprint(0.2, 0.0) is True        # mid-body
-    assert inside_footprint(-0.2, 0.0) is True        # rear region (symmetric stance, no gripper any more)
+    assert inside_footprint(0.1, 0.0) is True        # mid-body
+    assert inside_footprint(-0.1, 0.0) is True        # rear region (symmetric stance, no gripper any more)
     # exactly on the rear face (FOOT_X_REAR = -0.49): inside_footprint's rectangle test uses <= on
     # both bounds, so a boundary point is inclusive (True) -- assert that documented behavior
     # explicitly.
     assert inside_footprint(FOOT_X_REAR, 0.0) is True
-    assert inside_footprint(0.5, 0.0) is False       # beyond front (front face 0.49)
-    assert inside_footprint(0.0, 0.4) is False       # beyond side (half-width 0.37)
-    assert inside_footprint(0.5, 0.0, margin=0.3) is True   # inflated: front+margin = 0.49+0.3 = 0.79 >= 0.5
+    assert inside_footprint(0.5, 0.0) is False       # beyond front (front face 0.15)
+    assert inside_footprint(0.0, 0.4) is False       # beyond side (half-width 0.13)
+    assert inside_footprint(0.4, 0.0, margin=0.3) is True   # inflated: front+margin = 0.15+0.3 = 0.45 >= 0.4
 
 
 def test_front_gap_detects_wall_ahead():
@@ -47,12 +47,12 @@ def test_rear_gap_detects_wall_behind():
     assert abs(g - 0.20) < 1e-6
 
 
-def test_footprint_covers_gait_envelope():
-    """The static footprint rectangle must dominate the worst-case dynamic
-    foot reach (stance + stride + ball) — this ties footprint.py to
-    legged/params.py so gait retuning cannot silently break oracle honesty."""
-    from tugbot_maze.legged.params import foot_envelope
-    ex, ey = foot_envelope()
-    assert FOOT_X_FRONT >= ex
-    assert -FOOT_X_REAR >= ex
-    assert FOOT_HALF_W >= ey
+def test_footprint_covers_buggy_envelope():
+    """The footprint rectangle must dominate the mr_buggy3 wheel-inclusive
+    envelope (wheel centers x +0.112/-0.1135, radius 0.0365; outer wheel faces
+    |y| = 0.10+0.015+0.015). The old legged gait-envelope tie-in (dog envelope
+    0.439 x 0.353) retired with the platform swap -- legged/params.py still
+    carries it for the archived dog."""
+    assert FOOT_X_FRONT >= 0.112 + 0.0365
+    assert -FOOT_X_REAR >= 0.1135 + 0.0365
+    assert FOOT_HALF_W >= 0.10 + 0.015 + 0.015

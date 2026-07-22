@@ -54,33 +54,14 @@ def _run(drift, latency=0, dt=0.1, max_steps=30000):
 # discrete cell is re-anchored to the (accurate, at this drift) odom cell each cell, so it
 # stays synced under both. Extreme drift (>=10%/m) is out of scope -- it is not
 # representative of this Gazebo and conflicts with odom re-anchoring.
+# xfail marks retired 2026-07-22: their reasons cited legged-envelope (0.49/0.37) wall
+# overlaps under drift; the 0.15/0.13 buggy rectangle clears those corridors (xpassed).
 @pytest.mark.parametrize("drift,latency", [
     (0.0, 0),
     (0.03, 0),
-    pytest.param(
-        0.05, 0,
-        marks=pytest.mark.xfail(
-            strict=False,
-            reason='legged footprint 0.49/0.37: 14.5mm envelope-wall overlap under '
-                   'uncorrected 5%/m drift (no ICP in offline sim); real-run gate = '
-                   'Gazebo oracle 0.000%. Controller-authorized 2026-07-17, exceeds '
-                   'the 2026-06-26 1cm precedent.'),
-    ),
-    pytest.param(
-        0.05, 2,
-        marks=pytest.mark.xfail(
-            strict=False,
-            reason='legged footprint 0.49/0.37: 119mm sustained overlap + 2-cell desync '
-                   'under uncorrected 5%/m drift (no ICP in offline sim); real-run gate = '
-                   'Gazebo oracle 0.000%. Controller-authorized 2026-07-17, exceeds '
-                   'the 2026-06-26 1cm precedent.'),
-    ),
-    pytest.param(
-        0.05, 3,
-        marks=pytest.mark.xfail(
-            strict=False,
-            reason='legged footprint 0.49/0.37: ~120mm sustained envelope-wall overlap (~1458/8739 steps) under uncorrected 5%/m drift (no ICP in offline sim); real-run gate = Gazebo oracle 0.000%. Controller-authorized 2026-07-17; supersedes the 2026-06-26 reason (0.7mm corner graze, measured at footprint 0.39) which no longer describes this case.'),
-    ),
+    pytest.param(0.05, 0),
+    pytest.param(0.05, 2),
+    pytest.param(0.05, 3),
 ])
 def test_reaches_exit_without_collision_or_desync(drift, latency):
     reached, collided, max_desync, _, _, esc = _run(drift, latency)

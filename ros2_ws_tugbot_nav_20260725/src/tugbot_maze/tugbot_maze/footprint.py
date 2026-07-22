@@ -1,18 +1,18 @@
-"""ANYmal C dog collision footprint + sensor placement (see
-tugbot_description/models/anymal_c/model.sdf). All in the base_link frame,
-+x=forward, +y=left. Symmetric rectangle = the TRUE dynamic foot envelope of
-the legged gait with NO padding (tugbot-era convention: safety margins live in
-the gates/thresholds, not in the footprint): neutral stance feet at x=+-0.34 /
-y=+-0.3012, plus worst-case trot stride reach and the 0.03 foot ball — see
-legged/params.foot_envelope(), enforced by test_footprint_covers_gait_envelope.
-The 2D omni lidar sits at the body centre."""
+"""MR-Buggy3 kinematic chassis collision footprint + sensor placement (see
+tugbot_description/models/mr_buggy3/model.sdf). All in the base_link frame,
++x=forward, +y=left. Symmetric rectangle = the full wheel-inclusive envelope
+with NO padding (tugbot-era convention: safety margins live in the
+gates/thresholds, not in the footprint): wheel centers at x=+0.112/-0.1135
+(radius 0.0365 -> extents ~+-0.15), wheel outer faces at |y|=0.13
+(0.10 + 0.015 hub offset + 0.015 half-width); the 0.3 x 0.09 body box sits
+inside. The 16-beam lidar sits at the body centre (SCAN_OFFSET_X=0)."""
 from __future__ import annotations
 import math
 
-FOOT_X_FRONT = 0.49      # neutral stance 0.34 + max stride reach + ball, rounded up
-FOOT_X_REAR  = -0.49     # symmetric
-FOOT_HALF_W  = 0.37      # lateral stance 0.3012 + yaw-stride reach + ball, rounded up
-SCAN_OFFSET_X = 0.0      # /scan (scan_omni) at body centre
+FOOT_X_FRONT = 0.15      # front wheel center 0.112 + wheel radius 0.0365, rounded up
+FOOT_X_REAR  = -0.15     # rear wheel center -0.1135 - 0.0365, rounded (symmetric)
+FOOT_HALF_W  = 0.13      # wheel outer face: 0.10 + 0.015 + 0.015
+SCAN_OFFSET_X = 0.0      # /scan projected from the centered 3D lidar
 
 
 def beam_endpoint(r, bearing, scan_offset_x: float = SCAN_OFFSET_X):
