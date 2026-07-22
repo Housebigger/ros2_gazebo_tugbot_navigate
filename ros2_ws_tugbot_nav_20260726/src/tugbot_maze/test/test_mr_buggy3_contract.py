@@ -1,8 +1,10 @@
-"""Contract: the mr_buggy3 kinematic chassis. Recipe ported from the archived
-anymal kinematic phase (20260716): gravity off, ZERO collision bodies (collision
-truth lives in the offline footprint oracle), VelocityControl on /cmd_vel,
-world-anchored OdometryPublisher with the base_link TF-label trick; 16-beam
-lidar centered (SCAN_OFFSET_X=0) with specs field-identical to the dog's."""
+"""Contract: the mr_buggy3 PHYSICAL chassis (ackermann-physics phase). Gravity on,
+real wheel contact (5 collision bodies), upstream joints/friction/inertials with
+the AckermannSteering plugin in Harmonic naming -- the upstream duplicate-
+right_joint bug is FIXED and pinned here. Carried over unchanged from the
+kinematic phase: world-anchored OdometryPublisher with the base_link TF-label
+trick, and the 16-beam lidar centered (SCAN_OFFSET_X=0) with specs
+field-identical to the dog's."""
 import re
 from pathlib import Path
 
