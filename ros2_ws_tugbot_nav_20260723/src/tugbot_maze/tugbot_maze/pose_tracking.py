@@ -48,7 +48,9 @@ def apply_odom_yaw_gate(est: Pose2D, odom_map: Pose2D, prior: Pose2D,
                         bound: float) -> Tuple[Pose2D, bool]:
     """Reject an ICP-accepted pose whose yaw disagrees with the drift-free odom yaw by more
     than `bound` rad. `odom_map` is the pure-odom pose in the map frame
-    (compose_2d(entrance_anchor, odom_base)); its yaw is drift-free.
+    (compose_2d(entrance_anchor, odom_base)); its yaw is drift-free in this sim
+    (gz world-anchored OdometryPublisher, measured -- spec addendum 2). A real
+    drifting-odom platform would need this premise re-examined before reuse.
 
     On a gate fire this RECOVERS the yaw -- returns the prior POSITION but with the yaw snapped
     to the drift-free odom yaw -- rather than just keeping the prior. A capped-but-not-recovered
