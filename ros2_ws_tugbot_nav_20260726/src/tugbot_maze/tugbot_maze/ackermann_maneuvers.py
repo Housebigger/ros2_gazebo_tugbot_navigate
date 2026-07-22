@@ -109,16 +109,21 @@ def clamp_to_ackermann(v: float, w: float, *,
                        v_floor: float = 0.08) -> Tuple[float, float]:
     """Project a (v, w) command into the Ackermann-feasible set: the car cannot
     pivot, so a meaningful steering demand requires wheel speed. Floors |v| when
-    |w| > ~0 (keeping v's sign; a pure rotation becomes a slow forward arc --
-    the same thing the gz AckermannSteering plugin would physically do with it),
-    then caps |w| at |v| * max_curvature (the steering-limit curvature). At
-    cruise (v=0.4) the cap is 0.96 rad/s > every steering law's w_max, so
-    normal driving is untouched; only the pivot-shaped collapse regime changes
-    (the DRIVE-phase near-wall keep-out law emitted v=0, w=-0.5 -- the third
-    in-place source the full-solve invariant test caught)."""
+    |w| > ~0 (a small nonzero v keeps its sign; a pure rotation becomes a slow
+    REVERSE arc -- retreating into the just-traversed clear corridor), then caps
+    |w| at |v| * max_curvature (the steering-limit curvature). At cruise (v=0.4)
+    the cap is 0.96 rad/s > every steering law's w_max, so normal driving is
+    untouched; only the pivot-shaped collapse regime changes (the DRIVE-phase
+    near-wall keep-out law emitted v=0, w=-0.5 -- the third in-place source the
+    full-solve invariant test caught)."""
     if abs(w) <= 1e-3:
         return v, w
     if abs(v) < v_floor:
-        v = math.copysign(v_floor, v if abs(v) > 1e-9 else 1.0)
+        # A pure pivot intent (v exactly 0) retreats while steering: the stop-and-
+        # reorient law fires precisely where front_block/wedge gating is suppressed
+        # (large heading error), so a FORWARD creep would head into the obstacle
+        # that caused the stop; the just-traversed corridor behind is clear (the
+        # reverse-to-center/backout precedent). A small nonzero v keeps its sign.
+        v = math.copysign(v_floor, v) if abs(v) > 1e-9 else -v_floor
     w_cap = abs(v) * max_curvature
     return v, max(-w_cap, min(w_cap, w))

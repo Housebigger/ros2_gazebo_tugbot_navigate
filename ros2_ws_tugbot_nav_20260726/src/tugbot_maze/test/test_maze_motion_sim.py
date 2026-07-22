@@ -221,13 +221,25 @@ def test_ackermann_defaults_false():
 
 
 def test_ackermann_full_solve_never_commands_in_place():
-    """Full offline solve with ackermann=True (zero drift): reaches the exit,
-    zero collisions, and NO emitted command is an in-place rotation
-    (|w|>0.02 with |v|<0.01) -- the constraint the gz AckermannSteering
-    plugin physically enforces. MazeSim integrates (v,w) kinematically, so
-    the assertion, not the sim, carries the Ackermann semantics."""
+    """Full offline solve with ackermann=True (zero drift), three layers of truth:
+    (1) the post-projection invariant -- no EMITTED command is an in-place rotation
+    (|w|>0.02 with |v|<0.01, the constraint the gz AckermannSteering plugin
+    physically enforces) -- verifies the projection contract at the choke point;
+    (2) a PRE-projection audit records _step_inner's raw commands and bounds the
+    pivot-shaped count, so a NEW pivot source in the FSM cannot regress silently
+    behind the projection (post-projection alone is true by construction);
+    (3) the solve + zero-collision assertions carry the integration truth. MazeSim
+    integrates (v,w) kinematically, so the assertions, not the sim, carry the
+    Ackermann semantics."""
     sim = MazeSim(load_segments(), cell_center(ENTRANCE_CELL), 0.0, inertia=True)
     m = MazeMotion(ackermann=True)
+    raw = []
+    inner = m._step_inner
+    def spy(pose, scan, t):
+        cmd = inner(pose, scan, t)
+        raw.append(cmd)
+        return cmd
+    m._step_inner = spy
     t, done = 0.0, False
     for _ in range(60000):
         scan = sim.scan(n_beams=360, fov_rad=2 * math.pi)
@@ -239,5 +251,11 @@ def test_ackermann_full_solve_never_commands_in_place():
         if done:
             break
     assert done, 'ackermann offline solve did not reach the exit'
+    pivots = sum(1 for v, w, _ in raw if abs(w) > 0.02 and abs(v) < 0.01)
+    # Raw pivot-shaped intents exist (the drive-phase stop-and-reorient law) and are
+    # projected to reverse arcs; bound them so a NEW pivot source cannot regress
+    # silently behind the projection. Observed 59 on 2026-07-23 (solve at sim-t 534.0);
+    # bound pinned at 2 x observed + 50.
+    assert pivots < 168, f'raw pivot-shaped commands regressed: {pivots}'
 
 

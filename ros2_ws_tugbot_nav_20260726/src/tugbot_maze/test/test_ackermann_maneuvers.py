@@ -87,8 +87,10 @@ def test_clamp_passes_normal_driving_untouched():
     assert clamp_to_ackermann(-0.3, -0.4) == (-0.3, -0.4)  # reverse arc within cap
 
 
-def test_clamp_projects_pivot_to_slow_arc():
+def test_clamp_projects_pivot_to_slow_reverse_arc():
+    # Pure pivot (v exactly 0): retreat while steering -- the stop-and-reorient
+    # regime suppresses front_block, so forward creep would close on the obstacle.
     v, w = clamp_to_ackermann(0.0, -0.5)
-    assert v == 0.08 and abs(w) <= v * 2.4 + 1e-12 and w < 0    # pivot -> slow tight arc
-    v2, w2 = clamp_to_ackermann(0.02, 0.5)
+    assert v == -0.08 and abs(w) <= abs(v) * 2.4 + 1e-12 and w < 0
+    v2, w2 = clamp_to_ackermann(0.02, 0.5)                  # small FORWARD intent keeps its sign
     assert v2 == 0.08 and w2 == min(0.5, v2 * 2.4)
