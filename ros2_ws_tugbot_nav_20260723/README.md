@@ -1,4 +1,4 @@
-# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260722`
+# Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260723`
 
 ROS 2 (Jazzy) + Gazebo Harmonic stack that drives an **ANYmal C quadruped** — as of this
 20260717 iteration the dog **physically walks**: gravity is on, all 54 CERBERUS collision
@@ -105,7 +105,7 @@ this iteration's acceptance is the *legged-locomotion* result above.
 ## How to run
 
 ```bash
-cd ros2_ws_tugbot_nav_20260722
+cd ros2_ws_tugbot_nav_20260723
 source /opt/ros/jazzy/setup.bash && colcon build --symlink-install && source install/setup.bash
 
 # New: online_slam — no interior map fed, self-builds the reference while driving:
@@ -156,7 +156,7 @@ The wrapper does three things a bare `ros2 launch` does **not**:
 `maze_dfs`, so `explorer_type:=flood_fill` is **mandatory** or the flood-fill node never starts:
 
 ```bash
-cd ros2_ws_tugbot_nav_20260722
+cd ros2_ws_tugbot_nav_20260723
 source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch tugbot_bringup tugbot_maze_explore.launch.py \
     headless:=false use_rviz:=true \
@@ -255,6 +255,42 @@ Result over the acceptance campaign (8 headless + 1 GUI): 7 clean completions
 remaining TIMEOUTs traced to routing-layer causes (exploration-graph
 exhaustion), not localization — see the failure taxonomy in
 `docs/superpowers/specs/2026-07-19-yaw-only-fallback-design.md`.
+
+## Localization: grid-aliasing recovery (20260723)
+
+The scan-to-map ICP has a failure mode this maze makes easy: on a 2 m regular
+grid, a corridor scan fits a one-cell-shifted, ~90-degree-rotated pose almost as
+well as the true one. A run of small sub-threshold ICP accepts can walk the
+believed pose into that alias, where it then locks -- the yaw pins near +-pi/2
+for the rest of the run and the map is poisoned. Measurement (a default-off
+three-pose logger comparing ground truth, /odom and the solver pose, decomposed
+offline) established the mechanism precisely: /odom is drift-free here, so the
+error is entirely in the ICP, and it enters as a step into the alias, not as a
+gradual dead-reckoning drift.
+
+The fix is an **odom-prior yaw-consistency gate** on ICP accepts. /odom yaw is
+drift-free, so the solver yaw should never disagree with the odom-propagated
+orientation by much. When an accepted correction would put
+`|wrap(solver_yaw - odom_yaw)| > 0.5 rad` (calibrated: clean runs never exceed
+0.30 rad; the alias pins at ~1.5), the gate rejects it and **recovers** the yaw
+by snapping it to the drift-free odom yaw while keeping the odom-propagated
+position. This differs from the inner ICP's existing per-step yaw clamp, which
+compares against the previous corrected pose (itself drifting) and so lets the
+cumulative sub-threshold migration through; the gate compares against the raw
+odom orientation and catches it. It uses only /odom (which the solver already
+integrates for its prior), never the ground-truth channel, and fires
+unconditionally. Observability: the solver logs `YAW_GATE ydis=... est_yaw=...
+odom_yaw=...` on each rejection.
+
+Result over the acceptance campaign (8 headless + 1 GUI): every run reaches the
+exit with oracle 0.000% and no alias lock (vs 4/8 completion before the fix,
+with the aliased runs timing out). An earlier "capping" version of the gate
+(reject and keep the drifting prior, without the yaw snap) removed the lock but
+left a ~0.5 rad residual that grazed one junction at 3-7%; the recovering
+version zeroes it, and the per-run YAW_GATE fire count drops from ~25 (capping,
+persistent) to ~2 (recovering, transient) because the snap clears the error at
+its source. See `docs/superpowers/specs/2026-07-20-localization-root-cause-design.md`
+for the measurement, the calibration, and the honest bounds.
 
 ## Routing layer: exhaustion recovery (20260722)
 
