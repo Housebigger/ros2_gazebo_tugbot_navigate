@@ -115,7 +115,10 @@ class MazeMotion:
         self.ackermann = ackermann
         self._ack_turn = None            # active NPointTurnRunner program (None = none in flight)
         self._turn_classified = False    # one-shot latch: classify a turn once per entry (Task 5c)
+        self._arc_turn_active = False    # current turn program is a back-and-arc (skip the hop_start re-latch)
         self._reverse_hop = False        # active backout episode is a reverse-hop (not a dead-end/escape backout)
+        # Holds the MOST-RECENT timed-out pair only, never cleared on success; a stale value can
+        # falsely block a later pair, which is benign because the fallback is N-point.
         self._reverse_hop_blocked = None  # (cell, target) pair whose reverse-hop just timed out -- don't re-arm
         self._reverse_hop_fired = 0      # DIAG: reverse-hops armed by the classifier (tests/regression)
         self._back_and_arc_fired = 0     # DIAG: back-and-arc turns planned by the classifier
@@ -637,7 +640,12 @@ class MazeMotion:
         # the settle count; the corridor drive holds heading, so starting slightly off is fine.
         timed_out = self.turn_start is not None and (t - self.turn_start) >= self.turn_timeout_s
         if (settled and self.turn_in_tol >= self.turn_settle_ticks) or timed_out:
-            self.hop_start = (pose[0], pose[1])           # measure the drive from here
+            if not self._arc_turn_active:
+                self.hop_start = (pose[0], pose[1])       # measure the drive from here
+            # else: the back-and-arc's NET displacement is d_back forward along the NEW
+            # heading, so the route-time hop_start (the junction-center pose) is kept --
+            # re-latching at the arc exit would push arrival ~d_back past the target center.
+            self._arc_turn_active = False
             self.hop_deadline = t + self.hop_timeout_s
             self.progress_pose = (pose[0], pose[1]); self.progress_t = t   # wedge-detector baseline
             self.turn_start = None
@@ -672,6 +680,7 @@ class MazeMotion:
         armed (phase changed to 'backout'); None otherwise (turn phase continues normally,
         possibly with self._ack_turn pre-seeded with a back-and-arc program)."""
         x, y, yaw = pose
+        self._arc_turn_active = False                            # set True only when an arc is seeded below
         current_cardinal = round(yaw / (math.pi / 2.0)) * (math.pi / 2.0)
         rel = _norm(self.target_cardinal - current_cardinal)
         cur_fwd = (round(math.cos(current_cardinal)), round(math.sin(current_cardinal)))
@@ -705,6 +714,7 @@ class MazeMotion:
                 rel_dir = 1 if rel > 0 else -1
                 segs = plan_back_and_arc(rel_dir, d_back)
                 self._ack_turn = NPointTurnRunner(yaw, self.target_cardinal, t, segments=segs)
+                self._arc_turn_active = True                     # completion must NOT re-latch hop_start
                 self._back_and_arc_fired += 1
             return None                                          # (d_back<0.45 -> N-point, unchanged)
         return None                                               # odd angle -> N-point
@@ -715,6 +725,9 @@ class MazeMotion:
         (the caller's aligned/settled checks decide completion, same as in-place mode)."""
         if self._ack_turn is None or self._ack_turn.target != target_cardinal:
             self._ack_turn = NPointTurnRunner(yaw, target_cardinal, t)
+            # A plain N-point replan (e.g. after an exhausted back-and-arc program) ends
+            # near where it starts, so the completion re-latch is correct for it again.
+            self._arc_turn_active = False
         v, w, exhausted = self._ack_turn.command(t)
         if exhausted:
             self._ack_turn = None      # replan from the current yaw on the next tick
