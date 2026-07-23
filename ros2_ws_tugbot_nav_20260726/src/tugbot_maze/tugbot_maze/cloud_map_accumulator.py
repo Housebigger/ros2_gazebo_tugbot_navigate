@@ -7,10 +7,24 @@ the launch static mount TF), voxel-dedups into CloudMap3D and republishes the
 accumulation (latched) on /maze/cloud_map_3d. Pure viz in its own process --
 consumes only TF + the cloud, never touches navigation state. Frames without a
 resolvable TF are dropped silently (normal until the solver seeds map->odom).
-Launch-gated to flood_fill + online_slam."""
+Launch-gated to flood_fill + online_slam.
+
+TF lookup is done at the CLOUD's capture stamp (cloud.header.stamp), not the
+latest available transform: the accumulator's own export blocks the callback
+~300-450ms at late-run map sizes, so clouds can queue up to ~0.5s old, and
+pairing a backlogged cloud with the latest (newer) pose paints 0.1-0.2m ghost
+shells -- a positive feedback loop (bigger map -> slower export -> more
+backlog -> more ghosts). This was quantified in the 2026-07-23 GUI ghost
+forensics: the export-block backlog x latest-TF pairing doubled late-run
+voxel growth relative to headless. Looking up the transform at the cloud's
+own stamp (the tf2 buffer keeps history) means a backlog frame can never be
+paired with a newer pose. Frames older than 0.5s are dropped outright before
+the lookup -- they are near-duplicates of their neighbors, and dropping them
+loses no coverage while cutting the post-block processing spike."""
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
+from rclpy.duration import Duration
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
@@ -26,6 +40,7 @@ class CloudMapAccumulator(Node):
         self.publish_period_s = float(self.declare_parameter('publish_period_s', 1.0).value)
         self._map = CloudMap3D()
         self._last_pub_s = None
+        self._stale_dropped = 0
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         qos = QoSProfile(depth=1)
@@ -36,9 +51,16 @@ class CloudMapAccumulator(Node):
 
     def _cloud_cb(self, cloud):
         try:
+            age = (self.get_clock().now()
+                   - Time.from_msg(cloud.header.stamp)).nanoseconds / 1e9
+            if age > 0.5:
+                self._stale_dropped += 1
+                return
             try:
-                t = self.tf_buffer.lookup_transform(          # latest available
-                    self.map_frame, cloud.header.frame_id, Time())
+                t = self.tf_buffer.lookup_transform(          # at capture stamp
+                    self.map_frame, cloud.header.frame_id,
+                    Time.from_msg(cloud.header.stamp),
+                    timeout=Duration(seconds=0.05))
             except tf2_ros.TransformException:
                 return
             tr, q = t.transform.translation, t.transform.rotation
@@ -52,7 +74,9 @@ class CloudMapAccumulator(Node):
                 self.pub.publish(self._map.to_pointcloud2(
                     frame_id=self.map_frame, stamp=now.to_msg()))
                 self._last_pub_s = now_s
-                self.get_logger().info('CLOUDMAP voxels=%d' % len(self._map))
+                self.get_logger().info(
+                    'CLOUDMAP voxels=%d stale_dropped=%d'
+                    % (len(self._map), self._stale_dropped))
         except Exception as e:              # viz must never crash or spam
             self.get_logger().error('cloud frame dropped: %r' % e,
                                     throttle_duration_sec=5.0)
