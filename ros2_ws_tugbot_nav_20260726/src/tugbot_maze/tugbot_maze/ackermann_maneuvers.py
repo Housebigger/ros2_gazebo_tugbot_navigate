@@ -9,7 +9,7 @@ their displacements largely cancel, keeping the excursion bounded inside the
 tick-by-tick and stops early once its own yaw tolerance is met."""
 from __future__ import annotations
 import math
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 Segment = Tuple[int, float, float]     # (v_sign +-1, signed curvature 1/m, arc length m)
 
@@ -26,11 +26,21 @@ def _wrap(a: float) -> float:
 
 def simulate_segments(segs: List[Segment], yaw0: float) -> Tuple[float, float]:
     """(final_yaw, max_excursion): integrate the arc chain from the origin, sampling
-    each segment at quarter points (the mid-arc bulge exceeds the chord endpoints)."""
+    each segment at quarter points (the mid-arc bulge exceeds the chord endpoints).
+    A segment with curvature ~0 (a straight leg, e.g. the reverse leg of
+    back-and-arc) integrates as a straight line instead -- the arc formula divides
+    by k and blows up at k=0."""
     x = y = 0.0
     yaw = yaw0
     exc = 0.0
     for v_sign, k, L in segs:
+        if abs(k) < 1e-9:
+            for _ in range(4):
+                s = v_sign * (L / 4.0)
+                x += s * math.cos(yaw)
+                y += s * math.sin(yaw)
+                exc = max(exc, math.hypot(x, y))
+            continue
         for _ in range(4):
             s = v_sign * (L / 4.0)
             new_yaw = yaw + s * k
@@ -68,6 +78,20 @@ def plan_n_point_turn(yaw_now: float, yaw_target: float, *,
             raise ValueError('cannot satisfy excursion limit')
 
 
+def plan_back_and_arc(rel_dir: int, d_back: float) -> List[Segment]:
+    """Two segments for a 90-degree junction turn: straight reverse d_back along the
+    current heading, then a forward quarter-arc of radius R = d_back turning toward
+    rel_dir (+1 = left/CCW, -1 = right/CW). The arc is tangent to both corridor
+    centerlines: backing d_back from the junction center puts the car at the arc's
+    entry point, and the arc exits ON the new centerline R past the center -- the
+    drive phase picks up from there. Requires d_back >= 0.45 (curvature 1/0.45 =
+    2.22 < the 2.4 steering limit); raises ValueError below."""
+    if d_back < 0.45:
+        raise ValueError('insufficient reverse room for back-and-arc')
+    k = rel_dir / d_back
+    return [(-1, 0.0, d_back), (1, k, (math.pi / 2.0) * d_back)]
+
+
 class NPointTurnRunner:
     """Executes a planned turn tick-by-tick on wall-clock time: each segment runs
     v = v_sign * v_mag, w = v * curvature for arc_len / v_mag seconds, with a
@@ -76,12 +100,19 @@ class NPointTurnRunner:
     def __init__(self, yaw_now: float, yaw_target: float, t_now: float, *,
                  v_mag: float = TURN_V_MAG, pause_s: float = PAUSE_S,
                  max_curvature: float = MAX_CURVATURE, seg_len: float = SEG_LEN_M,
-                 excursion_limit: float = EXCURSION_LIMIT_M) -> None:
+                 excursion_limit: float = EXCURSION_LIMIT_M,
+                 segments: Optional[List[Segment]] = None) -> None:
         self.target = yaw_target
         self.v_mag = float(v_mag)
         self.pause_s = float(pause_s)
-        self.segs = plan_n_point_turn(yaw_now, yaw_target, max_curvature=max_curvature,
-                                      seg_len=seg_len, excursion_limit=excursion_limit)
+        if segments is not None:
+            # Pre-planned segments (e.g. plan_back_and_arc) override the N-point plan;
+            # `target` is still stored above so the caller's replan-key comparison
+            # (target changed -> replan) treats this program like any other.
+            self.segs = list(segments)
+        else:
+            self.segs = plan_n_point_turn(yaw_now, yaw_target, max_curvature=max_curvature,
+                                          seg_len=seg_len, excursion_limit=excursion_limit)
         self.i = 0
         self.seg_start_t = t_now
         self.pause_until = t_now       # no leading pause

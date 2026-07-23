@@ -2,7 +2,8 @@
 import math
 
 from tugbot_maze.ackermann_maneuvers import (
-    NPointTurnRunner, plan_n_point_turn, simulate_segments, clamp_to_ackermann)
+    NPointTurnRunner, plan_n_point_turn, simulate_segments, clamp_to_ackermann,
+    plan_back_and_arc)
 
 
 def _final_yaw(segs, yaw0=0.0):
@@ -94,3 +95,52 @@ def test_clamp_projects_pivot_to_slow_reverse_arc():
     assert v == -0.08 and abs(w) <= abs(v) * 2.4 + 1e-12 and w < 0
     v2, w2 = clamp_to_ackermann(0.02, 0.5)                  # small FORWARD intent keeps its sign
     assert v2 == 0.08 and w2 == min(0.5, v2 * 2.4)
+
+
+def test_simulate_handles_straight_segments():
+    yaw, exc = simulate_segments([(-1, 0.0, 0.6)], 0.0)
+    assert yaw == 0.0 and abs(exc - 0.6) < 1e-9
+
+
+def test_back_and_arc_geometry_left():
+    segs = plan_back_and_arc(+1, 0.6)
+    assert segs[0] == (-1, 0.0, 0.6)                      # straight reverse, no steering
+    yaw, _ = simulate_segments(segs, 0.0)
+    assert abs(yaw - math.pi / 2.0) < 1e-9                # ends heading +90
+    # endpoint: back 0.6 along -x, then quarter-arc -> net displacement (0, +0.6)
+    # relative to the start (the junction center): verify via fine integration
+    x = y = 0.0; hdg = 0.0
+    for v_sign, k, L in segs:
+        # n=1000 leaves a forward-Euler truncation error (~4.7e-4, O(1/n)) that
+        # cannot clear the 1e-6 tolerance below; 1e6 steps pushes it to ~4.7e-7.
+        n = 1_000_000
+        for _ in range(n):
+            s = v_sign * L / n
+            x += s * math.cos(hdg); y += s * math.sin(hdg)
+            hdg += s * k
+    assert abs(x - 0.0) < 1e-6 and abs(y - 0.6) < 1e-6    # on the new centerline, R past center
+
+
+def test_back_and_arc_curvature_within_limit():
+    for d in (0.45, 0.5, 0.65):
+        for v_sign, k, L in plan_back_and_arc(-1, d):
+            assert abs(k) <= 2.4 + 1e-9
+
+
+def test_back_and_arc_rejects_insufficient_room():
+    import pytest
+    with pytest.raises(ValueError):
+        plan_back_and_arc(+1, 0.44)
+
+
+def test_runner_accepts_injected_segments():
+    r = NPointTurnRunner(0.0, math.pi / 2.0, t_now=0.0, segments=plan_back_and_arc(+1, 0.6))
+    t, saw_reverse, saw_forward_arc = 0.0, False, False
+    while True:
+        v, w, done = r.command(t)
+        if done: break
+        if v < 0 and abs(w) < 1e-9: saw_reverse = True
+        if v > 0 and abs(w) > 0.02: saw_forward_arc = True
+        t += 0.1
+        assert t < 60.0
+    assert saw_reverse and saw_forward_arc

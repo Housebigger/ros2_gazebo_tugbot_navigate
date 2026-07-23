@@ -29,7 +29,7 @@ from tugbot_maze.hop_controller import (
     centering_command, grid_cross_track,
     side_distances, corridor_follow_command, profiled_turn_command, backout_command)
 from tugbot_maze.map_memory import MapMemory
-from tugbot_maze.ackermann_maneuvers import NPointTurnRunner, clamp_to_ackermann
+from tugbot_maze.ackermann_maneuvers import NPointTurnRunner, clamp_to_ackermann, plan_back_and_arc
 
 
 def _norm(a: float) -> float:
@@ -114,6 +114,11 @@ class MazeMotion:
         # turn programs (ackermann_maneuvers), and centering skips its rotate-to-face branch.
         self.ackermann = ackermann
         self._ack_turn = None            # active NPointTurnRunner program (None = none in flight)
+        self._turn_classified = False    # one-shot latch: classify a turn once per entry (Task 5c)
+        self._reverse_hop = False        # active backout episode is a reverse-hop (not a dead-end/escape backout)
+        self._reverse_hop_blocked = None  # (cell, target) pair whose reverse-hop just timed out -- don't re-arm
+        self._reverse_hop_fired = 0      # DIAG: reverse-hops armed by the classifier (tests/regression)
+        self._back_and_arc_fired = 0     # DIAG: back-and-arc turns planned by the classifier
         if self.ackermann:
             # N-point turns converge over 2-3 replan programs with steering-rack pauses
             # (Task-2 review analysis): the in-place-turn timeouts are far too tight.
@@ -197,7 +202,7 @@ class MazeMotion:
         if self.phase == 'center':
             return self._center(pose, scan, t)
         if self.phase == 'turn':
-            return self._turn(pose, t)
+            return self._turn(pose, scan, t)
         if self.phase == 'drive':
             return self._drive(pose, scan, t)
         if self.phase == 'recover':
@@ -422,6 +427,7 @@ class MazeMotion:
         self.turn_start = t
         self.center_start = None
         self.align_start = None; self.latched_cardinal = None
+        self._turn_classified = False    # a NEW turn entry -- classify once (Task 5c)
         self.phase = 'turn'
         return (0.0, 0.0, False)
 
@@ -616,8 +622,13 @@ class MazeMotion:
             return (0.0, 0.0, False)
         return self._unstick(t)                              # no reverse -> _unstick once (MF5)
 
-    def _turn(self, pose, t):
+    def _turn(self, pose, scan, t):
         yaw = pose[2]
+        if self.ackermann and not self._turn_classified:
+            self._turn_classified = True     # classify exactly once per turn entry
+            result = self._classify_turn(pose, scan, t)
+            if result is not None:
+                return result                 # a reverse-hop was armed -> phase is now 'backout'
         err = _norm(self.target_cardinal - yaw)
         settled = abs(err) <= self.yaw_tol_rad
         self.turn_in_tol = self.turn_in_tol + 1 if settled else 0
@@ -640,6 +651,63 @@ class MazeMotion:
                                   ang_decel=self.ang_decel, turn_w_max=self.turn_w_max,
                                   kd=self.kd_turn)        # decel profile: no latency overshoot
         return (0.0, w, False)
+
+    def _classify_turn(self, pose, scan, t):
+        """One-shot turn-entry classifier (ackermann only, Task 5c). GUI forensics: 11/15
+        voxel-thickening episodes cluster at turn phases -- the N-point program's 2-3
+        direction flips + ~10s dwell repaint map surfaces from a jittering pose. Fallback
+        ladder, safest/cheapest maneuver first:
+          1. ~180 deg AND the new hop target is the cell directly behind (route geometry:
+             hop_dir opposes the current facing) -> reuse the backout machinery for a
+             straight REVERSE-HOP (0 direction flips, no turn at all) -- UNLESS this exact
+             (cell, target) pair just timed out a reverse-hop (blocked once, so a pinned
+             reverse can't loop forever; the fallback below picks up).
+          2. ~90 deg AND >=0.45 m of clearance behind (curvature 1/0.45=2.22 stays under the
+             2.4 steering limit) -> BACK-AND-ARC (1 flip: one reverse leg, one forward arc),
+             injected into a fresh NPointTurnRunner via its `segments` kwarg.
+          3. Anything else (insufficient rear room, missing rear reading, odd angle) -> fall
+             through to the existing N-point program (self._ack_turn stays None; the normal
+             _ackermann_turn_cmd lazy-plan below picks it up), same as before Task 5c.
+        Returns a (v, w, done) tuple to return immediately from _turn when a reverse-hop was
+        armed (phase changed to 'backout'); None otherwise (turn phase continues normally,
+        possibly with self._ack_turn pre-seeded with a back-and-arc program)."""
+        x, y, yaw = pose
+        current_cardinal = round(yaw / (math.pi / 2.0)) * (math.pi / 2.0)
+        rel = _norm(self.target_cardinal - current_cardinal)
+        cur_fwd = (round(math.cos(current_cardinal)), round(math.sin(current_cardinal)))
+        if abs(abs(rel) - math.pi) < 0.35:                       # ~180 deg: candidate reverse-hop
+            opposes = (self.hop_dir is not None
+                      and self.hop_dir[0] == -cur_fwd[0] and self.hop_dir[1] == -cur_fwd[1])
+            blocked = self._reverse_hop_blocked == (self.cell, self.hop_target)
+            if opposes and not blocked:
+                self.backout_target = self.hop_target
+                self.backout_cardinal = current_cardinal          # face as-is; reverse toward the target
+                self.backout_start = (x, y)
+                self.backout_deadline = t + self.backout_timeout_s
+                # Trémaux: count the retreat edge exactly as the dead-end back-out gate does.
+                self.brain.mark_traversal(self.cell, self.backout_target)
+                self._reverse_hop = True
+                self._ack_turn = None
+                self._reverse_hop_fired += 1
+                self.center_start = None
+                self.phase = 'backout'
+                return (0.0, 0.0, False)
+            return None                                          # geometry mismatch / blocked -> N-point
+        if abs(abs(rel) - math.pi / 2.0) < 0.35:                 # ~90 deg: candidate back-and-arc
+            ranges, amin, ainc = scan
+            perp = cell_wall_perp_dist(ranges, amin, ainc, yaw)
+            rear_name = OPP[_dir_name(cur_fwd)]
+            rear_perp = perp.get(rear_name)
+            if rear_perp is None or not math.isfinite(rear_perp):
+                return None                                      # missing/inf rear reading -> N-point
+            d_back = min(0.65, rear_perp - 0.30)
+            if d_back >= 0.45:
+                rel_dir = 1 if rel > 0 else -1
+                segs = plan_back_and_arc(rel_dir, d_back)
+                self._ack_turn = NPointTurnRunner(yaw, self.target_cardinal, t, segments=segs)
+                self._back_and_arc_fired += 1
+            return None                                          # (d_back<0.45 -> N-point, unchanged)
+        return None                                               # odd angle -> N-point
 
     def _ackermann_turn_cmd(self, yaw, target_cardinal, t):
         """Drive the N-point-turn runner toward target_cardinal. Lazily (re)plans when
@@ -822,16 +890,25 @@ class MazeMotion:
         max_backout_attempts the _route gate stops re-arming back-out and falls through to the
         normal turn+drive toward the parent, where the wedge detector + hop-attempt cap escalate
         (mark wall -> _unstick) exactly as before -- so the timeout path always makes progress and
-        can never deterministically re-enter back-out on the same pinned cell."""
+        can never deterministically re-enter back-out on the same pinned cell.
+
+        A Task-5c REVERSE-HOP (self._reverse_hop) shares this exact mechanism but is neither a
+        dead-end back-out nor an escape reverse: a timeout must NOT charge backout_attempts
+        (mirrors the _escape_backout exemption), and instead blocks re-arming a reverse-hop for
+        this same (cell, target) pair (self._reverse_hop_blocked) so the classifier's one-shot
+        latch falls back to N-point on the retry rather than looping on a pinned reverse."""
         x, y, yaw = pose
         moved = math.hypot(x - self.backout_start[0], y - self.backout_start[1])
         arrived = moved >= CELL_SIZE_M - self.hop_arrive_slack_m
         if arrived or t >= self.backout_deadline:
             if arrived:
                 self.cell = self.backout_target
+            elif self._reverse_hop:                       # reverse-hop timeout: no budget charge,
+                self._reverse_hop_blocked = (self.cell, self.backout_target)  # block a re-arm on retry
             elif not self._escape_backout:                # an escape-reverse timeout must NOT charge
                 self.backout_attempts[self.cell] = self.backout_attempts.get(self.cell, 0) + 1  # the dead-end budget
             self._escape_backout = False                  # clear on leaving backout (arrival or timeout)
+            self._reverse_hop = False                      # clear on leaving backout (arrival or timeout)
             self.settle_until = t + self.settle_s
             self.center_start = None
             self.align_start = None; self.latched_cardinal = None

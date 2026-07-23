@@ -259,3 +259,26 @@ def test_ackermann_full_solve_never_commands_in_place():
     assert pivots < 168, f'raw pivot-shaped commands regressed: {pivots}'
 
 
+def test_ackermann_classifier_prefers_reverse_hop_and_arc():
+    """Full offline ackermann solve: count turn programs by kind via the phase stream --
+    after 5c, dead-end retreats run as backout/reverse-hop (no 180 N-point at the
+    dead-end parent chain) and most junction turns are back-and-arc. Assert the solve
+    still completes collision-free AND at least one reverse-hop beyond the dead-end
+    gate fired (m._reverse_hop_fired > 0) AND at least one back-and-arc was planned
+    (m._back_and_arc_fired > 0)."""
+    sim = MazeSim(load_segments(), cell_center(ENTRANCE_CELL), 0.0, inertia=True)
+    m = MazeMotion(ackermann=True)
+    t, done = 0.0, False
+    for _ in range(60000):
+        scan = sim.scan(n_beams=360, fov_rad=2 * math.pi)
+        v, w, done = m.step(sim.reported_pose, scan, t)
+        sim.step(v, w, 0.1)
+        assert not sim.collides(*sim.pose), f'collision at t={t:.1f}'
+        t += 0.1
+        if done:
+            break
+    assert done, 'ackermann offline solve did not reach the exit'
+    assert m._reverse_hop_fired > 0, 'no reverse-hop ever fired'
+    assert m._back_and_arc_fired > 0, 'no back-and-arc turn was ever planned'
+
+
