@@ -53,12 +53,16 @@ def run_to_exit(follow_side, *, sealed=True, max_steps=20000, dt=0.1, n_beams=72
     return None, closest, outside
 
 
+# FROZEN RED (tugbot-return era 4): wall follower wedges in the interior with the
+# 0.262/-0.468/0.292 rectangle (steps=None, outside=0) -- recorded, not tuned; see 42f5e96.
 def test_sealed_left_hand_solves_interior():
     steps, closest, outside = run_to_exit('left', sealed=True)
     assert steps is not None, f"sealed left failed to reach exit; closest={closest:.2f} m"
     assert outside == 0, f"sealed left left the maze {outside} times (cheating)"
 
 
+# FROZEN RED (tugbot-return era 4): wall follower wedges in the interior with the
+# 0.262/-0.468/0.292 rectangle (steps=None, outside=0) -- recorded, not tuned; see 42f5e96.
 def test_sealed_right_hand_solves_interior():
     steps, closest, outside = run_to_exit('right', sealed=True)
     assert steps is not None, f"sealed right failed to reach exit; closest={closest:.2f} m"
@@ -71,14 +75,17 @@ def test_unsealed_left_hand_exterior_cheat_era4_tugbot_footprint():
     # -- asserted outside > 0. Legged era (0.49/0.37 dynamic envelope): the corridor became
     # geometrically impassable -- asserted outside == 0. Buggy era (0.15/0.13 wheel envelope,
     # 2026-07-22): the exterior corridor is passable again, so the cheat REOPENS -- outside > 0.
-    # Tugbot-return era (0.262/-0.468/0.292): exterior corridor <passable -- outside > 0>
-    # (OBSERVED: steps=1721, outside=1611 samples). This is a wall_follow-only phenomenon: the
-    # production stack (flood_fill cell-grid routing + perimeter-referenced ICP) never routes
-    # outside; the sealed-entrance tests above remain the primary interior-solve guard.
+    # tugbot-return era 4 (0.262/-0.468/0.292, 2026-07-23): exterior corridor passable
+    # (observed steps=1721, outside=1611) -- cheat stays OPEN, same side as the buggy era.
+    # This is a wall_follow-only phenomenon: the production stack (flood_fill cell-grid routing
+    # + perimeter-referenced ICP) never routes outside; the sealed-entrance tests above remain
+    # the primary interior-solve guard.
     _, _, outside = run_to_exit('left', sealed=False)
     assert outside > 0, "expected the 0.262/-0.468/0.292 tugbot footprint to fit the exterior corridor"
 
 
+# FROZEN RED (tugbot-return era 4): wall follower wedges in the interior with the
+# 0.262/-0.468/0.292 rectangle (steps=None, outside=0) -- recorded, not tuned; see 42f5e96.
 def test_report_faster_legitimate_hand(capsys):
     steps_l, _, out_l = run_to_exit('left', sealed=True)
     steps_r, _, out_r = run_to_exit('right', sealed=True)
@@ -88,10 +95,15 @@ def test_report_faster_legitimate_hand(capsys):
     with capsys.disabled():
         print(f"\n[GUARANTEE sealed] left={steps_l} right={steps_r} -> FASTER_LEGIT_HAND={faster}")
     # Intentional spec lock on the hand-selection decision — update only after
-    # re-verifying BOTH sides still stay inside. left ~5609 < right ~9320 (sealed).
+    # re-verifying BOTH sides still stay inside. left ~5609 < right ~9320 (sealed) --
+    # those counts are a stale buggy-era pass; frozen era 4 never reaches this line
+    # (both sides return steps=None, see FROZEN comment above).
     assert faster == 'left'
 
 
+# FROZEN RED (tugbot-return era 4): wall follower wedges in the interior with the
+# 0.262/-0.468/0.292 rectangle (steps=None, outside=0) -- recorded, not tuned; see 42f5e96.
+# Covers all 3 parametrizations below.
 @pytest.mark.parametrize("dx,dy,dyaw", [(0.2, 0.2, 0.1), (-0.2, -0.2, -0.1), (0.2, -0.2, 0.1)])
 def test_sealed_left_hand_robust_to_start_perturbation(dx, dy, dyaw):
     steps, closest, outside = run_to_exit('left', sealed=True,
