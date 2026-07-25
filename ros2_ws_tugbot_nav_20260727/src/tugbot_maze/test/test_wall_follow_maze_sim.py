@@ -13,10 +13,10 @@ ENTRANCE_SEAL = entrance_seal_segment((0.95, 0.0), 2.072423, 'left')
 # Threshold separating a legitimate interior solve from exterior cheating: sealed
 # runs stay ~0.5 m INSIDE the box (outside==0 for any tol>0), while the historical
 # unsealed cheat ran ~1 m OUTSIDE it -- so any tol in ~(0, 1.0) works; 0.4 sits in the gap.
-# (Buggy era 0.15/0.13: the exterior corridor is passable again and the unsealed cheat
-# REOPENS -- see test_unsealed_left_hand_exterior_cheat_reopened_by_buggy_footprint below.)
+# (Tugbot-return era (0.262/-0.468/0.292): see
+# test_unsealed_left_hand_exterior_cheat_era4_tugbot_footprint below for the observed outcome.)
 # Coupled to MazeSim wall_half_thickness_m=0.12 AND the footprint constants
-# (FOOT_X_FRONT/FOOT_X_REAR +-0.15, FOOT_HALF_W 0.13, which set the collision envelope;
+# (FOOT_X_FRONT/FOOT_X_REAR 0.262/-0.468, FOOT_HALF_W 0.292, which set the collision envelope;
 # robot_radius_m=0.35 is unused by the oracle): revisit if any of those change.
 OUTSIDE_TOL_M = 0.4
 
@@ -65,17 +65,18 @@ def test_sealed_right_hand_solves_interior():
     assert outside == 0, f"sealed right left the maze {outside} times (cheating)"
 
 
-def test_unsealed_left_hand_exterior_cheat_reopened_by_buggy_footprint():
-    # HISTORICAL RECORD, era 3. Pre-2026-07-17 (0.39/0.32 footprint): the legacy WallFollower
+def test_unsealed_left_hand_exterior_cheat_era4_tugbot_footprint():
+    # HISTORICAL RECORD, era 4. Pre-2026-07-17 (0.39/0.32 footprint): the legacy WallFollower
     # squeezed OUTSIDE the unsealed perimeter and "solved" via the exterior (the '5/5 cheat')
     # -- asserted outside > 0. Legged era (0.49/0.37 dynamic envelope): the corridor became
     # geometrically impassable -- asserted outside == 0. Buggy era (0.15/0.13 wheel envelope,
     # 2026-07-22): the exterior corridor is passable again, so the cheat REOPENS -- outside > 0.
-    # This is a wall_follow-only phenomenon: the production stack (flood_fill cell-grid routing
-    # + perimeter-referenced ICP) never routes outside; the sealed-entrance tests above remain
-    # the primary interior-solve guard.
+    # Tugbot-return era (0.262/-0.468/0.292): exterior corridor <passable -- outside > 0>
+    # (OBSERVED: steps=1721, outside=1611 samples). This is a wall_follow-only phenomenon: the
+    # production stack (flood_fill cell-grid routing + perimeter-referenced ICP) never routes
+    # outside; the sealed-entrance tests above remain the primary interior-solve guard.
     _, _, outside = run_to_exit('left', sealed=False)
-    assert outside > 0, "expected the 0.15/0.13 buggy footprint to fit the exterior corridor again"
+    assert outside > 0, "expected the 0.262/-0.468/0.292 tugbot footprint to fit the exterior corridor"
 
 
 def test_report_faster_legitimate_hand(capsys):

@@ -69,10 +69,10 @@ def test_collides_true_near_wall_segment():
     sim = MazeSim(seg, start_xy=(0.0, 0.0), start_yaw=0.0,
                   robot_radius_m=0.35, wall_half_thickness_m=0.12)
     # collides(x,y) with no yaw uses the legacy bounding circle: hypot(FOOT_X_REAR,FOOT_HALF_W) =
-    # hypot(0.15,0.13) = 0.1985 + margin 0.12 = 0.3185 (robot_radius_m=0.35 above is unused by the
-    # no-yaw path -- see collides()).
-    assert sim.collides(0.75, 0.0) is True       # 0.25 m to wall < bounding radius+margin (~0.3185)
-    assert sim.collides(0.5, 0.0) is False       # 0.5 m to wall > bounding radius+margin (~0.3185)
+    # hypot(0.468,0.292) = 0.5516 + margin 0.12 = 0.6716 (robot_radius_m=0.35 above is unused by
+    # the no-yaw path -- see collides()).
+    assert sim.collides(0.75, 0.0) is True       # 0.25 m to wall < bounding radius+margin (~0.6716)
+    assert sim.collides(0.2, 0.0) is False       # 0.8 m to wall > bounding radius+margin (~0.6716)
 
 
 def test_step_blocked_by_wall_keeps_position_but_allows_rotation():
@@ -136,68 +136,69 @@ def test_reported_pose_equals_true_with_zero_drift():
 
 
 def test_collides_rectangle_catches_rear_gripper():
-    # Vertical wall at base_link x=-0.20: rear face is FOOT_X_REAR=-0.15, distance 0.20-0.15 = 0.05 m
-    # < wall_half_thickness 0.12 -> collision. A naive bounding CIRCLE of the old 0.35 kind would
-    # also reach here, but the point of the fixture is the exact rectangle path (keep the function
-    # name -- it pins the rectangle-catches-rear-contact behavior).
-    sim = MazeSim([(-0.20, -0.30, -0.20, 0.30)], start_xy=(0.0, 0.0), start_yaw=0.0)
+    # Vertical wall at base_link x=-0.55: rear face is FOOT_X_REAR=-0.468, distance
+    # 0.55-0.468 = 0.082 m < wall_half_thickness 0.12 -> collision. The gripper overhang is
+    # BACK -- this fixture again guards true rear contact through the exact rectangle path.
+    sim = MazeSim([(-0.55, -0.30, -0.55, 0.30)], start_xy=(0.0, 0.0), start_yaw=0.0)
     assert sim.collides(0.0, 0.0, 0.0) is True
 
 
 def test_collides_rectangle_tighter_on_sides_than_circle():
-    # Horizontal wall at y=0.26 (to the left). Segment distance to side face (FOOT_HALF_W=0.13) is
-    # 0.26-0.13 = 0.13 m > wall_half_thickness 0.12 -> NO collision, while the bounding circle
-    # (0.3185) would have flagged a wall at 0.26 -- the lateral-tightness contrast preserved.
-    sim = MazeSim([(-0.30, 0.26, 0.30, 0.26)], start_xy=(0.0, 0.0), start_yaw=0.0)
+    # Horizontal wall at y=0.45 (to the left). Segment distance to side face (FOOT_HALF_W=0.292)
+    # is 0.45-0.292 = 0.158 m > wall_half_thickness 0.12 -> NO collision, while the bounding
+    # circle (0.6716) would have flagged a wall at 0.45 -- the lateral-tightness contrast
+    # preserved.
+    sim = MazeSim([(-0.30, 0.45, 0.30, 0.45)], start_xy=(0.0, 0.0), start_yaw=0.0)
     assert sim.collides(0.0, 0.0, 0.0) is False
 
 
 def test_collides_front_wall_within_inflated_front():
-    # Vertical wall at base_link x=0.20: front face FOOT_X_FRONT=0.15, 0.20-0.15 = 0.05 < 0.12 ->
-    # collision.
-    sim = MazeSim([(0.20, -0.30, 0.20, 0.30)], start_xy=(0.0, 0.0), start_yaw=0.0)
+    # Vertical wall at base_link x=0.35: front face FOOT_X_FRONT=0.262, 0.35-0.262 = 0.088
+    # < 0.12 -> collision.
+    sim = MazeSim([(0.35, -0.30, 0.35, 0.30)], start_xy=(0.0, 0.0), start_yaw=0.0)
     assert sim.collides(0.0, 0.0, 0.0) is True
 
 
 def test_collides_yaw_aware_rotation():
-    # A wall 0.26 m behind world-x (at yaw=0 rear clearance 0.26-0.15 = 0.11 m < 0.12 -> WOULD
-    # collide), but the robot faces +y (yaw=+pi/2): in base_link the wall is 0.26 m to the left
-    # (+y direction), clearance to side face (FOOT_HALF_W=0.13) is 0.26-0.13 = 0.13 m > 0.12
+    # A wall 0.55 m behind world-x (at yaw=0 rear clearance 0.55-0.468 = 0.082 m < 0.12 -> WOULD
+    # collide), but the robot faces +y (yaw=+pi/2): in base_link the wall is 0.55 m to the left
+    # (+y direction), clearance to side face (FOOT_HALF_W=0.292) is 0.55-0.292 = 0.258 m > 0.12
     # -> NO collision.
-    sim = MazeSim([(-0.26, -0.30, -0.26, 0.30)], start_xy=(0.0, 0.0), start_yaw=0.0)
+    sim = MazeSim([(-0.55, -0.30, -0.55, 0.30)], start_xy=(0.0, 0.0), start_yaw=0.0)
     import math
     assert sim.collides(0.0, 0.0, math.pi / 2) is False
 
 
 def test_collides_yaw_none_uses_bounding_circle():
     # Legacy (x,y)-only call: conservative bounding circle
-    # (radius hypot(0.15,0.13)~0.1985 + margin 0.12 = ~0.3185).
+    # (radius hypot(0.468,0.292)~0.5516 + margin 0.12 = ~0.6716).
     sim = MazeSim([(-0.30, -0.30, -0.30, 0.30)], start_xy=(0.0, 0.0), start_yaw=0.0)
     assert isinstance(sim.collides(0.0, 0.0), bool)
-    assert sim.collides(0.0, 0.0) is True          # 0.30 < 0.3185 -> True
+    assert sim.collides(0.0, 0.0) is True          # 0.30 < 0.6716 -> True
 
 
 def test_collides_false_when_clear():
-    # Wall at y=1.0: clearance to side face (FOOT_HALF_W=0.13) is 0.87 m > 0.12 -> no collision.
+    # Wall at y=1.0: clearance to side face (FOOT_HALF_W=0.292) is 0.708 m > 0.12 -> no collision.
     sim = MazeSim([(-0.30, 1.0, 0.30, 1.0)], start_xy=(0.0, 0.0), start_yaw=0.0)
     assert sim.collides(0.0, 0.0, 0.0) is False
     assert sim.collides(0.0, 0.0) is False
 
 
 def test_collides_exact_rejects_corner_near_miss():
-    # A wall just off the rear-right CORNER (FOOT_X_REAR, -FOOT_HALF_W) = (-0.15, -0.13):
-    # per-axis offsets (0.10, 0.10) beyond the rectangle -> corner - offsets = (-0.25, -0.23), but
-    # Euclidean clearance hypot(0.10,0.10)=0.141 m > wall_half_thickness 0.12 -> NO collision.
-    # A naive square-corner inflation WOULD have flagged this (both axis offsets <= 0.12). The exact
-    # oracle correctly reports the ~0.14 m clearance.
-    sim = MazeSim([(-0.25, -0.23, -0.249, -0.23)], start_xy=(0.0, 0.0), start_yaw=0.0)
+    # A wall just off the rear-right CORNER (FOOT_X_REAR, -FOOT_HALF_W) = (-0.468, -0.292):
+    # per-axis offsets (0.10, 0.10) beyond the rectangle -> corner - offsets = (-0.568, -0.392),
+    # but Euclidean clearance hypot(0.10,0.10)=0.141 m > wall_half_thickness 0.12 -> NO collision.
+    # A naive square-corner inflation WOULD have flagged this (both axis offsets <= 0.12). The
+    # exact oracle correctly reports the ~0.14 m clearance.
+    sim = MazeSim([(-0.568, -0.392, -0.567, -0.392)], start_xy=(0.0, 0.0), start_yaw=0.0)
     assert sim.collides(0.0, 0.0, 0.0) is False
 
 
 def test_collides_exact_catches_true_corner_contact():
-    # Same corner (-0.15, -0.13), but per-axis offsets (0.06, 0.06) -> corner - offsets =
-    # (-0.21, -0.19): Euclidean clearance hypot(0.06,0.06)=0.085 m < 0.12 -> real contact -> True.
-    sim = MazeSim([(-0.21, -0.19, -0.209, -0.19)], start_xy=(0.0, 0.0), start_yaw=0.0)
+    # Same corner (-0.468, -0.292), but per-axis offsets (0.06, 0.06) -> corner - offsets =
+    # (-0.528, -0.352): Euclidean clearance hypot(0.06,0.06)=0.085 m < 0.12 -> real contact ->
+    # True.
+    sim = MazeSim([(-0.528, -0.352, -0.527, -0.352)], start_xy=(0.0, 0.0), start_yaw=0.0)
     assert sim.collides(0.0, 0.0, 0.0) is True
 
 

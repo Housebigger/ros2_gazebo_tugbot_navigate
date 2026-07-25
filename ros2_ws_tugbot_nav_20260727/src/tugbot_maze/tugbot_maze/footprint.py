@@ -1,17 +1,17 @@
-"""MR-Buggy3 kinematic chassis collision footprint + sensor placement (see
-tugbot_description/models/mr_buggy3/model.sdf). All in the base_link frame,
-+x=forward, +y=left. Symmetric rectangle = the full wheel-inclusive envelope
-with NO padding (tugbot-era convention: safety margins live in the
-gates/thresholds, not in the footprint): wheel centers at x=+0.112/-0.1135
-(radius 0.0365 -> extents ~+-0.15), wheel outer faces at |y|=0.13
-(0.10 + 0.015 hub offset + 0.015 half-width); the 0.3 x 0.09 body box sits
-inside. The 16-beam lidar sits at the body centre (SCAN_OFFSET_X=0)."""
+"""Original Tugbot collision footprint + sensor placement (tugbot-return; see
+tugbot_description/models/tugbot/model.sdf). All in the base_link frame,
++x=forward, +y=left. Asymmetric rectangle = the honest full-body envelope
+recovered verbatim from the pre-dog workspaces (20260705/20260712), rear
+dominated by the gripper hand. NO padding (safety margins live in the
+gates/thresholds, not in the footprint). The 16-beam lidar is grafted at the
+body centre (SCAN_OFFSET_X=0) -- the historic -0.1855 belonged to the removed
+2D scan_omni and must NOT return."""
 from __future__ import annotations
 import math
 
-FOOT_X_FRONT = 0.15      # front wheel center 0.112 + wheel radius 0.0365, rounded up
-FOOT_X_REAR  = -0.15     # rear wheel center -0.1135 - 0.0365, rounded (symmetric)
-FOOT_HALF_W  = 0.13      # wheel outer face: 0.10 + 0.015 + 0.015
+FOOT_X_FRONT = 0.262     # body front (base mesh)
+FOOT_X_REAR  = -0.468    # rear gripper hand
+FOOT_HALF_W  = 0.292     # half-width (base mesh / wheels at 0.257)
 SCAN_OFFSET_X = 0.0      # /scan projected from the centered 3D lidar
 
 
