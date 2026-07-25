@@ -288,12 +288,18 @@ class GtCloudAccumulator(Node):
 
     def _gt_cb(self, msg):
         # transforms[0] = the tugbot model root (bridge drops gz names; index
-        # convention per the tugbot-return record). Stamp from the message
-        # header of the first transform.
+        # convention per the tugbot-return record). RECEIPT-TIME pairing: the
+        # bridged per-transform header stamps are CONSTANT ZERO (measured in
+        # the first diag run: voxels=0, unpaired=all, gt_buf unbounded) -- the
+        # node clock (sim domain under use_sim_time, same domain as cloud
+        # stamps) is the only usable stamp. Jitter at ~58 Hz transport is ~ms,
+        # well inside the 0.05 s window. Fairness note: production pairs at
+        # the cloud CAPTURE stamp via tf2 interpolation; this instrument pairs
+        # cloud capture stamp vs gt RECEIPT stamp.
         if not msg.transforms:
             return
         t0 = msg.transforms[0]
-        t_s = Time.from_msg(t0.header.stamp).nanoseconds / 1e9
+        t_s = self.get_clock().now().nanoseconds / 1e9
         tr, q = t0.transform.translation, t0.transform.rotation
         self._gt_buf.append((t_s, (tr.x, tr.y, tr.z, q.x, q.y, q.z, q.w)))
         cutoff = t_s - GT_BUFFER_S
