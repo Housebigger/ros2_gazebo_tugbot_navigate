@@ -17,7 +17,7 @@
 - Every command block starts with an explicit `cd` to an absolute path (cwd drifts between calls).
 - `set +u` before sourcing any ROS `setup.bash`; only `python3` exists on this machine.
 - Build ONLY from inside the workspace: `cd <ws> && colcon build --symlink-install` (repo-root builds fail on duplicate packages).
-- Suite accounting is authoritative ONLY from a main-session workspace-root run: `cd <ws> && python3 -m pytest src/tugbot_maze/test/ -q`. Subagent pytest counts have twice been collection-scope artifacts — report them, but the controller re-verifies.
+- Suite accounting is authoritative ONLY from a main-session workspace-root run over BOTH test dirs: `cd <ws> && python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q` (544 collected; tugbot_maze alone under-collects by the 5 bringup-contract tests — Task 0 measured exactly this trap). Subagent pytest counts have twice been collection-scope artifacts — report them, but the controller re-verifies.
 - `git add` explicit paths only, never `-A` (tmp_resources holds untracked junk).
 - Commit messages: NO backticks; use heredoc `git commit -F - <<'EOF'`; end with the trailer lines used project-wide (Co-Authored-By: Claude Fable 5 <noreply@anthropic.com> and the Claude-Session URL).
 - Subagents run ALL commands FOREGROUND. Long sim runs (Task 6 headless acceptance, any GUI run) happen in the MAIN session only. GUI runs launch ONLY on the user's explicit go-ahead.
@@ -79,7 +79,7 @@ Expected: all packages build, no errors.
 ```bash
 cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260727
 set +u; source /opt/ros/jazzy/setup.bash; source install/setup.bash; set -u
-python3 -m pytest src/tugbot_maze/test/ -q 2>&1 | tail -15
+python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -15
 ```
 
 Expected: `4 failed, 540 passed` (0 xfailed). Copy the 4 failed test names verbatim into the Task 0 commit message — every later suite run is adjudicated against this list.
@@ -222,7 +222,7 @@ def test_gripper_and_collisions_survive():
     sdf = _tugbot_sdf()
     assert '<link name="gripper">' in sdf            # honest rear overhang stays
     assert '<link name="gripper_hand">' in sdf
-    assert sdf.count('<collision') >= 9              # base+gripper set+hand set+4 wheels
+    assert sdf.count('<collision') >= 11             # base+gripper+hand set (incl. side pads)+4 wheels
 
 
 def test_world_spawns_tugbot():
@@ -241,6 +241,13 @@ def test_static_tfs_point_at_tugbot_frames():
     launch = (_ws_src() / 'tugbot_gazebo' / 'launch' / 'tugbot_gazebo.launch.py').read_text()
     assert 'tugbot/base_link/lidar_3d' in launch and 'mr_buggy3/base/lidar_3d' not in launch
     assert 'tugbot/base_link/camera_front' in launch and 'mr_buggy3/base/camera_front' not in launch
+    # The TRANSLATIONS must match the SDF mounts (lidar z=0.55, camera 0.20/0.40):
+    # a renamed frame with a stale buggy offset would project the cloud ~0.25 m low
+    # while every name-only assertion stays green (Task 1 quality-review finding).
+    lidar = _block(launch, r"name='lidar_3d_static_tf'.*?arguments=\[(.*?)\]")
+    assert "'--z', '0.55'" in lidar
+    cam = _block(launch, r"name='camera_front_static_tf'.*?arguments=\[(.*?)\]")
+    assert "'--x', '0.20'" in cam and "'--z', '0.40'" in cam
 
 
 def test_bridge_unchanged_platform_agnostic():
@@ -450,15 +457,33 @@ with:
     </include>
 ```
 
-- [ ] **Step 2: Point the static TFs at tugbot sensor frames**
+- [ ] **Step 2: Point the static TFs at tugbot sensor frames — NAMES AND TRANSLATIONS**
 
-In `tugbot_gazebo.launch.py`, replace the child-frame strings:
-- `mr_buggy3/base/lidar_3d` → `tugbot/base_link/lidar_3d`
-- `mr_buggy3/base/camera_front` → `tugbot/base_link/camera_front`
+In `tugbot_gazebo.launch.py`, the two static-TF nodes still carry the BUGGY
+mount offsets (lidar `--z 0.30`, camera `--x 0.12 --z 0.15`). A name-only
+rename would project the cloud ~0.25 m low with every frame assertion green
+(Task 1 quality-review finding). Replace the full argument lists:
+
+`lidar_3d_static_tf` arguments:
+
+```python
+            '--x', '0.0', '--y', '0.0', '--z', '0.55',
+            '--roll', '0.0', '--pitch', '0.0', '--yaw', '0.0',
+            '--frame-id', 'base_link', '--child-frame-id', 'tugbot/base_link/lidar_3d',
+```
+
+`camera_front_static_tf` arguments:
+
+```python
+            '--x', '0.20', '--y', '0.0', '--z', '0.40',
+            '--roll', '0.0', '--pitch', '0.0', '--yaw', '0.0',
+            '--frame-id', 'base_link', '--child-frame-id', 'tugbot/base_link/camera_front',
+```
 
 (gz scoped sensor frames follow `<model>/<link>/<sensor>`; tugbot's link is
 `base_link`, the buggy's was `base`. Task 5's smoke verifies the live frame
-string from the actual cloud header.)
+string from the actual cloud header. The translations mirror the SDF mounts
+pinned in Task 1: lidar `0 0 0.55`, camera `0.20 0 0.40`.)
 
 - [ ] **Step 3: Re-freeze the two coupled buggy-contract tests**
 
@@ -479,8 +504,9 @@ and replace `test_static_tfs_point_at_buggy_frames` with:
 
 ```python
 def test_static_tfs_no_longer_point_at_buggy_frames():
-    # Re-frozen at tugbot-return (same convention as the dog re-freeze at
-    # buggy-swap): launch TFs now belong to the tugbot contract test.
+    # Re-frozen at tugbot-return: launch TFs now belong to the tugbot contract
+    # test. Mirrors the negative-assertion pattern buggy-swap introduced for
+    # the dog (written fresh there; renamed from a positive test here).
     launch = (_ws_src() / 'tugbot_gazebo' / 'launch' / 'tugbot_gazebo.launch.py').read_text()
     assert 'mr_buggy3/base/lidar_3d' not in launch
     assert 'mr_buggy3/base/camera_front' not in launch
@@ -713,7 +739,7 @@ Run:
 ```bash
 cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260727
 python3 -m pytest src/tugbot_maze/test/test_wall_follow_maze_sim.py -q
-python3 -m pytest src/tugbot_maze/test/ -q 2>&1 | tail -15
+python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -15
 ```
 
 These are HISTORICAL-RECORD tests, footprint-coupled by design (the file
@@ -810,7 +836,7 @@ diff-mode already, so a delta here means a real regression, not the flip.)
 
 ```bash
 cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260727
-python3 -m pytest src/tugbot_maze/test/ -q 2>&1 | tail -8
+python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -8
 ```
 
 Expected: identical counts to the end of Task 3.
@@ -860,8 +886,16 @@ via /cmd_vel for DRIVE_S seconds, then compares the /odom displacement against
 the ground-truth displacement from /gt/dynamic_pose (EVAL-ONLY readout — red
 line: gt never feeds control; here it only grades the odom plugin).
 
-PASS = displacement mismatch < 0.05 m AND both sources actually moved > 0.3 m
-(catches both a drifting wheel-integrated odom and a silent/dead plugin).
+PASS = displacement mismatch < 0.05 m AND both sources actually moved > 0.3 m.
+The comparison is on DISPLACEMENT (both series relative to their own start
+sample), which is origin-invariant: this verifies drift-free TRACKING, frame
+orientation, and plugin liveness over a ~1.5 m arc -- it does NOT assert
+where the odom origin sits (the odom frame is anchored at the spawn, so
+odom0 and gt0 may legitimately differ by the spawn offset; see the printed
+start samples). It catches a dead / mis-framed / grossly-drifting (>5 cm
+over ~1.5 m) odom, not a silent slow drift below that bound. Origin
+anchoring itself is exercised end-to-end by the solver runs (entrance-
+anchored compose + POS_GATE), not by this smoke check.
 Exit code 0 on PASS, 1 on FAIL, 2 on missing data."""
 import math
 import sys
@@ -875,7 +909,8 @@ from tf2_msgs.msg import TFMessage
 
 DRIVE_S = 6.0
 SETTLE_S = 2.0
-V, W = 0.25, 0.25        # gentle arc — diff drive, well inside accel limits
+V, W = 0.25, 0.10        # near-straight arc: the maze entry corridor is 2 m wide,
+                         # lateral excursion at R=2.5 m over 6 s is ~0.44 m — safe
 TOL_M = 0.05
 MIN_TRAVEL_M = 0.3
 
@@ -896,22 +931,33 @@ class AnchorCheck(Node):
         self.odom_xy = (p.x, p.y)
 
     def _gt(self, msg):
-        for t in msg.transforms:
-            if t.child_frame_id == 'tugbot':
-                tr = t.transform.translation
-                self.gt_xy = (tr.x, tr.y)
+        # ros_gz_bridge's built-in gz.msgs.Pose_V -> tf2_msgs/TFMessage
+        # conversion does NOT carry the gz Pose "name" field into
+        # header.frame_id / child_frame_id -- both come through empty
+        # (confirmed via raw ros2/gz dumps). tugbot is the maze world's only
+        # non-static top-level model, so gz's SceneBroadcaster consistently
+        # emits its own world-anchored pose as transforms[0], ahead of its
+        # child links (base_link, imu_link, ...) -- index 0 is used instead.
+        # Caveat: if a second top-level dynamic model is ever added to the
+        # maze world, index 0 is no longer guaranteed to be the robot and
+        # this check must switch to a positional heuristic (e.g. nearest to
+        # the last known odom pose) instead of a fixed index.
+        if msg.transforms:
+            tr = msg.transforms[0].transform.translation
+            self.gt_xy = (tr.x, tr.y)
 
 
 def main():
     rclpy.init()
     node = AnchorCheck()
-    deadline = time.monotonic() + 20.0
+    deadline = time.monotonic() + 40.0
     while (node.odom_xy is None or node.gt_xy is None) and time.monotonic() < deadline:
         rclpy.spin_once(node, timeout_sec=0.2)
     if node.odom_xy is None or node.gt_xy is None:
         print(f'ANCHOR_CHECK missing data: odom={node.odom_xy} gt={node.gt_xy}')
         return 2
     node.odom0, node.gt0 = node.odom_xy, node.gt_xy
+    print(f'ANCHOR_CHECK start odom0={node.odom0} gt0={node.gt0}')
 
     cmd = Twist()
     cmd.linear.x, cmd.angular.z = V, W
@@ -947,13 +993,19 @@ Create `tools/verify_tugbot_model.sh`:
 ```bash
 #!/usr/bin/env bash
 # tugbot-return smoke (Task 5): model/plugin semantics in the REAL maze world,
-# headless, no solver in the loop. Checks, in order:
-#   1. gz has NO /scan topic (stock scan_omni really gone -- the projection
-#      chain must be the only /scan source once the full stack runs)
-#   2. /lidar/points/points delivers a PointCloud2 whose frame_id is the
-#      tugbot/base_link/lidar_3d scoped frame (records the LIVE string)
-#   3. /diffdrive/odom_unused exists on the gz graph (odom redirect took)
-#   4. world-anchored odom: drive an arc, /odom displacement == gt displacement
+# headless, no solver in the loop. Checks, in code order:
+#   1. maze-world-loaded: the maze world's gz topic namespace is present (the
+#      gazebo-only launch defaults to tugbot_empty_world.sdf, which would
+#      silently green-light checks 2-5 while starving the gt bridge)
+#   2. no-model-/scan-topic: gz has NO /scan topic (stock scan_omni really
+#      gone -- the projection chain must be the only /scan source once the
+#      full stack runs)
+#   3. cloud-split-topic: /lidar/points/points is present on the gz graph
+#   4. diffdrive-odom-redirect: /diffdrive/odom_unused exists on the gz graph
+#      (odom redirect took)
+#   5. live-lidar-frame: /lidar/points delivers a PointCloud2 whose frame_id
+#      is the tugbot/base_link/lidar_3d scoped frame (records the LIVE string)
+#   6. world-anchored-odom: drive an arc, /odom displacement == gt displacement
 #      (tools/tugbot_odom_anchor_check.py; gt readout is EVAL-ONLY)
 # Same PRIME/env discipline as the run scripts.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -971,7 +1023,7 @@ set -u
 
 kill_sim() {
     for pat in "ros2 launch" "gz sim" "ruby.*gz" parameter_bridge robot_state_publisher \
-               static_transform_publisher tugbot_odom_anchor_check; do
+               static_transform_publisher scan_slice_projector tugbot_odom_anchor_check; do
         pkill -9 -f "$pat" 2>/dev/null
     done
 }
@@ -982,10 +1034,22 @@ export ROS_DOMAIN_ID=$(( ($(date +%s) % 90) + 1 ))
 LOGDIR="$(mktemp -d /tmp/tugbot_smoke.XXXXXX)"
 echo "[SMOKE] logdir=$LOGDIR DOMAIN=$ROS_DOMAIN_ID"
 
+# The gazebo-only launch DEFAULTS to tugbot_empty_world.sdf (pre-dog relic
+# that happens to include model://tugbot) — the full explore stack passes the
+# maze world explicitly. Smoke on the wrong world silently green-lights the
+# model checks while the gt bridge (pinned to the maze world name) starves.
+MAZE_WORLD="${WS_ROOT}/install/tugbot_gazebo/share/tugbot_gazebo/worlds/tugbot_maze_world_20260528_clean_scaled2x.sdf"
 ros2 launch tugbot_gazebo tugbot_gazebo.launch.py headless:=true \
+    world_sdf:="${MAZE_WORLD}" \
     > "$LOGDIR/launch.log" 2>&1 &
 LAUNCH_PID=$!
-sleep 25
+trap 'kill -INT "$LAUNCH_PID" 2>/dev/null; sleep 1; kill_sim' EXIT
+
+for i in $(seq 1 30); do
+    kill -0 "$LAUNCH_PID" 2>/dev/null || { echo "[SMOKE] launch died early"; break; }
+    gz topic -l 2>/dev/null | grep -q "/world/tugbot_maze_world_20260528_clean_scaled2x/" && break
+    sleep 2
+done
 
 PASS=0; FAIL=0
 check() {  # check <name> <0-for-pass>
@@ -994,6 +1058,7 @@ check() {  # check <name> <0-for-pass>
 }
 
 gz topic -l > "$LOGDIR/gz_topics.txt" 2>&1
+grep -q "/world/tugbot_maze_world_20260528_clean_scaled2x/" "$LOGDIR/gz_topics.txt"; check "maze-world-loaded" $?
 ! grep -qx "/scan" "$LOGDIR/gz_topics.txt"; check "no-model-/scan-topic" $?
 grep -q "/lidar/points/points" "$LOGDIR/gz_topics.txt"; check "cloud-split-topic" $?
 grep -q "/diffdrive/odom_unused" "$LOGDIR/gz_topics.txt"; check "diffdrive-odom-redirect" $?
@@ -1022,7 +1087,7 @@ cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_
 tools/verify_tugbot_model.sh
 ```
 
-Expected: `PASS=5 FAIL=0`. If `live-lidar-frame` fails, read the printed live
+Expected: `PASS=6 FAIL=0`. If `live-lidar-frame` fails, read the printed live
 frame string and fix the static TF child frames in
 `tugbot_gazebo.launch.py` + the contract test to the OBSERVED string (the
 `<model>/<link>/<sensor>` convention is an expectation, the sim is the
@@ -1055,6 +1120,16 @@ EOF
 
 This task is executed by the CONTROLLER in the main session — long sim runs
 die with subagents. Subagents must not start it.
+
+**Watch-list from the Task 3 quality review (rear-asymmetry blind spot):** the
+live motion code does NOT import FOOT_X_REAR — its rear margins were written
+against the buggy's 0.15 rear, while the tugbot gripper extends 0.468. With
+`ackermann_drive` False (Task 4) the exposed paths are (a) in-place /
+centering rotations at junctions (rear corner sweeps a ~0.59 m arc — the
+historical hazard the reverse-to-center fix mitigates) and (b) dead-end
+backout reverses. The oracle replay catches rear grazes — read its per-sample
+output specifically for REAR-face contacts before declaring 0.000%, and if any
+appear, they are a finding for the addendum, not a tuning license.
 
 - [ ] **Step 1: Two headless runs**
 
