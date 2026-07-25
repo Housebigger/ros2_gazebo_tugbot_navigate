@@ -222,7 +222,7 @@ def test_gripper_and_collisions_survive():
     sdf = _tugbot_sdf()
     assert '<link name="gripper">' in sdf            # honest rear overhang stays
     assert '<link name="gripper_hand">' in sdf
-    assert sdf.count('<collision') >= 9              # base+gripper set+hand set+4 wheels
+    assert sdf.count('<collision') >= 11             # base+gripper+hand set (incl. side pads)+4 wheels
 
 
 def test_world_spawns_tugbot():
@@ -241,6 +241,13 @@ def test_static_tfs_point_at_tugbot_frames():
     launch = (_ws_src() / 'tugbot_gazebo' / 'launch' / 'tugbot_gazebo.launch.py').read_text()
     assert 'tugbot/base_link/lidar_3d' in launch and 'mr_buggy3/base/lidar_3d' not in launch
     assert 'tugbot/base_link/camera_front' in launch and 'mr_buggy3/base/camera_front' not in launch
+    # The TRANSLATIONS must match the SDF mounts (lidar z=0.55, camera 0.20/0.40):
+    # a renamed frame with a stale buggy offset would project the cloud ~0.25 m low
+    # while every name-only assertion stays green (Task 1 quality-review finding).
+    lidar = _block(launch, r"name='lidar_3d_static_tf'.*?arguments=\[(.*?)\]")
+    assert "'--z', '0.55'" in lidar
+    cam = _block(launch, r"name='camera_front_static_tf'.*?arguments=\[(.*?)\]")
+    assert "'--x', '0.20'" in cam and "'--z', '0.40'" in cam
 
 
 def test_bridge_unchanged_platform_agnostic():
@@ -450,15 +457,33 @@ with:
     </include>
 ```
 
-- [ ] **Step 2: Point the static TFs at tugbot sensor frames**
+- [ ] **Step 2: Point the static TFs at tugbot sensor frames — NAMES AND TRANSLATIONS**
 
-In `tugbot_gazebo.launch.py`, replace the child-frame strings:
-- `mr_buggy3/base/lidar_3d` → `tugbot/base_link/lidar_3d`
-- `mr_buggy3/base/camera_front` → `tugbot/base_link/camera_front`
+In `tugbot_gazebo.launch.py`, the two static-TF nodes still carry the BUGGY
+mount offsets (lidar `--z 0.30`, camera `--x 0.12 --z 0.15`). A name-only
+rename would project the cloud ~0.25 m low with every frame assertion green
+(Task 1 quality-review finding). Replace the full argument lists:
+
+`lidar_3d_static_tf` arguments:
+
+```python
+            '--x', '0.0', '--y', '0.0', '--z', '0.55',
+            '--roll', '0.0', '--pitch', '0.0', '--yaw', '0.0',
+            '--frame-id', 'base_link', '--child-frame-id', 'tugbot/base_link/lidar_3d',
+```
+
+`camera_front_static_tf` arguments:
+
+```python
+            '--x', '0.20', '--y', '0.0', '--z', '0.40',
+            '--roll', '0.0', '--pitch', '0.0', '--yaw', '0.0',
+            '--frame-id', 'base_link', '--child-frame-id', 'tugbot/base_link/camera_front',
+```
 
 (gz scoped sensor frames follow `<model>/<link>/<sensor>`; tugbot's link is
 `base_link`, the buggy's was `base`. Task 5's smoke verifies the live frame
-string from the actual cloud header.)
+string from the actual cloud header. The translations mirror the SDF mounts
+pinned in Task 1: lidar `0 0 0.55`, camera `0.20 0 0.40`.)
 
 - [ ] **Step 3: Re-freeze the two coupled buggy-contract tests**
 
