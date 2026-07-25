@@ -417,7 +417,7 @@ set +u; source install/setup.bash; set -u
 python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -5
 ```
 
-Expected: `10 failed, 550 passed` (baseline + 6 new unit tests; frozen names unchanged).
+Expected: `10 failed, 552 passed` (baseline + 8 new unit tests incl. the review-added buffer-trim and z pass-through pins; frozen names unchanged).
 
 - [ ] **Step 8: Commit**
 
@@ -796,7 +796,7 @@ set +u; source /opt/ros/jazzy/setup.bash; source install/setup.bash; set -u
 python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -5
 ```
 
-Expected: `10 failed, 554 passed` (Task 1's 550 + 4 metric tests).
+Expected: `10 failed, 556 passed` (Task 1's 552 + 4 metric tests).
 
 - [ ] **Step 8: Commit**
 
@@ -1034,7 +1034,7 @@ Expected: 3 passed. Then the full suite tail:
 python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -3
 ```
 
-Expected: `10 failed, 557 passed`.
+Expected: `10 failed, 559 passed`.
 
 - [ ] **Step 5: Commit**
 
@@ -1146,7 +1146,7 @@ EOF
 Process per the established discipline: dispatch the fix as its own
 implementer+review cycle AFTER the controller records the verdict; one
 evidence-backed fix, no parameter roulette; full suite adjudication
-(10 failed / 557 passed expected envelope plus any new fix tests).
+(10 failed / 559 passed expected envelope plus any new fix tests).
 
 ---
 
@@ -1175,4 +1175,4 @@ memory archive).
 
 - Spec coverage: instrument a→Task 1, b→Task 2, c→Task 3; protocol/verdict→Task 4; fix principles→Task 5; acceptance/downgrade→Task 6. Coordinate anchors and fairness rules carried into code.
 - Placeholders: Task 5 intentionally defers exact code to the verdict (measure-first phase structure per adjudication 2); everything pre-writable is written. The diag script is specified as four exact deltas against a byte-copied original.
-- Type consistency: `nearest_gt_sample(buffer, t_s)` / `compose_map_sensor(x..qw)` / `segment_band_stats(pts, seg)` / `wall_points(pts, seg)` / `parse_posediag_line(line)` / `bucket_stats(rows, center, half)` consistent between tools and tests; suite-count arithmetic 544→550→554→557.
+- Type consistency: `nearest_gt_sample(buffer, t_s)` / `compose_map_sensor(x..qw)` / `segment_band_stats(pts, seg)` / `wall_points(pts, seg)` / `parse_posediag_line(line)` / `bucket_stats(rows, center, half)` consistent between tools and tests; suite-count arithmetic 544→552→556→559.
