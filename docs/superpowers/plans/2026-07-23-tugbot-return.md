@@ -923,16 +923,22 @@ class AnchorCheck(Node):
         self.odom_xy = (p.x, p.y)
 
     def _gt(self, msg):
-        for t in msg.transforms:
-            if t.child_frame_id == 'tugbot':
-                tr = t.transform.translation
-                self.gt_xy = (tr.x, tr.y)
+        # ros_gz_bridge's built-in gz.msgs.Pose_V -> tf2_msgs/TFMessage
+        # conversion does NOT carry the gz Pose "name" field into
+        # header.frame_id / child_frame_id -- both come through empty
+        # (confirmed via raw ros2/gz dumps). tugbot is the maze world's only
+        # non-static top-level model, so gz's SceneBroadcaster consistently
+        # emits its own world-anchored pose as transforms[0], ahead of its
+        # child links (base_link, imu_link, ...) -- index 0 is used instead.
+        if msg.transforms:
+            tr = msg.transforms[0].transform.translation
+            self.gt_xy = (tr.x, tr.y)
 
 
 def main():
     rclpy.init()
     node = AnchorCheck()
-    deadline = time.monotonic() + 20.0
+    deadline = time.monotonic() + 40.0
     while (node.odom_xy is None or node.gt_xy is None) and time.monotonic() < deadline:
         rclpy.spin_once(node, timeout_sec=0.2)
     if node.odom_xy is None or node.gt_xy is None:
@@ -998,7 +1004,7 @@ set -u
 
 kill_sim() {
     for pat in "ros2 launch" "gz sim" "ruby.*gz" parameter_bridge robot_state_publisher \
-               static_transform_publisher tugbot_odom_anchor_check; do
+               static_transform_publisher scan_slice_projector tugbot_odom_anchor_check; do
         pkill -9 -f "$pat" 2>/dev/null
     done
 }
