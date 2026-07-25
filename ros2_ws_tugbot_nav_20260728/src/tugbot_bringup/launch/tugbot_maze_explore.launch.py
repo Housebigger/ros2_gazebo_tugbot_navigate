@@ -232,7 +232,7 @@ def generate_launch_description():
 
     gt_cloud_accumulator = Node(
         package='tugbot_maze', executable='gt_cloud_accumulator', name='gt_cloud_accumulator',
-        parameters=[{'use_sim_time': True,
+        parameters=[{'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
                      'dump_dir': LaunchConfiguration('junction_log_dir')}],
         condition=IfCondition(LaunchConfiguration('gt_cloud_diag')),
         output='screen',

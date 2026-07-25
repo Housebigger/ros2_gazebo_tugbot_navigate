@@ -57,3 +57,19 @@ def test_compose_yawed_pose_rotates_sensor_points():
     assert p[0] == pytest.approx(1.0 + WORLD_TO_MAP_X, abs=1e-6)
     assert p[1] == pytest.approx(2.0 + WORLD_TO_MAP_Y + 2.0, abs=1e-6)
     assert p[2] == pytest.approx(LIDAR_MOUNT_Z, abs=1e-6)
+
+
+def test_trim_gt_buffer_drops_old_samples():
+    from tugbot_maze.gt_cloud_accumulator import trim_gt_buffer, GT_BUFFER_S
+    buf = [(0.0, 'old'), (1.0, 'mid'), (2.5, 'new')]
+    out = trim_gt_buffer(buf, 2.5)
+    assert (0.0, 'old') not in out and (2.5, 'new') in out
+    assert all(t >= 2.5 - GT_BUFFER_S for t, _ in out)
+
+
+def test_compose_passes_gt_z_through():
+    # Task 1 review I2 documentation: gt z rides through the compose; the
+    # two maps' z datums may differ and the metric must be datum-relative.
+    T = compose_map_sensor(0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0)
+    p = T @ np.array([0.0, 0.0, 0.0, 1.0])
+    assert p[2] == pytest.approx(0.5 + LIDAR_MOUNT_Z)

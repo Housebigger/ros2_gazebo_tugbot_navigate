@@ -54,13 +54,25 @@ TOPIC_PUB_MIN_PERIOD_S = 30.0  # Heisenberg guard on the latched publish
 def nearest_gt_sample(buffer, t_s):
     """Nearest-stamp sample from [(t_s, payload), ...]; None if empty or the
     nearest is farther than MAX_PAIR_DT_S (fairness: no looser than the
-    production TF pairing window)."""
+    production TF pairing window).
+    Nearest (not interpolated) -- production tf2 interpolates to the exact
+    stamp; at ~58 Hz gt the difference is sub-voxel (~mm), accepted asymmetry."""
     if not buffer:
         return None
     best = min(buffer, key=lambda item: abs(item[0] - t_s))
     if abs(best[0] - t_s) > MAX_PAIR_DT_S:
         return None
     return best
+
+
+def trim_gt_buffer(buf, newest_t_s):
+    """Drop samples older than newest_t_s - GT_BUFFER_S. Trim keys off the
+    NEWEST stamp; a backward sim-time jump would leave future-stamped
+    samples lingering (acceptable in sim -- documented, not guarded)."""
+    cutoff = newest_t_s - GT_BUFFER_S
+    while buf and buf[0][0] < cutoff:
+        buf.pop(0)
+    return buf
 
 
 def compose_map_sensor(x, y, z, qx, qy, qz, qw):
@@ -90,7 +102,17 @@ class GtCloudAccumulator(Node):
         self.pub = self.create_publisher(PointCloud2, '/maze/gt_cloud_map_3d', qos)
         self.create_subscription(TFMessage, '/gt/dynamic_pose', self._gt_cb, 50)
         self.create_subscription(PointCloud2, '/lidar/points', self._cloud_cb, 5)
+        self.create_timer(10.0, self._heartbeat)
         self.get_logger().info('gt_cloud_accumulator started (EVAL-ONLY).')
+
+    def _heartbeat(self):
+        # Unconditional -- a fully-starved gt path (no pairing ever succeeds)
+        # would otherwise be SILENT, since the should_publish-gated log below
+        # never fires. This guarantees a voided A/B is loudly visible in
+        # launch.log even when nothing accumulates.
+        self.get_logger().info(
+            'GTCLOUD voxels=%d stale_dropped=%d unpaired=%d gt_buf=%d'
+            % (len(self._map), self._stale_dropped, self._unpaired, len(self._gt_buf)))
 
     def _gt_cb(self, msg):
         # transforms[0] = the tugbot model root (bridge drops gz names; index
@@ -102,9 +124,7 @@ class GtCloudAccumulator(Node):
         t_s = Time.from_msg(t0.header.stamp).nanoseconds / 1e9
         tr, q = t0.transform.translation, t0.transform.rotation
         self._gt_buf.append((t_s, (tr.x, tr.y, tr.z, q.x, q.y, q.z, q.w)))
-        cutoff = t_s - GT_BUFFER_S
-        while self._gt_buf and self._gt_buf[0][0] < cutoff:
-            self._gt_buf.pop(0)
+        trim_gt_buffer(self._gt_buf, t_s)
 
     def _cloud_cb(self, cloud):
         try:
