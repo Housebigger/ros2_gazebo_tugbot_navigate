@@ -76,7 +76,10 @@ class FloodFillSolver(Node):
         self.front_block_m = float(self.declare_parameter('front_block_m', 0.7).value)
         self.junction_log_dir = str(self.declare_parameter('junction_log_dir', '').value)
         self.junction_log_path = os.path.join(self.junction_log_dir or 'log', 'junctions.json')
-        self.ackermann_drive = bool(self.declare_parameter('ackermann_drive', True).value)
+        # tugbot-return: classic differential mode (in-place turns, x1 timeouts,
+        # rotate-to-face centering). The Ackermann primitives stay in the code,
+        # dormant -- pass ackermann_drive:=true to re-engage them.
+        self.ackermann_drive = bool(self.declare_parameter('ackermann_drive', False).value)
 
         self.brain = FloodFillBrain(exit_cell=EXIT_CELL)
         self.mem = MapMemory(self.brain)
