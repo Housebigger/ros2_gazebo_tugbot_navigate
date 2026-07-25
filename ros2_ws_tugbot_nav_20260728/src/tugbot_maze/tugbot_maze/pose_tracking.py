@@ -85,6 +85,33 @@ def apply_odom_pos_gate(est: Pose2D, odom_map: Pose2D,
     return est, False
 
 
+def apply_odom_yaw_micro_gate(est: Pose2D, odom_map: Pose2D, bound: float) -> Tuple[Pose2D, bool]:
+    """Snap an ICP-accepted pose's yaw to the drift-free odom yaw when it disagrees by more
+    than `bound` rad, WITHOUT touching position. `odom_map` is the pure-odom pose in the map
+    frame, same premise as apply_odom_yaw_gate (drift-free in this sim; a real drifting-odom
+    platform would need this premise re-examined before reuse).
+
+    This catches a DIFFERENT failure than the two predecessor gates: not a large alias jump,
+    but DETERMINISTIC SUB-THRESHOLD wrong accepts that ride frozen on the drift-free odom
+    through the surrounding reject stretches (center-twist-root-cause VERDICT: a gt-parallel
+    POSEDIAG decomposition over 15,916 rows / 3 runs found the worst offender pinned at map
+    (10.06, 5.1) with yaw innovation +0.244-0.248 rad in EVERY run -- comfortably under both
+    apply_odom_yaw_gate's 0.5 and apply_odom_pos_gate's 1.0, invisible to either). A two-band
+    |yaw_res| histogram calibrated the bound: a clean band < 0.08 (15,794 samples, p95 0.038,
+    p99 0.066), spikes at 0.10-0.25 (122 samples), and [0.08, 0.10) completely EMPTY -- so
+    bound=0.09 (the vacuum midpoint) splits the modes with margin on both sides; 99.2% of
+    samples are untouched.
+
+    Unlike apply_odom_yaw_gate (which falls back to the PRIOR position on a fire, because it
+    catches large alias jumps where position is also suspect), this gate KEEPS the accepted
+    position -- the deterministic sub-threshold accepts it targets have healthy positions;
+    only the yaw is wrong. Returns (pose, gated: bool)."""
+    d = est[2] - odom_map[2]
+    if abs(math.atan2(math.sin(d), math.cos(d))) > bound:
+        return (est[0], est[1], odom_map[2]), True   # recover: keep est position, snap yaw
+    return est, False
+
+
 def yaw_to_quat(yaw: float) -> Tuple[float, float, float, float]:
     """(x, y, z, w) quaternion for a planar yaw (rad)."""
     return (0.0, 0.0, math.sin(yaw / 2.0), math.cos(yaw / 2.0))

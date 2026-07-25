@@ -2,7 +2,9 @@
 drift-free odom yaw by more than the bound, keeping the odom-propagated prior. Calibrated
 bound 0.5 rad (clean-run |ydis| max 0.297; alias pin ~1.5). localization-root-cause Task 5."""
 import math
-from tugbot_maze.pose_tracking import apply_odom_yaw_gate, apply_odom_pos_gate
+import pytest
+from tugbot_maze.pose_tracking import (
+    apply_odom_yaw_gate, apply_odom_pos_gate, apply_odom_yaw_micro_gate)
 
 
 def test_healthy_correction_passes():
@@ -76,3 +78,40 @@ def test_pos_gate_diagonal_distance():
     # Euclidean, not per-axis: (0.8, 0.8) -> 1.13m > 1.0 -> gated.
     est, gated = apply_odom_pos_gate((14.8, 14.8, 1.5), (14.0, 14.0, 1.5), 1.0)
     assert est == (14.0, 14.0, 1.5) and gated is True
+
+
+# --- yaw micro-gate (center-twist-root-cause Task 5): vacuum-calibrated bound 0.09 rad
+# (two-band histogram over 15,916 POSEDIAG rows, 3 runs -- clean band <0.08, spikes 0.10-0.25,
+# [0.08, 0.10) EMPTY). Unlike apply_odom_yaw_gate (which snaps yaw AND falls back to the prior
+# position), this gate keeps the ACCEPTED position and only snaps yaw -- the deterministic
+# sub-threshold accepts it targets have healthy positions, only the yaw is wrong.
+
+def test_micro_gate_passes_within_bound():
+    # 0.08 rad disagreement (the observed clean-band ceiling) must NOT be gated at bound 0.09.
+    est = (5.0, 3.0, 0.08); odom_map = (5.0, 3.0, 0.00)
+    out, gated = apply_odom_yaw_micro_gate(est, odom_map, 0.09)
+    assert gated is False and out == est
+
+
+def test_micro_gate_fires_above_bound_keeps_est_position():
+    # 0.244 rad (the verdict's measured deterministic spike) -> gate fires; the ACCEPTED
+    # position is kept (unlike apply_odom_yaw_gate, which falls back to the prior position).
+    est = (10.06, 5.1, 0.244); odom_map = (10.06, 5.1, 0.000)
+    out, gated = apply_odom_yaw_micro_gate(est, odom_map, 0.09)
+    assert gated is True and out == (10.06, 5.1, 0.000)
+
+
+def test_micro_gate_wrap_around_pi():
+    # est yaw 3.10, odom yaw -3.10 -> raw diff 6.20 but wrapped is ~-0.083 (< 0.09) -> pass.
+    est = (1.0, 2.0, 3.10); odom_map = (1.0, 2.0, -3.10)
+    out, gated = apply_odom_yaw_micro_gate(est, odom_map, 0.09)
+    assert gated is False and out == est
+
+
+def test_ydis_micro_rad_pinned_at_vacuum_midpoint():
+    pytest.importorskip("rclpy")
+    from tugbot_maze.flood_fill_solver import YDIS_MICRO_RAD
+    # Vacuum calibration (center-twist-root-cause VERDICT, 15,916 rows / 3 runs): clean band
+    # |yaw_res| < 0.08 (15,794 samples, p95 0.038, p99 0.066), spikes 0.10-0.25 (122 samples),
+    # [0.08, 0.10) EMPTY -> bound pinned at the vacuum midpoint 0.09.
+    assert YDIS_MICRO_RAD == 0.09

@@ -24,7 +24,7 @@ from tugbot_maze.maze_motion import MazeMotion
 from tugbot_maze.junction_log import JunctionLog, update_junctions
 from tugbot_maze.pose_tracking import (
     compose_2d, quat_to_yaw, odom_prior, yaw_to_quat, map_to_odom,
-    apply_odom_yaw_gate, apply_odom_pos_gate)
+    apply_odom_yaw_gate, apply_odom_pos_gate, apply_odom_yaw_micro_gate)
 from tugbot_maze.scan_match_localizer import ScanMatchLocalizer
 from tugbot_maze.maze_sim import load_segments, outer_segments
 from tugbot_maze.online_scan_match_localizer import (
@@ -38,6 +38,14 @@ YDIS_GATE_RAD = 0.5
 # reject ICP accepts displacing the position > this from the drift-free odom position
 # (ackermann-physics 5b; calibrated: clean p99 0.182/max 0.822, one-cell alias pin ~2.0)
 POS_GATE_M = 1.0
+
+# snap ICP-accepted yaw to the drift-free odom yaw when it disagrees by more than this
+# (center-twist-root-cause Task 5; two-band vacuum calibration over 15,916 POSEDIAG rows /
+# 3 runs: clean band |yaw_res| < 0.08 (15,794 samples, p95 0.038, p99 0.066), spikes 0.10-0.25
+# (122 samples), [0.08, 0.10) EMPTY -- bound = the vacuum midpoint; catches the deterministic
+# sub-threshold accepts, e.g. map (10.06, 5.1) yaw innovation +0.244-0.248 in EVERY run, both
+# blind to YDIS_GATE_RAD/POS_GATE_M above; 99.2% of samples untouched)
+YDIS_MICRO_RAD = 0.09
 
 
 class FloodFillSolver(Node):
@@ -242,6 +250,17 @@ class FloodFillSolver(Node):
                     'POS_GATE pdis=%.3f est=(%.2f, %.2f) odom=(%.2f, %.2f)'
                     % (math.hypot(gated_est[0] - odom_map[0], gated_est[1] - odom_map[1]),
                        gated_est[0], gated_est[1], odom_map[0], odom_map[1]))
+            # Odom-prior yaw MICRO-gate: catches deterministic sub-threshold wrong accepts
+            # (center-twist-root-cause VERDICT) that ride frozen on the drift-free odom through
+            # reject stretches -- invisible to both gates above. Position is kept (healthy in
+            # this failure mode); only the yaw snaps to the drift-free odom yaw.
+            micro_est, micro_gated = apply_odom_yaw_micro_gate(est, odom_map, YDIS_MICRO_RAD)
+            if micro_gated:
+                self.get_logger().info(          # DIAG: sub-threshold accept snapped (Task 5)
+                    'YAW_MICRO ydis=%.3f est_yaw=%.3f odom_yaw=%.3f'
+                    % (math.atan2(math.sin(est[2] - odom_map[2]), math.cos(est[2] - odom_map[2])),
+                       est[2], odom_map[2]))
+            est = micro_est
         self._sm_corrected = est
         self._sm_last_odom = odom_base
         self._sm_seq = self._scan_seq
