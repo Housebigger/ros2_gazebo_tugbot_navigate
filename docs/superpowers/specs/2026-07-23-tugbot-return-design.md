@@ -265,4 +265,21 @@ mode ((3,9) rear graze) is already covered by the reverse-to-center fix
   pre-filed (both aliasing gates silent all run, so pivot yaw error never
   materialized on this drift-free anchored-odom platform).
 
-GUI acceptance: pending (user-triggered only).
+### 6. GUI acceptance (run 115518, user verdict: PASSED)
+
+| run | result | POS/YAW gates | ERROR | oracle | final voxels | saturation (last/mid) |
+|---|---|---|---|---|---|---|
+| 115518 (GUI+RViz) | EXIT_REACHED (~540 s) | 0 / 0 | 0 | 0.000% | 447,527 | 0.60 (decaying) |
+
+- GUI ran longer under render load (357 accumulator samples vs 243 headless),
+  hence the slightly thicker map; 447,527 still sits below the buggy 450k
+  baseline and in the same band as the headless pair -- the GUI/headless
+  convergence introduced by the ackermann-phase stamp-based TF fix carries
+  over to the tugbot.
+- User visual verdict on the RViz accumulated map: acceptance PASSED.
+- Percentage convention note: the "~17%/18%" figures are computed against the
+  dog range's UPPER end (2.47M), same convention as the prior phase; against
+  2.15M they read ~20%. The range itself is disclosed above.
+- Inventory note: the stock IMU sensor is retained in the model (unbridged,
+  inert on the ROS side) -- consistent with the "stock 2D sensors removed"
+  scope, recorded here for completeness.
