@@ -6,7 +6,7 @@
 #   launch.log (POSEDIAG + GTCLOUD + CLOUDMAP lines)
 #   cloud_map_3d.npy   (production map, captured pre-kill)
 #   gt_cloud_map.npy   (gt map, dumped by the instrument at SIGINT)
-# Usage: tools/run_center_twist_diag.sh [MAX_SECONDS] [HEADLESS] [USE_RVIZ]
+# Usage: tools/run_center_twist_diag.sh [MAX_SECONDS] [HEADLESS] [USE_RVIZ] [POSE_SOURCE] [SENSE_DEBUG]
 set +u
 WS="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$WS"
@@ -77,8 +77,11 @@ echo "$RESULT" > "$ART/result.txt"
 grep -aE "EXIT_REACHED|HOP_BACKUP|JUNCTION|DIAG|SENSE|flood_fill_solver|LOCO|FALL_DETECTED|CLOUDMAP" "$ART/launch.log" | tail -80 > "$ART/flood_fill_tail.txt" 2>/dev/null
 
 # capture the production latched map BEFORE teardown (latch dies with the node)
-timeout 40 python3 "$(dirname "$0")/capture_cloud_map.py" \
-    --out "$ART/cloud_map_3d.npy" | tee -a "$ART/run_meta.txt"
+# (skip when the launch itself died - the latch is already gone; review M3)
+if [ "$RESULT" != "LAUNCH_DIED" ] && [ "$RESULT" != "DDS_SHM_FAIL" ]; then
+    timeout 40 python3 "$(dirname "$0")/capture_cloud_map.py" \
+        --out "$ART/cloud_map_3d.npy" | tee -a "$ART/run_meta.txt"
+fi
 
 kill -INT "$LAUNCH_PID" 2>/dev/null
 sleep 5

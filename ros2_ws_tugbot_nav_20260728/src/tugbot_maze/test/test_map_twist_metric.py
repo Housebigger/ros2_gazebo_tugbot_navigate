@@ -59,6 +59,23 @@ def test_wall_points_selects_band_only():
     assert 40 <= len(sel) <= 60                   # only the in-band wall survives
 
 
+def test_single_image_angle_reports_injected_rotation():
+    # Angle-channel validity on a SINGLE rotated image. The clean+twisted
+    # UNION attenuates the fitted angle ~2x (Task 2 review I2), which is why
+    # angle is corroborating-only in the verdict protocol -- this test pins
+    # that the channel itself is sound when given an unmixed image.
+    seg = (10.0, 8.0, 10.0, 11.0)
+    pts = _wall(*seg, noise=0.01)
+    mid = np.array([10.0, 9.5, 0.0])
+    a = math.radians(3.0)
+    R = np.array([[math.cos(a), -math.sin(a), 0.0],
+                  [math.sin(a), math.cos(a), 0.0],
+                  [0.0, 0.0, 1.0]])
+    rotated = ((pts - mid) @ R.T + mid).astype(np.float32)
+    stats = segment_band_stats(rotated, seg)
+    assert abs(abs(stats['angle_deg']) - 3.0) < 0.8
+
+
 def test_stats_are_z_datum_invariant():
     # Task 1 quality review I2: the gt and production maps may sit on
     # different z datums. Shifting a cloud by +0.5 m in z and passing the
