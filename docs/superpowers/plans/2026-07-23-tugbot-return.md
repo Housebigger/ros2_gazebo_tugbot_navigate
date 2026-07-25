@@ -1082,6 +1082,16 @@ EOF
 This task is executed by the CONTROLLER in the main session — long sim runs
 die with subagents. Subagents must not start it.
 
+**Watch-list from the Task 3 quality review (rear-asymmetry blind spot):** the
+live motion code does NOT import FOOT_X_REAR — its rear margins were written
+against the buggy's 0.15 rear, while the tugbot gripper extends 0.468. With
+`ackermann_drive` False (Task 4) the exposed paths are (a) in-place /
+centering rotations at junctions (rear corner sweeps a ~0.59 m arc — the
+historical hazard the reverse-to-center fix mitigates) and (b) dead-end
+backout reverses. The oracle replay catches rear grazes — read its per-sample
+output specifically for REAR-face contacts before declaring 0.000%, and if any
+appear, they are a finding for the addendum, not a tuning license.
+
 - [ ] **Step 1: Two headless runs**
 
 ```bash
