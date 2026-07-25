@@ -164,3 +164,83 @@ numbers BEFORE any fix lands.
 - No motion-layer changes (the twist is a mapping/localization question; the
   tugbot's motion passed acceptance).
 - No real-drifting-odom generalization work (recorded backlog stays parked).
+
+## Addendum — VERDICT (Task 4, two valid instrumented runs)
+
+### Instrument shakedown (recorded traps)
+
+- Run 162802 voided the A/B loudly (heartbeat working as designed): the
+  bridged `/gt/dynamic_pose` per-transform header stamps are CONSTANT ZERO —
+  the same ros_gz_bridge conversion that drops gz names also leaves stamps
+  unset (measured: gt stamp `sec: 0` vs cloud stamp advancing sim time). The
+  gt instrument now pairs on RECEIPT time (same sim-clock domain). Sibling
+  trap of the tugbot-return "bridge drops names" finding.
+- Teardown-time dumping is unreliable under the run script's 5 s INT-to-KILL
+  window (measured: dump never ran) — the gt map is now snapshotted every
+  30 s piggybacking the latched publish, plus captured at run end via the
+  same tool as the production map.
+
+### A/B result (runs 170140 and 171131, both EXIT_REACHED, gates silent,
+oracle 0.000%, zero ERROR — no baseline regression from the instruments)
+
+| | production map | gt map |
+|---|---|---|
+| total voxels | 395,455 / 401,796 | 291,008 / 299,633 |
+| center-band spread_p95 mean | 0.2250 / 0.2250 | 0.1631 / 0.1631 |
+| **AGG_DELTA dp95_mean** | **+0.0619 (both runs, identical)** | — |
+| AGG_DELTA dp95_p95 | +0.1421 (both runs) | — |
+
+Production carries ~100k extra voxels (+34%) of believed-pose smear globally;
+in the four center wall bands the paired spread delta is +0.06 mean / +0.14
+worst — well above the 0.05 voxel floor. Per-segment: the two vertical
+center-corridor walls show the largest deltas (0.200 vs 0.050 and 0.200 vs
+0.102). The gt map is decisively cleaner. Both datums co-located (0.000).
+
+**Branch (a): the twist is believed-pose error. Timing/pairing and rendering
+are exonerated; localization layer owns it.**
+
+### Mechanism (POSEDIAG decomposition, 15,916 rows across 3 valid logs)
+
+1. **Odom is exonerated completely**: yaw_odom sanity p95 = 0.004-0.006 rad.
+   Every solver yaw residual is ICP-injected.
+2. **Deterministic sub-threshold wrong accepts at specific weak-observability
+   spots.** The worst episode reproduces in ALL runs at the SAME location
+   with the SAME magnitude: map (10.05-10.09, 5.0-5.2), heading north into
+   the center corridor, peak yaw_res +0.244/+0.245/+0.248 rad with pos_res
+   0.26-0.27 — a mini-attractor in the self-built reference at that spot,
+   not noise. Anatomy (run 170140): an ICP accept at t=…357.38 INJECTS
+   (yaw +0.045 on top of an existing lag, position −0.03), the error then
+   RIDES FROZEN on the drift-free odom for ~1 s while ICP rejects
+   (`eigmin=0.00` streak = the interior gate holding the 3-DOF localizer off
+   in the center corridor), and the next accept at t=…358.28 snaps most of
+   it back (−0.116). Every painted cloud in that window carries ~0.15-0.25
+   rad of yaw error — fan smear at range.
+3. **Secondary component**: a ~0.03-0.05 rad yaw lag during turn sweeps
+   (solver trails the true yaw whichever direction it rotates) — small,
+   paints ≤ ~0.2 m at 5 m range, partially a measurement-phase artifact.
+4. **Both aliasing gates are structurally blind here**: max deviation 0.248
+   < yaw gate 0.5; 0.27 < position gate 1.0. Sub-threshold by design, as the
+   spec predicted.
+
+### Calibration (two-band vacuum, the position-gate method, 3rd use)
+
+|yaw_res| histogram across 15,916 samples: clean band tops out below 0.08
+(15,794 samples; p95 0.038, p99 0.066); the spike population sits at
+0.10-0.25 (122 samples); **[0.08, 0.10) is EMPTY**. The vacuum midpoint sets
+the bound.
+
+### Chosen lever (Task 5)
+
+**Yaw micro-gate at the existing solver gate choke point**: after the 0.5
+recovery gate and the 1.0 position gate, snap the accepted yaw to the
+drift-free odom yaw when the innovation exceeds **0.09 rad**
+(`apply_odom_yaw_gate` reused with the tighter bound; own log tag; own
+counter). 99.2% of samples are untouched; the deterministic 0.15-0.25
+episodes are killed at the source; the ride-on-odom stretches then carry
+≤0.09 rad. Localizer files stay byte-frozen; the real-drifting-odom caveat
+is recorded exactly as for the two predecessor gates. Expectation for the
+re-verify: AGG_DELTA dp95_mean drops toward 0; residual floor bounded by the
+~0.04 turn-lag component (sub-clamp). Position micro-gating is deliberately
+NOT included in the first lever (pos spikes ride the same episodes; if the
+post-fix metric shows residual position smear, it becomes the second lever
+in-phase per the one-fix-one-measure discipline).
