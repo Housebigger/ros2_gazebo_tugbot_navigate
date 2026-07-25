@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # tugbot-return smoke (Task 5): model/plugin semantics in the REAL maze world,
-# headless, no solver in the loop. Checks, in order:
-#   1. gz has NO /scan topic (stock scan_omni really gone -- the projection
-#      chain must be the only /scan source once the full stack runs)
-#   2. /lidar/points/points delivers a PointCloud2 whose frame_id is the
-#      tugbot/base_link/lidar_3d scoped frame (records the LIVE string)
-#   3. /diffdrive/odom_unused exists on the gz graph (odom redirect took)
-#   4. world-anchored odom: drive an arc, /odom displacement == gt displacement
+# headless, no solver in the loop. Checks, in code order:
+#   1. maze-world-loaded: the maze world's gz topic namespace is present (the
+#      gazebo-only launch defaults to tugbot_empty_world.sdf, which would
+#      silently green-light checks 2-5 while starving the gt bridge)
+#   2. no-model-/scan-topic: gz has NO /scan topic (stock scan_omni really
+#      gone -- the projection chain must be the only /scan source once the
+#      full stack runs)
+#   3. cloud-split-topic: /lidar/points/points is present on the gz graph
+#   4. diffdrive-odom-redirect: /diffdrive/odom_unused exists on the gz graph
+#      (odom redirect took)
+#   5. live-lidar-frame: /lidar/points delivers a PointCloud2 whose frame_id
+#      is the tugbot/base_link/lidar_3d scoped frame (records the LIVE string)
+#   6. world-anchored-odom: drive an arc, /odom displacement == gt displacement
 #      (tools/tugbot_odom_anchor_check.py; gt readout is EVAL-ONLY)
 # Same PRIME/env discipline as the run scripts.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,7 +54,13 @@ ros2 launch tugbot_gazebo tugbot_gazebo.launch.py headless:=true \
     world_sdf:="${MAZE_WORLD}" \
     > "$LOGDIR/launch.log" 2>&1 &
 LAUNCH_PID=$!
-sleep 25
+trap 'kill -INT "$LAUNCH_PID" 2>/dev/null; sleep 1; kill_sim' EXIT
+
+for i in $(seq 1 30); do
+    kill -0 "$LAUNCH_PID" 2>/dev/null || { echo "[SMOKE] launch died early"; break; }
+    gz topic -l 2>/dev/null | grep -q "/world/tugbot_maze_world_20260528_clean_scaled2x/" && break
+    sleep 2
+done
 
 PASS=0; FAIL=0
 check() {  # check <name> <0-for-pass>
