@@ -504,8 +504,9 @@ and replace `test_static_tfs_point_at_buggy_frames` with:
 
 ```python
 def test_static_tfs_no_longer_point_at_buggy_frames():
-    # Re-frozen at tugbot-return (same convention as the dog re-freeze at
-    # buggy-swap): launch TFs now belong to the tugbot contract test.
+    # Re-frozen at tugbot-return: launch TFs now belong to the tugbot contract
+    # test. Mirrors the negative-assertion pattern buggy-swap introduced for
+    # the dog (written fresh there; renamed from a positive test here).
     launch = (_ws_src() / 'tugbot_gazebo' / 'launch' / 'tugbot_gazebo.launch.py').read_text()
     assert 'mr_buggy3/base/lidar_3d' not in launch
     assert 'mr_buggy3/base/camera_front' not in launch
