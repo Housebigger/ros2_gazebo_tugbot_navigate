@@ -1,7 +1,13 @@
 """Unit tests for the gt parallel accumulator's PURE helpers (the node wraps
 them; sim integration is exercised by the Task 4 diag runs). Pins the A/B
 fairness rules: nearest-stamp pairing with the production TF timeout as the
-max pairing distance, and the exact world->map compose with the lidar mount."""
+max pairing distance, and the exact world->map compose with the lidar mount.
+
+Note: pairing is against the gt sample's RECEIPT stamp, not a stamp read out
+of /gt/dynamic_pose -- measured (2026-07-25 gtstamp smoke) that the bridged
+transforms[0].header.stamp is constant sec:0/nanosec:0, unusable. The
+nearest_gt_sample/trim_gt_buffer helpers below are stamp-AGNOSTIC (they take
+plain floats), so this receipt-time fix needed no helper-level test change."""
 import math
 
 import numpy as np

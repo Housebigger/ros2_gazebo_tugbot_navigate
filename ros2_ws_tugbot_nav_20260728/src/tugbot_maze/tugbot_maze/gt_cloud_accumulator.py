@@ -116,12 +116,29 @@ class GtCloudAccumulator(Node):
 
     def _gt_cb(self, msg):
         # transforms[0] = the tugbot model root (bridge drops gz names; index
-        # convention per the tugbot-return record). Stamp from the message
-        # header of the first transform.
+        # convention per the tugbot-return record).
+        #
+        # MEASURED (2026-07-25 gtstamp smoke, headless maze world):
+        # `ros2 topic echo --once /gt/dynamic_pose` -> transforms[0].header.stamp
+        # is sec:0 nanosec:0 -- the ros_gz_bridge that drops the gz name fields
+        # also fails to populate a per-transform header stamp, so it is
+        # CONSTANT ZERO, never advancing. Using it for pairing was silently
+        # voiding the whole A/B (POSEDIAG-scale confirmed: run 1's heartbeat
+        # showed voxels=0 unpaired=5510 gt_buf=32410 -- every sample buffered
+        # forever because trim's own cutoff arithmetic never advances off 0.0,
+        # and every cloud pairing missed the |dt|<=0.05s window against a
+        # frozen t_s=0.0). Receipt time (this node's own clock, same sim-time
+        # domain as the cloud stamps under use_sim_time) is the only usable
+        # stamp. Jitter at ~58 Hz gt transport is ~ms, well inside the 0.05 s
+        # pairing window. Fairness note: production pairs at the cloud CAPTURE
+        # stamp via tf2 interpolation to that exact stamp; this instrument
+        # pairs the cloud's CAPTURE stamp against the gt sample's RECEIPT
+        # stamp -- a documented asymmetry, not an attempt to match production
+        # byte-for-byte (the bridged gt stamp leaves no other option).
         if not msg.transforms:
             return
         t0 = msg.transforms[0]
-        t_s = Time.from_msg(t0.header.stamp).nanoseconds / 1e9
+        t_s = self.get_clock().now().nanoseconds / 1e9
         tr, q = t0.transform.translation, t0.transform.rotation
         self._gt_buf.append((t_s, (tr.x, tr.y, tr.z, q.x, q.y, q.z, q.w)))
         trim_gt_buffer(self._gt_buf, t_s)
@@ -157,15 +174,25 @@ class GtCloudAccumulator(Node):
                                     throttle_duration_sec=5.0)
 
     def dump(self):
+        # Logs an outcome on every path (dump_dir unset / success / error) --
+        # run 1's silent absence of a "GTCLOUD dump" line was ambiguous
+        # between "dump_dir was never configured", "the map was empty",
+        # and "the process died (SIGKILL) before this ever ran". An empty
+        # map was PROBED offline (CloudMap3D() -> to_pointcloud2 ->
+        # read_points_numpy -> np.save) and does NOT raise -- it cleanly
+        # produces (0, 3); the explicit reshape below is defensive belt for
+        # that path regardless.
         if not self.dump_dir:
+            self.get_logger().info('GTCLOUD dump skipped (dump_dir not set)')
             return
         try:
             pc = self._map.to_pointcloud2(frame_id='map')
             pts = point_cloud2.read_points_numpy(
                 pc, field_names=('x', 'y', 'z'), skip_nans=False)
+            pts = np.asarray(pts, dtype=np.float32).reshape(-1, 3)
             path = os.path.join(self.dump_dir, 'gt_cloud_map.npy')
-            np.save(path, pts.astype(np.float32))
-            self.get_logger().info('GTCLOUD dumped %d voxels -> %s'
+            np.save(path, pts)
+            self.get_logger().info('GTCLOUD dump wrote %d voxels -> %s'
                                    % (len(pts), path))
         except Exception as e:
             self.get_logger().error('GTCLOUD dump failed: %r' % e)
