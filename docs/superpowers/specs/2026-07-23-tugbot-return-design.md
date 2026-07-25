@@ -178,3 +178,91 @@ mode ((3,9) rear graze) is already covered by the reverse-to-center fix
 - No tuning loop to force the voxel count under the buggy baseline (honest
   comparison per adjudication 2).
 - No S-curve or new motion primitives (backlog untouched).
+
+## Addendum — execution record (2026-07-23, tasks 0-6)
+
+### 1. Suite accounting
+
+- Task 0 baseline (fresh clone, main-session verified): **4 failed / 540
+  passed / 0 xfailed, 544 collected**. Frozen quartet:
+  `test_maze_asset_and_config_are_present` +
+  `test_maze_launch_files_exist_and_use_maze_world` +
+  `test_maze_world_scaffold_contract` +
+  `test_maze_corridors_are_at_least_twice_tugbot_turning_diameter`.
+  Plan fix en route: the authoritative suite spans BOTH
+  `src/tugbot_maze/test/` AND `src/tugbot_bringup/test/` — tugbot_maze alone
+  under-collects by the 5 bringup-contract tests (236e33a).
+- After the footprint restore (Task 3, main-session verified): **10 failed /
+  544 passed, 554 collected** (+10 tests from the tugbot contract file). The
+  6 new frozen reds are all wall_follow footprint-coupled historical records
+  (see §3). Unchanged through Task 4.
+
+### 2. Model/world surgery highlights (Tasks 1-2)
+
+- Contract file `test_tugbot_return_contract.py` (10 tests) pins the whole
+  phase; the buggy contract's two world/launch tests re-frozen.
+- Quality review caught a live trap before it fired: the launch static TFs
+  still carried the BUGGY mount translations (lidar z 0.30, camera
+  0.12/0.15) — a name-only frame rename would have projected the cloud
+  ~0.25 m low with all assertions green. TFs now carry names AND
+  translations (lidar z 0.55, camera 0.20/0.40), and the contract test pins
+  the translations (96af4a6, f4e4f2c).
+
+### 3. Footprint restore + era-4 adjudication (Task 3)
+
+- Constants restored verbatim from the pre-dog workspaces:
+  front 0.262 / rear −0.468 (gripper hand) / half-width 0.292;
+  SCAN_OFFSET_X stays 0 (the historic −0.1855 belonged to the removed 2D
+  scan_omni). Nine maze_sim geometry fixtures recomputed (bounding circle
+  0.5516 + 0.12 = 0.6716), discriminating intents preserved.
+- Wall-follow historical records, observed and frozen (not tuned):
+  - exterior cheat era 4: corridor still passable at 0.292 half-width —
+    steps=1721, outside=1611, cheat stays OPEN (same side as the buggy era).
+  - sealed interior solves + 3 perturbations + faster-hand lock: the
+    follower wedges in the interior (steps=None, outside=0, closest
+    26.08/22.38 m) — 6 reds frozen by name with in-file breadcrumbs.
+    Production navigation is flood_fill, whose offline suites stayed green.
+
+### 4. Smoke findings (Task 5, PASS=6)
+
+- **Empty-world default trap:** the gazebo-only launch defaults `world_sdf`
+  to `tugbot_empty_world.sdf` (pre-dog relic that still includes
+  model://tugbot, so model checks pass while the gt bridge — pinned to the
+  maze world name — starves with zero publishers). The full explore stack
+  always passed the maze world explicitly, which is why no prior phase saw
+  it. Smoke now pins the world and asserts `maze-world-loaded`.
+- **Bridge drops gz names:** ros_gz_bridge's Pose_V→TFMessage conversion
+  leaves every frame_id/child_frame_id EMPTY on /gt/dynamic_pose; consumers
+  must use the transforms[0] index convention (the solver's `_gt_cb` already
+  documents the same trap). Anchor check keys transforms[0].
+- **Zombie projector:** `scan_slice_projector` survives the parent launch
+  SIGINT (11 zombies had accumulated across smoke iterations); the smoke's
+  kill list now includes it (production run scripts always had it).
+- Anchor check (honest grading: origin-invariant displacement comparison —
+  drift-free tracking + frame orientation + liveness): err=0.0000,
+  travel=1.381 m; bonus empirical record `odom0 == gt0 == (-11.011,
+  -9.025)` — the OdometryPublisher reports world coordinates, so origin
+  anchoring has a measured data point too. Live lidar frame recorded:
+  `tugbot/base_link/lidar_3d`.
+- Process archaeology: the pkill-self-match heredoc trap struck again during
+  diagnosis (write and execute must be separate tool calls); its orphaned
+  script instance explains a mid-diagnostic launch kill.
+
+### 5. Headless acceptance ×2 (Task 6, main session)
+
+| run | result | POS/YAW gates | ERROR | oracle | final voxels | saturation (last/mid) | stale_dropped |
+|---|---|---|---|---|---|---|---|
+| 113158 | EXIT_REACHED (~537 s) | 0 / 0 | 0 | 0.000% | **420,579** | 0.66 (decaying) | 0 |
+| 114147 | EXIT_REACHED (~537 s) | 0 / 0 | 0 | 0.000% | **428,676** | 0.62 (decaying) | 0 |
+
+- Oracle: 2 runs, 220 samples, 0 collisions (live_rate 0.000%); the Task 3
+  review's rear-asymmetry watch item (gripper 0.468 vs buggy-era hardcoded
+  rear margins) recorded ZERO rear-face contacts across both runs.
+- Honest three-platform comparison (accumulated 3D map, final voxels):
+  dog (trot) 2.15–2.47 M = 100% · physical buggy ~450 k ≈ 18% ·
+  **tugbot (diff, in-place turns) 420–429 k ≈ 17%** — the cleanest maps of
+  the project to date, WITHOUT the pivot-turn fan smear the risk register
+  pre-filed (both aliasing gates silent all run, so pivot yaw error never
+  materialized on this drift-free anchored-odom platform).
+
+GUI acceptance: pending (user-triggered only).
