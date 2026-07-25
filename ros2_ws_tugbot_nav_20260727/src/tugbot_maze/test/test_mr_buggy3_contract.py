@@ -103,16 +103,14 @@ def test_camera_front_forward_and_spec():
     assert '<width>720</width>' in b and '<height>540</height>' in b
 
 
-def test_world_spawns_buggy_not_dog():
+def test_world_no_longer_spawns_buggy():
+    # Re-frozen at tugbot-return: the buggy ASSET stays in the repo (pure-SDF
+    # assertions above still pin it) but the world spawns the original tugbot.
     world = (_ws_src() / 'tugbot_gazebo' / 'worlds'
              / 'tugbot_maze_world_20260528_clean_scaled2x.sdf').read_text()
-    assert 'model://mr_buggy3' in world
-    assert 'model://anymal_c' not in world       # dog assets stay in repo but are not spawned
-    m = re.search(r'<uri>model://mr_buggy3</uri>\s*<name>mr_buggy3</name>\s*<pose>([^<]+)</pose>', world)
-    assert m is not None
-    x, y, z = (float(v) for v in m.group(1).split()[:3])
-    assert (x, y) == (-11.011, -9.025)           # entrance spawn, same xy as the dog
-    assert abs(z - 0.04) < 1e-9                  # wheel radius 0.0365 + clearance (original model's own z)
+    assert 'model://mr_buggy3' not in world
+    assert 'model://anymal_c' not in world
+    assert 'model://tugbot' in world
 
 
 def test_bridge_has_no_dog_joint_topics():
@@ -122,7 +120,9 @@ def test_bridge_has_no_dog_joint_topics():
     assert '/lidar/points/points' in bridge      # cloud split-topic entry stays
 
 
-def test_static_tfs_point_at_buggy_frames():
+def test_static_tfs_no_longer_point_at_buggy_frames():
+    # Re-frozen at tugbot-return (same convention as the dog re-freeze at
+    # buggy-swap): launch TFs now belong to the tugbot contract test.
     launch = (_ws_src() / 'tugbot_gazebo' / 'launch' / 'tugbot_gazebo.launch.py').read_text()
-    assert 'mr_buggy3/base/lidar_3d' in launch and 'anymal_c/base/lidar_3d' not in launch
-    assert 'mr_buggy3/base/camera_front' in launch and 'anymal_c/base/camera_front' not in launch
+    assert 'mr_buggy3/base/lidar_3d' not in launch
+    assert 'mr_buggy3/base/camera_front' not in launch
