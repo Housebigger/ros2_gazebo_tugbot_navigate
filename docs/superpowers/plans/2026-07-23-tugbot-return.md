@@ -886,8 +886,16 @@ via /cmd_vel for DRIVE_S seconds, then compares the /odom displacement against
 the ground-truth displacement from /gt/dynamic_pose (EVAL-ONLY readout — red
 line: gt never feeds control; here it only grades the odom plugin).
 
-PASS = displacement mismatch < 0.05 m AND both sources actually moved > 0.3 m
-(catches both a drifting wheel-integrated odom and a silent/dead plugin).
+PASS = displacement mismatch < 0.05 m AND both sources actually moved > 0.3 m.
+The comparison is on DISPLACEMENT (both series relative to their own start
+sample), which is origin-invariant: this verifies drift-free TRACKING, frame
+orientation, and plugin liveness over a ~1.5 m arc -- it does NOT assert
+where the odom origin sits (the odom frame is anchored at the spawn, so
+odom0 and gt0 may legitimately differ by the spawn offset; see the printed
+start samples). It catches a dead / mis-framed / grossly-drifting (>5 cm
+over ~1.5 m) odom, not a silent slow drift below that bound. Origin
+anchoring itself is exercised end-to-end by the solver runs (entrance-
+anchored compose + POS_GATE), not by this smoke check.
 Exit code 0 on PASS, 1 on FAIL, 2 on missing data."""
 import math
 import sys
@@ -930,6 +938,10 @@ class AnchorCheck(Node):
         # non-static top-level model, so gz's SceneBroadcaster consistently
         # emits its own world-anchored pose as transforms[0], ahead of its
         # child links (base_link, imu_link, ...) -- index 0 is used instead.
+        # Caveat: if a second top-level dynamic model is ever added to the
+        # maze world, index 0 is no longer guaranteed to be the robot and
+        # this check must switch to a positional heuristic (e.g. nearest to
+        # the last known odom pose) instead of a fixed index.
         if msg.transforms:
             tr = msg.transforms[0].transform.translation
             self.gt_xy = (tr.x, tr.y)
@@ -945,6 +957,7 @@ def main():
         print(f'ANCHOR_CHECK missing data: odom={node.odom_xy} gt={node.gt_xy}')
         return 2
     node.odom0, node.gt0 = node.odom_xy, node.gt_xy
+    print(f'ANCHOR_CHECK start odom0={node.odom0} gt0={node.gt0}')
 
     cmd = Twist()
     cmd.linear.x, cmd.angular.z = V, W
@@ -980,13 +993,19 @@ Create `tools/verify_tugbot_model.sh`:
 ```bash
 #!/usr/bin/env bash
 # tugbot-return smoke (Task 5): model/plugin semantics in the REAL maze world,
-# headless, no solver in the loop. Checks, in order:
-#   1. gz has NO /scan topic (stock scan_omni really gone -- the projection
-#      chain must be the only /scan source once the full stack runs)
-#   2. /lidar/points/points delivers a PointCloud2 whose frame_id is the
-#      tugbot/base_link/lidar_3d scoped frame (records the LIVE string)
-#   3. /diffdrive/odom_unused exists on the gz graph (odom redirect took)
-#   4. world-anchored odom: drive an arc, /odom displacement == gt displacement
+# headless, no solver in the loop. Checks, in code order:
+#   1. maze-world-loaded: the maze world's gz topic namespace is present (the
+#      gazebo-only launch defaults to tugbot_empty_world.sdf, which would
+#      silently green-light checks 2-5 while starving the gt bridge)
+#   2. no-model-/scan-topic: gz has NO /scan topic (stock scan_omni really
+#      gone -- the projection chain must be the only /scan source once the
+#      full stack runs)
+#   3. cloud-split-topic: /lidar/points/points is present on the gz graph
+#   4. diffdrive-odom-redirect: /diffdrive/odom_unused exists on the gz graph
+#      (odom redirect took)
+#   5. live-lidar-frame: /lidar/points delivers a PointCloud2 whose frame_id
+#      is the tugbot/base_link/lidar_3d scoped frame (records the LIVE string)
+#   6. world-anchored-odom: drive an arc, /odom displacement == gt displacement
 #      (tools/tugbot_odom_anchor_check.py; gt readout is EVAL-ONLY)
 # Same PRIME/env discipline as the run scripts.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -1024,7 +1043,13 @@ ros2 launch tugbot_gazebo tugbot_gazebo.launch.py headless:=true \
     world_sdf:="${MAZE_WORLD}" \
     > "$LOGDIR/launch.log" 2>&1 &
 LAUNCH_PID=$!
-sleep 25
+trap 'kill -INT "$LAUNCH_PID" 2>/dev/null; sleep 1; kill_sim' EXIT
+
+for i in $(seq 1 30); do
+    kill -0 "$LAUNCH_PID" 2>/dev/null || { echo "[SMOKE] launch died early"; break; }
+    gz topic -l 2>/dev/null | grep -q "/world/tugbot_maze_world_20260528_clean_scaled2x/" && break
+    sleep 2
+done
 
 PASS=0; FAIL=0
 check() {  # check <name> <0-for-pass>
