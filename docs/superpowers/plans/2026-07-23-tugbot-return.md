@@ -901,7 +901,8 @@ from tf2_msgs.msg import TFMessage
 
 DRIVE_S = 6.0
 SETTLE_S = 2.0
-V, W = 0.25, 0.25        # gentle arc — diff drive, well inside accel limits
+V, W = 0.25, 0.10        # near-straight arc: the maze entry corridor is 2 m wide,
+                         # lateral excursion at R=2.5 m over 6 s is ~0.44 m — safe
 TOL_M = 0.05
 MIN_TRAVEL_M = 0.3
 
@@ -1008,7 +1009,13 @@ export ROS_DOMAIN_ID=$(( ($(date +%s) % 90) + 1 ))
 LOGDIR="$(mktemp -d /tmp/tugbot_smoke.XXXXXX)"
 echo "[SMOKE] logdir=$LOGDIR DOMAIN=$ROS_DOMAIN_ID"
 
+# The gazebo-only launch DEFAULTS to tugbot_empty_world.sdf (pre-dog relic
+# that happens to include model://tugbot) — the full explore stack passes the
+# maze world explicitly. Smoke on the wrong world silently green-lights the
+# model checks while the gt bridge (pinned to the maze world name) starves.
+MAZE_WORLD="${WS_ROOT}/install/tugbot_gazebo/share/tugbot_gazebo/worlds/tugbot_maze_world_20260528_clean_scaled2x.sdf"
 ros2 launch tugbot_gazebo tugbot_gazebo.launch.py headless:=true \
+    world_sdf:="${MAZE_WORLD}" \
     > "$LOGDIR/launch.log" 2>&1 &
 LAUNCH_PID=$!
 sleep 25
@@ -1020,6 +1027,7 @@ check() {  # check <name> <0-for-pass>
 }
 
 gz topic -l > "$LOGDIR/gz_topics.txt" 2>&1
+grep -q "/world/tugbot_maze_world_20260528_clean_scaled2x/" "$LOGDIR/gz_topics.txt"; check "maze-world-loaded" $?
 ! grep -qx "/scan" "$LOGDIR/gz_topics.txt"; check "no-model-/scan-topic" $?
 grep -q "/lidar/points/points" "$LOGDIR/gz_topics.txt"; check "cloud-split-topic" $?
 grep -q "/diffdrive/odom_unused" "$LOGDIR/gz_topics.txt"; check "diffdrive-odom-redirect" $?
@@ -1048,7 +1056,7 @@ cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_
 tools/verify_tugbot_model.sh
 ```
 
-Expected: `PASS=5 FAIL=0`. If `live-lidar-frame` fails, read the printed live
+Expected: `PASS=6 FAIL=0`. If `live-lidar-frame` fails, read the printed live
 frame string and fix the static TF child frames in
 `tugbot_gazebo.launch.py` + the contract test to the OBSERVED string (the
 `<model>/<link>/<sensor>` convention is an expectation, the sim is the
