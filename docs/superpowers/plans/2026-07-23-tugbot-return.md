@@ -17,7 +17,7 @@
 - Every command block starts with an explicit `cd` to an absolute path (cwd drifts between calls).
 - `set +u` before sourcing any ROS `setup.bash`; only `python3` exists on this machine.
 - Build ONLY from inside the workspace: `cd <ws> && colcon build --symlink-install` (repo-root builds fail on duplicate packages).
-- Suite accounting is authoritative ONLY from a main-session workspace-root run: `cd <ws> && python3 -m pytest src/tugbot_maze/test/ -q`. Subagent pytest counts have twice been collection-scope artifacts — report them, but the controller re-verifies.
+- Suite accounting is authoritative ONLY from a main-session workspace-root run over BOTH test dirs: `cd <ws> && python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q` (544 collected; tugbot_maze alone under-collects by the 5 bringup-contract tests — Task 0 measured exactly this trap). Subagent pytest counts have twice been collection-scope artifacts — report them, but the controller re-verifies.
 - `git add` explicit paths only, never `-A` (tmp_resources holds untracked junk).
 - Commit messages: NO backticks; use heredoc `git commit -F - <<'EOF'`; end with the trailer lines used project-wide (Co-Authored-By: Claude Fable 5 <noreply@anthropic.com> and the Claude-Session URL).
 - Subagents run ALL commands FOREGROUND. Long sim runs (Task 6 headless acceptance, any GUI run) happen in the MAIN session only. GUI runs launch ONLY on the user's explicit go-ahead.
@@ -79,7 +79,7 @@ Expected: all packages build, no errors.
 ```bash
 cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260727
 set +u; source /opt/ros/jazzy/setup.bash; source install/setup.bash; set -u
-python3 -m pytest src/tugbot_maze/test/ -q 2>&1 | tail -15
+python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -15
 ```
 
 Expected: `4 failed, 540 passed` (0 xfailed). Copy the 4 failed test names verbatim into the Task 0 commit message — every later suite run is adjudicated against this list.
@@ -713,7 +713,7 @@ Run:
 ```bash
 cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260727
 python3 -m pytest src/tugbot_maze/test/test_wall_follow_maze_sim.py -q
-python3 -m pytest src/tugbot_maze/test/ -q 2>&1 | tail -15
+python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -15
 ```
 
 These are HISTORICAL-RECORD tests, footprint-coupled by design (the file
@@ -810,7 +810,7 @@ diff-mode already, so a delta here means a real regression, not the flip.)
 
 ```bash
 cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_navigate/ros2_ws_tugbot_nav_20260727
-python3 -m pytest src/tugbot_maze/test/ -q 2>&1 | tail -8
+python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -8
 ```
 
 Expected: identical counts to the end of Task 3.
