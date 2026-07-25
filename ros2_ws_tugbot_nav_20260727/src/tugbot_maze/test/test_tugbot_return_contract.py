@@ -99,7 +99,7 @@ def test_gripper_and_collisions_survive():
     sdf = _tugbot_sdf()
     assert '<link name="gripper">' in sdf            # honest rear overhang stays
     assert '<link name="gripper_hand">' in sdf
-    assert sdf.count('<collision') >= 9              # base+gripper set+hand set+4 wheels
+    assert sdf.count('<collision') >= 11             # base+gripper+hand set (incl. side pads)+4 wheels
 
 
 def test_world_spawns_tugbot():
@@ -118,6 +118,13 @@ def test_static_tfs_point_at_tugbot_frames():
     launch = (_ws_src() / 'tugbot_gazebo' / 'launch' / 'tugbot_gazebo.launch.py').read_text()
     assert 'tugbot/base_link/lidar_3d' in launch and 'mr_buggy3/base/lidar_3d' not in launch
     assert 'tugbot/base_link/camera_front' in launch and 'mr_buggy3/base/camera_front' not in launch
+    # The TRANSLATIONS must match the SDF mounts (lidar z=0.55, camera 0.20/0.40):
+    # a renamed frame with a stale buggy offset would project the cloud ~0.25 m low
+    # while every name-only assertion stays green (Task 1 quality-review finding).
+    lidar = _block(launch, r"name='lidar_3d_static_tf'.*?arguments=\[(.*?)\]")
+    assert "'--z', '0.55'" in lidar
+    cam = _block(launch, r"name='camera_front_static_tf'.*?arguments=\[(.*?)\]")
+    assert "'--x', '0.20'" in cam and "'--z', '0.40'" in cam
 
 
 def test_bridge_unchanged_platform_agnostic():

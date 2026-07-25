@@ -80,9 +80,9 @@
         </material>
       </visual>
       <!-- tugbot-return graft: 16-beam 3D lidar, centered (SCAN_OFFSET_X=0
-           contract), z=0.55 above the stock sensor-pole top (0.5318) so the
-           structure does not occlude the rings. <lidar> block field-identical
-           to the dog/buggy contract. -->
+           contract), z=0.55 above where the stock pole met the body top
+           (0.5318), so the body does not occlude the rings. <lidar> block
+           field-identical to the dog/buggy contract. -->
       <sensor name="lidar_3d" type="gpu_lidar">
         <pose>0 0 0.55 0 0 0</pose>
         <topic>/lidar/points</topic>
