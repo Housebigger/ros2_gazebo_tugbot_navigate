@@ -230,6 +230,14 @@ def generate_launch_description():
             LaunchConfiguration('pose_source'), "' == 'online_slam'"])),
     )
 
+    gt_cloud_accumulator = Node(
+        package='tugbot_maze', executable='gt_cloud_accumulator', name='gt_cloud_accumulator',
+        parameters=[{'use_sim_time': True,
+                     'dump_dir': LaunchConfiguration('junction_log_dir')}],
+        condition=IfCondition(LaunchConfiguration('gt_cloud_diag')),
+        output='screen',
+    )
+
     frontier_explorer = Node(
         package='tugbot_exploration',
         executable='frontier_explorer',
@@ -295,6 +303,7 @@ def generate_launch_description():
         DeclareLaunchArgument('pose_source', default_value='online_slam', description="flood_fill localization source: 'online_slam' (DEFAULT; validated on the anymal_c dog), 'scan_match' (ICP vs the known wall map; A/B upper bound -- KNOWN BROKEN on anymal_c: its bootstrap inherits slam_toolbox's identity map->odom, which only matched the map frame under tugbot's spawn-zeroed odom), 'odom_locked' (freeze map->odom at startup, then wheel odometry only), or 'slam' (live map->base_link)."),
         DeclareLaunchArgument('sense_debug', default_value='false', description='flood_fill: log per-cell sensed walls + min LIDAR ranges (diagnostics).'),
         DeclareLaunchArgument('pose_diag', default_value='false', description='flood_fill: eval-only POSEDIAG (gt/odom/solver) logging; ground truth NEVER enters control (localization-root-cause Task A).'),
+        DeclareLaunchArgument('gt_cloud_diag', default_value='false', description='center-twist forensics: EVAL-ONLY gt parallel accumulator (ground truth NEVER enters control); dumps gt_cloud_map.npy into junction_log_dir at shutdown.'),
         DeclareLaunchArgument('junction_log_dir', default_value='', description='flood_fill: directory for the per-run junctions.json artifact (empty -> <cwd>/log).'),
         DeclareLaunchArgument('follow_side', default_value='left', description='Wall-follower hand for explorer_type:=wall_follower: left or right. The maze_sim guarantee proof selected left as faster and robust.'),
         DeclareLaunchArgument('exploration_strategy', default_value='perimeter_then_frontier', description='Fallback inherited 0514 frontier/perimeter strategy when explorer_type:=frontier.'),
@@ -364,6 +373,6 @@ def generate_launch_description():
         DeclareLaunchArgument('corridor_max_nav2_fails', default_value='6', description='GCN: max Nav2 failures per corridor before declaring it exhausted.'),
         DeclareLaunchArgument('corridor_max_reactive', default_value='5', description='GCN: max reactive drive attempts per corridor.'),
         maze_slam_nav_launch,
-        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node, flood_fill_solver_node, cloud_map_accumulator]),
+        TimerAction(period=13.0, actions=[maze_dfs_explorer, frontier_explorer, maze_solver_node, wall_follow_solver_node, flood_fill_solver_node, cloud_map_accumulator, gt_cloud_accumulator]),
         TimerAction(period=14.0, actions=[maze_goal_monitor]),
     ])
