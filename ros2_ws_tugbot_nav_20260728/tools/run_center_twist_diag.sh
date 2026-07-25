@@ -5,7 +5,10 @@
 # /maze/cloud_map_3d dies with its node). Artifacts per run:
 #   launch.log (POSEDIAG + GTCLOUD + CLOUDMAP lines)
 #   cloud_map_3d.npy   (production map, captured pre-kill)
-#   gt_cloud_map.npy   (gt map, dumped by the instrument at SIGINT)
+#   gt_cloud_map.npy   (gt map: the node self-writes this every <=30s while
+#                       running -- captured fresh here pre-kill too, same as
+#                       the production map; shutdown-time dump() is a
+#                       best-effort belt only, not the primary path)
 # Usage: tools/run_center_twist_diag.sh [MAX_SECONDS] [HEADLESS] [USE_RVIZ] [POSE_SOURCE] [SENSE_DEBUG]
 set +u
 WS="$(cd "$(dirname "$0")/.." && pwd)"
@@ -81,6 +84,14 @@ grep -aE "EXIT_REACHED|HOP_BACKUP|JUNCTION|DIAG|SENSE|flood_fill_solver|LOCO|FAL
 if [ "$RESULT" != "LAUNCH_DIED" ] && [ "$RESULT" != "DDS_SHM_FAIL" ]; then
     timeout 40 python3 "$(dirname "$0")/capture_cloud_map.py" \
         --out "$ART/cloud_map_3d.npy" | tee -a "$ART/run_meta.txt"
+    # gt map: the node also self-writes a periodic snapshot every 30s (piggy-
+    # backed on its latched publish) since shutdown-time dumping proved
+    # structurally unreliable under this script's 5s INT-to-KILL window
+    # (measured: the node's rclpy.spin never raised before SIGKILL). This
+    # capture, while the stack is still alive, is FRESHER than that <=30s-old
+    # snapshot -- same filename/format, whichever is freshest wins.
+    timeout 40 python3 "$(dirname "$0")/capture_cloud_map.py" \
+        --topic /maze/gt_cloud_map_3d --out "$ART/gt_cloud_map.npy" | tee -a "$ART/run_meta.txt"
 fi
 
 kill -INT "$LAUNCH_PID" 2>/dev/null

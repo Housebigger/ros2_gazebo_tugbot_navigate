@@ -166,9 +166,27 @@ class GtCloudAccumulator(Node):
                     % (len(self._map), self._stale_dropped, self._unpaired))
                 if (self._last_topic_pub_s is None
                         or now_s - self._last_topic_pub_s >= TOPIC_PUB_MIN_PERIOD_S):
-                    self.pub.publish(self._map.to_pointcloud2(
-                        frame_id='map', stamp=now.to_msg()))
+                    pc = self._map.to_pointcloud2(frame_id='map', stamp=now.to_msg())
+                    self.pub.publish(pc)
                     self._last_topic_pub_s = now_s
+                    # Piggyback an npy snapshot on the already-computed latched
+                    # message (~ms of extra I/O -- Heisenberg guard intact).
+                    # Shutdown-time dumping is STRUCTURALLY unreliable here:
+                    # measured (run 2) the run script gives the launch only
+                    # 5 s between kill -INT and its pkill -9 sweep, and with
+                    # ~20 nodes in the graph the gt node's rclpy.spin never
+                    # raised KeyboardInterrupt before SIGKILL -- dump() never
+                    # ran, no gt_cloud_map.npy, no dump log line at all. This
+                    # periodic snapshot removes the reliance on a clean
+                    # teardown; dump() is KEPT as a best-effort belt for the
+                    # (rarer) clean-shutdown case.
+                    if self.dump_dir:
+                        pts_out = point_cloud2.read_points_numpy(
+                            pc, field_names=('x', 'y', 'z'), skip_nans=False)
+                        np.save(os.path.join(self.dump_dir, 'gt_cloud_map.npy'),
+                               pts_out.astype(np.float32).reshape(-1, 3))
+                        self.get_logger().info(
+                            'GTCLOUD snapshot wrote %d voxels' % len(pts_out))
         except Exception as e:                 # eval must never crash or spam
             self.get_logger().error('gt cloud frame dropped: %r' % e,
                                     throttle_duration_sec=5.0)
