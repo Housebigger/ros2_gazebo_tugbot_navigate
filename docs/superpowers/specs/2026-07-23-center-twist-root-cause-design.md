@@ -286,4 +286,12 @@ NOT landed in this phase without a fresh measurement round — recorded as
 backlog with its calibration data already in hand (clean pos p95 0.12 /
 spikes 0.26-0.27).
 
-GUI acceptance: pending (user-triggered only).
+### GUI acceptance (run 213200, user verdict: PASSED)
+
+EXIT_REACHED; AGG_DELTA dp95_mean +0.0369 (identical band to the headless
+re-verify pair 0.0375/0.0369); production |angle| mean 0.699 (straighter
+than the gt map's 1.301 on these bands); YAW_MICRO fired 6x at the
+deterministic episode; POS_GATE/YAW_GATE silent, zero ERROR, oracle 0.000%
+(111 samples); production 399,227 / gt 310,036 voxels (GUI render load runs
+longer, same band). User visual verdict on the center corridor: the fan
+overlap is gone — acceptance PASSED ("perfect").
