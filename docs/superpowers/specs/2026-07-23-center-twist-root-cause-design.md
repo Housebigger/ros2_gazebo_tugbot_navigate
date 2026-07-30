@@ -164,3 +164,138 @@ numbers BEFORE any fix lands.
 - No motion-layer changes (the twist is a mapping/localization question; the
   tugbot's motion passed acceptance).
 - No real-drifting-odom generalization work (recorded backlog stays parked).
+
+## Addendum — VERDICT (Task 4, two valid instrumented runs)
+
+### Instrument shakedown (recorded traps)
+
+- Run 162802 voided the A/B loudly (heartbeat working as designed): the
+  bridged `/gt/dynamic_pose` per-transform header stamps are CONSTANT ZERO —
+  the same ros_gz_bridge conversion that drops gz names also leaves stamps
+  unset (measured: gt stamp `sec: 0` vs cloud stamp advancing sim time). The
+  gt instrument now pairs on RECEIPT time (same sim-clock domain). Sibling
+  trap of the tugbot-return "bridge drops names" finding.
+- Teardown-time dumping is unreliable under the run script's 5 s INT-to-KILL
+  window (measured: dump never ran) — the gt map is now snapshotted every
+  30 s piggybacking the latched publish, plus captured at run end via the
+  same tool as the production map.
+
+### A/B result (runs 170140 and 171131, both EXIT_REACHED, gates silent,
+oracle 0.000%, zero ERROR — no baseline regression from the instruments)
+
+| | production map | gt map |
+|---|---|---|
+| total voxels | 395,455 / 401,796 | 291,008 / 299,633 (capture-time; the on-disk 170140 dump is 300,533 -- the fresher teardown snapshot overwrote the file by design, metrics recompute identically on it) |
+| center-band spread_p95 mean | 0.2250 / 0.2250 | 0.1631 / 0.1631 |
+| **AGG_DELTA dp95_mean** | **+0.0619 (both runs, identical)** | — |
+| AGG_DELTA dp95_p95 | +0.1421 (both runs) | — |
+
+Production carries ~100k extra voxels (+34%) of believed-pose smear globally;
+in the four center wall bands the paired spread delta is +0.06 mean / +0.14
+worst — well above the 0.05 voxel floor. Per-segment: the two vertical
+center-corridor walls show the largest deltas (0.200 vs 0.050 and 0.200 vs
+0.102). The gt map is decisively cleaner. Both datums co-located (0.000).
+
+**Branch (a): the twist is believed-pose error. Timing/pairing and rendering
+are exonerated; localization layer owns it.**
+
+### Mechanism (POSEDIAG decomposition, 15,916 rows across 3 valid logs)
+
+1. **Odom is exonerated completely**: yaw_odom sanity p95 = 0.004-0.006 rad.
+   Every solver yaw residual is ICP-injected.
+2. **Deterministic sub-threshold wrong accepts at specific weak-observability
+   spots.** The worst episode reproduces in ALL runs at the SAME location
+   with the SAME magnitude: map (10.05-10.09, 5.0-5.2), heading north into
+   the center corridor, peak yaw_res +0.244/+0.245/+0.248 rad with pos_res
+   0.26-0.278 — a mini-attractor in the self-built reference at that spot,
+   not noise. Anatomy (run 170140, final-review recompute): successive ICP
+   accepts over ~0.6 s BUILD the error (first injection +0.057 at
+   t=…357.38), it then RIDES FROZEN on the drift-free odom (the clean
+   frozen stretch is the post-snap +0.143 ride, >1.7 s) while ICP rejects
+   (`eigmin=0.00` streak = the interior gate holding the 3-DOF localizer off
+   in the center corridor), and the next accept at t=…358.28 snaps most of
+   it back (−0.100). Every painted cloud in that window carries ~0.15-0.25
+   rad of yaw error — fan smear at range.
+3. **Secondary component**: a ~0.03-0.05 rad yaw lag during turn sweeps
+   (solver trails the true yaw whichever direction it rotates) — small,
+   paints ≤ ~0.2 m at 5 m range, partially a measurement-phase artifact.
+4. **Both aliasing gates are structurally blind here**: max deviation 0.248
+   < yaw gate 0.5; 0.27 < position gate 1.0. Sub-threshold by design, as the
+   spec predicted.
+
+### Calibration (two-band vacuum, the position-gate method, 3rd use)
+
+|yaw_res| histogram across 15,916 samples: clean band tops out below 0.08
+(15,794 samples; p95 0.038, p99 0.066); the spike population sits at
+0.10-0.25 (122 samples); **[0.08, 0.10) is EMPTY**. The vacuum midpoint sets
+the bound.
+
+### Chosen lever (Task 5)
+
+**Yaw micro-gate at the existing solver gate choke point**: after the 0.5
+recovery gate and the 1.0 position gate, snap the accepted yaw to the
+drift-free odom yaw when the innovation exceeds **0.09 rad**
+(`apply_odom_yaw_gate` reused with the tighter bound; own log tag; own
+counter). 99.2% of samples are untouched; the deterministic 0.15-0.25
+episodes are killed at the source; the ride-on-odom stretches then carry
+≤0.09 rad. Localizer files stay byte-frozen; the real-drifting-odom caveat
+is recorded exactly as for the two predecessor gates. Expectation for the
+re-verify (pre-registered, incl. the Task 5 quality review's prediction):
+AGG_DELTA dp95_mean drops sharply from +0.062 but floors ABOVE zero
+(~+0.015 to +0.035) -- the residual is attributed to BOTH the ~0.04
+turn-lag yaw component (sub-clamp) AND the surviving ~0.26 m position
+spikes at the same episodes (the yaw-only snap deliberately leaves them;
+they are a bounded rigid shift, not range-amplified fan). A non-zero
+residual dp95 is NOT a fix failure -- it is the pre-declared second-lever
+condition. Decompose expectation: the 0.10-0.25 yaw spike band empties;
+the pos_res 0.26-0.27 spikes remain unchanged. Position micro-gating is deliberately
+NOT included in the first lever (pos spikes ride the same episodes; if the
+post-fix metric shows residual position smear, it becomes the second lever
+in-phase per the one-fix-one-measure discipline).
+
+## Addendum — re-verify (Task 6, post-fix instrumented runs 210929 / 211923)
+
+Both EXIT_REACHED, oracle 0.000% (221 samples, 0 collisions), YAW_GATE /
+POS_GATE silent, zero ERROR. The micro gate fired EXACTLY 7 times in each
+run, at the deterministic episode (ydis 0.108-0.140, est yaw ~1.72 vs odom
+1.60) — caught and snapped in real time, no oscillation, no log spam.
+
+| metric | pre-fix (170140/171131) | post-fix (210929/211923) |
+|---|---|---|
+| AGG_DELTA dp95_mean | +0.0619 / +0.0619 | **+0.0375 / +0.0369 (−40%)** |
+| AGG_DELTA dp95_p95 | +0.1421 / +0.1421 | +0.1000 / +0.0904 |
+| yaw_res max (all buckets) | 0.244 / 0.248 | **0.071 / 0.063** |
+| center yaw_p95 | 0.056 / 0.058 | **0.032 / 0.035 (excess over rest eliminated to within noise: 0.032<=0.035 and 0.035 vs 0.033)** |
+| production |angle| mean | 1.385 / 1.532 | 0.833 / 1.151 |
+| production total voxels | 395,455 / 401,796 | 374,561 / 377,962 |
+| center pos_p95 | 0.087-0.094 | 0.091-0.094 (unchanged) |
+
+Reading against the PRE-REGISTERED prediction: the 0.10-0.25 yaw spike band
+emptied exactly as predicted (max now 0.071-in-clean-band; the old
+(10.06, 5.1) attractor no longer appears in the worst windows); the center
+bucket's yaw excess over the rest bucket is eliminated; the position spikes
+survive unchanged as declared. The residual dp95 (~0.037) lands slightly ABOVE the
+predicted 0.015-0.035 window's upper bound and is attributed per the
+pre-registration to the surviving position spikes plus the ~0.04 turn-lag
+yaw component — the pre-declared second-lever condition, NOT a fix failure.
+
+Second-lever adjudication (one-fix-one-measure discipline): the yaw lever
+removed the dominant, range-amplified component (fan twist). The residual is
+a bounded rigid position shift (0.26 m worst, non-amplifying) at the same
+deterministic episodes. A position micro-gate is a natural follow-on but is
+NOT landed in this phase without a fresh measurement round — recorded as
+backlog with its calibration data already in hand (clean pos p95 0.12 /
+spikes 0.26-0.27).
+
+### GUI acceptance (run 213200, user verdict: PASSED)
+
+EXIT_REACHED; AGG_DELTA dp95_mean +0.0369 (identical band to the headless
+re-verify pair 0.0375/0.0369); production |angle| mean 0.699 (straighter
+than the gt map's 1.301 on these bands); YAW_MICRO fired 6x at the
+deterministic episode; POS_GATE/YAW_GATE silent, zero ERROR, oracle 0.000%
+(111 samples); production 399,227 / gt 310,036 voxels (GUI render load runs
+longer, same band). User visual verdict on the center corridor: the fan
+overlap is gone — acceptance PASSED ("perfect"). One single-tick spike-band sample (+0.156
+rad at (17.99, 18.10), a near-exit turn instant) appears in the GUI log --
+consistent with the declared turn-sweep measurement artifact, not the
+center attractor.

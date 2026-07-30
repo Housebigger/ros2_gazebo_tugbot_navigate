@@ -288,12 +288,18 @@ class GtCloudAccumulator(Node):
 
     def _gt_cb(self, msg):
         # transforms[0] = the tugbot model root (bridge drops gz names; index
-        # convention per the tugbot-return record). Stamp from the message
-        # header of the first transform.
+        # convention per the tugbot-return record). RECEIPT-TIME pairing: the
+        # bridged per-transform header stamps are CONSTANT ZERO (measured in
+        # the first diag run: voxels=0, unpaired=all, gt_buf unbounded) -- the
+        # node clock (sim domain under use_sim_time, same domain as cloud
+        # stamps) is the only usable stamp. Jitter at ~58 Hz transport is ~ms,
+        # well inside the 0.05 s window. Fairness note: production pairs at
+        # the cloud CAPTURE stamp via tf2 interpolation; this instrument pairs
+        # cloud capture stamp vs gt RECEIPT stamp.
         if not msg.transforms:
             return
         t0 = msg.transforms[0]
-        t_s = Time.from_msg(t0.header.stamp).nanoseconds / 1e9
+        t_s = self.get_clock().now().nanoseconds / 1e9
         tr, q = t0.transform.translation, t0.transform.rotation
         self._gt_buf.append((t_s, (tr.x, tr.y, tr.z, q.x, q.y, q.z, q.w)))
         cutoff = t_s - GT_BUFFER_S
@@ -417,7 +423,7 @@ set +u; source install/setup.bash; set -u
 python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -5
 ```
 
-Expected: `10 failed, 550 passed` (baseline + 6 new unit tests; frozen names unchanged).
+Expected: `10 failed, 552 passed` (baseline + 8 new unit tests incl. the review-added buffer-trim and z pass-through pins; frozen names unchanged).
 
 - [ ] **Step 8: Commit**
 
@@ -516,6 +522,37 @@ def test_wall_points_selects_band_only():
     floor = _wall(*seg, n=50, z=0.02)             # below the wall z-band
     sel = wall_points(np.vstack([inside, far, floor]), seg)
     assert 40 <= len(sel) <= 60                   # only the in-band wall survives
+
+
+def test_single_image_angle_reports_injected_rotation():
+    # Angle-channel validity on a SINGLE rotated image. The clean+twisted
+    # UNION attenuates the fitted angle ~2x (Task 2 review I2), which is why
+    # angle is corroborating-only in the verdict protocol -- this test pins
+    # that the channel itself is sound when given an unmixed image.
+    seg = (10.0, 8.0, 10.0, 11.0)
+    pts = _wall(*seg, noise=0.01)
+    mid = np.array([10.0, 9.5, 0.0])
+    a = math.radians(3.0)
+    R = np.array([[math.cos(a), -math.sin(a), 0.0],
+                  [math.sin(a), math.cos(a), 0.0],
+                  [0.0, 0.0, 1.0]])
+    rotated = ((pts - mid) @ R.T + mid).astype(np.float32)
+    stats = segment_band_stats(rotated, seg)
+    assert abs(abs(stats['angle_deg']) - 3.0) < 0.8
+
+
+def test_stats_are_z_datum_invariant():
+    # Task 1 quality review I2: the gt and production maps may sit on
+    # different z datums. Shifting a cloud by +0.5 m in z and passing the
+    # matching ground_z must reproduce the same band statistics.
+    seg = (10.0, 8.0, 10.0, 11.0)
+    pts = _wall(*seg, noise=0.01)
+    shifted = pts + np.array([0.0, 0.0, 0.5], dtype=np.float32)
+    a = segment_band_stats(pts, seg, ground_z=0.0)
+    b = segment_band_stats(shifted, seg, ground_z=0.5)
+    assert a['count'] == b['count']
+    assert a['spread_p95'] == pytest.approx(b['spread_p95'], abs=1e-6)
+    assert a['angle_deg'] == pytest.approx(b['angle_deg'], abs=1e-6)
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -558,12 +595,16 @@ PERP_BAND_M = 0.35            # voxels within this distance of the segment line
 END_TRIM_M = 0.15             # trim segment ends to avoid corner cross-talk
 
 
-def wall_points(pts, seg):
+def wall_points(pts, seg, ground_z=0.0):
     """Voxels in the wall band of segment (x0,y0,x1,y1): perpendicular
     distance <= PERP_BAND_M, longitudinally inside the (end-trimmed) segment,
-    z inside Z_BAND."""
+    z inside Z_BAND RELATIVE to ground_z. Datum-invariance contract (Task 1
+    quality review I2): the gt and production maps may sit on different z
+    datums (spawn-anchored odom vs world z), so the band is selected per
+    cloud relative to its OWN ground level -- never absolute z."""
     x0, y0, x1, y1 = seg
-    p = pts[(pts[:, 2] >= Z_BAND[0]) & (pts[:, 2] <= Z_BAND[1])]
+    p = pts[(pts[:, 2] >= ground_z + Z_BAND[0])
+            & (pts[:, 2] <= ground_z + Z_BAND[1])]
     d = np.array([x1 - x0, y1 - y0])
     L = float(np.hypot(*d))
     if L < 1e-9 or len(p) == 0:
@@ -577,10 +618,20 @@ def wall_points(pts, seg):
     return p[keep]
 
 
-def segment_band_stats(pts, seg):
+def segment_band_stats(pts, seg, ground_z=0.0):
     """count / spread_p50 / spread_p95 (perpendicular, median-centered) and
-    fitted principal-axis angle vs the segment axis (deg)."""
-    sel = wall_points(pts, seg)
+    fitted principal-axis angle vs the segment axis (deg).
+
+    Interpretation contract (Task 2 quality review, measured on synthetics):
+    - spread_p95 DELTA (production minus gt, per segment) is the PRIMARY
+      discriminator; absolute levels carry the common 0.24 m wall-thickness
+      baseline (both faces in-band floor a clean interior wall at ~0.10).
+    - angle is CORROBORATING-ONLY: parallel faces and the clean+twisted union
+      attenuate the fitted angle ~2x (a 0.09 m fan reads ~-1.6 deg).
+    - p50 is descriptive, NON-monotone in twist (fan fill can lower it).
+    - sub-voxel twists read clean: a POSITIVE detection is trustworthy, a
+      null is NOT proof of no twist."""
+    sel = wall_points(pts, seg, ground_z)
     x0, y0, x1, y1 = seg
     d = np.array([x1 - x0, y1 - y0])
     u = d / np.hypot(*d)
@@ -625,6 +676,19 @@ def main(argv):
     ap.add_argument('--half', type=float, default=3.2)
     args = ap.parse_args(argv)
     clouds = [np.load(f) for f in args.files]
+    # Per-cloud ground datum (1st percentile of z): the two maps may sit on
+    # different z datums (Task 1 quality review I2) -- bands are selected
+    # relative to each cloud's own ground, and the datum delta is reported.
+    grounds = [float(np.percentile(c[:, 2], 1.0)) for c in clouds]
+    for f, g in zip(args.files, grounds):
+        print('DATUM %s ground_z=%.3f' % (f, g))
+        if not (-1.0 <= g <= 0.5):
+            print('DATUM IMPLAUSIBLE %s: ground_z outside [-1.0, 0.5] -- '
+                  'floor coverage sparse? Bands may be mis-selected.' % f)
+    if len(grounds) == 2 and abs(grounds[0] - grounds[1]) > 0.1:
+        print('DATUM WARNING: z datums differ by %.3f m (expected if odom is '
+              'spawn-anchored; bands are per-cloud relative, comparison valid)'
+              % abs(grounds[0] - grounds[1]))
     segs = center_segments(args.center, args.half)
     print('TWISTMETRIC center=(%.2f, %.2f) half=%.1f segments=%d'
           % (args.center[0], args.center[1], args.half, len(segs)))
@@ -632,22 +696,38 @@ def main(argv):
         ('  [%d] n/p50/p95/ang' % i).ljust(28) for i in range(len(clouds)))
     print(hdr)
     agg = [[] for _ in clouds]
+    deltas = []
     for seg in segs:
         row = ('(%.2f,%.2f)-(%.2f,%.2f)' % seg).ljust(34)
+        stats = []
         for i, c in enumerate(clouds):
-            s = segment_band_stats(c, seg)
+            s = segment_band_stats(c, seg, grounds[i])
+            stats.append(s)
             row += ('  %5d/%.3f/%.3f/%+.2f' % (
                 s['count'], s['spread_p50'], s['spread_p95'],
                 s['angle_deg'])).ljust(28)
             if s['count'] >= 30:
                 agg[i].append(s)
         print(row)
+        # Paired per-segment delta (file0 - file1, i.e. production - gt): THE
+        # discriminating statistic (Task 2 quality review I1). Absolute p95
+        # levels carry the common wall-thickness baseline; the delta cancels
+        # it. Only segments where BOTH clouds have count >= 30 pair up.
+        if len(stats) == 2 and all(s['count'] >= 30 for s in stats):
+            deltas.append((stats[0]['spread_p95'] - stats[1]['spread_p95'],
+                           abs(stats[0]['angle_deg']) - abs(stats[1]['angle_deg'])))
     for i, rows in enumerate(agg):
         if rows:
             print('AGG[%d] bands=%d spread_p95_mean=%.4f |angle|_mean=%.3f'
                   % (i, len(rows),
                      float(np.mean([r['spread_p95'] for r in rows])),
                      float(np.mean([abs(r['angle_deg']) for r in rows]))))
+    if deltas:
+        dp = np.array([d[0] for d in deltas])
+        da = np.array([d[1] for d in deltas])
+        print('AGG_DELTA bands=%d dp95_mean=%.4f dp95_p95=%.4f dangle_mean=%.3f'
+              % (len(deltas), float(dp.mean()),
+                 float(np.percentile(dp, 95)), float(da.mean())))
     return 0
 
 
@@ -662,7 +742,7 @@ cd /home/hyh/Desktop/agent_playground/playground_claude_code/ros2_gazebo_tugbot_
 python3 -m pytest src/tugbot_maze/test/test_map_twist_metric.py -q
 ```
 
-Expected: 3 passed.
+Expected: 5 passed.
 
 - [ ] **Step 5: Write the capture tool**
 
@@ -751,8 +831,11 @@ line, INSERT (before the `kill -INT` teardown):
 
 ```bash
 # capture the production latched map BEFORE teardown (latch dies with the node)
-timeout 40 python3 "$(dirname "$0")/capture_cloud_map.py" \
-    --out "$ART/cloud_map_3d.npy" | tee -a "$ART/run_meta.txt"
+# (skip when the launch itself died - the latch is already gone; review M3)
+if [ "$RESULT" != "LAUNCH_DIED" ] && [ "$RESULT" != "DDS_SHM_FAIL" ]; then
+    timeout 40 python3 "$(dirname "$0")/capture_cloud_map.py" \
+        --out "$ART/cloud_map_3d.npy" | tee -a "$ART/run_meta.txt"
+fi
 ```
 
 4. Add `gt_cloud_accumulator` to the `kill_all_sim` pattern list (next to
@@ -768,7 +851,7 @@ set +u; source /opt/ros/jazzy/setup.bash; source install/setup.bash; set -u
 python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -5
 ```
 
-Expected: `10 failed, 553 passed` (Task 1's 550 + 3 metric tests).
+Expected: `10 failed, 557 passed` (Task 1's 552 + 5 metric tests).
 
 - [ ] **Step 8: Commit**
 
@@ -1006,7 +1089,7 @@ Expected: 3 passed. Then the full suite tail:
 python3 -m pytest src/tugbot_maze/test/ src/tugbot_bringup/test/ -q 2>&1 | tail -3
 ```
 
-Expected: `10 failed, 556 passed`.
+Expected: `10 failed, 560 passed`.
 
 - [ ] **Step 5: Commit**
 
@@ -1064,9 +1147,19 @@ finals + saturation) — instrument runs must not regress the baseline.
 
 - [ ] **Step 3: Decide the fork and WRITE THE VERDICT before any fix**
 
+Verdict statistics discipline (Task 2 quality review, synthetic-calibrated):
+the PRIMARY discriminator is the paired per-segment spread_p95 DELTA
+(`AGG_DELTA dp95_*`, production minus gt — cancels the common 0.24 m
+wall-thickness baseline that floors clean interior walls at p95≈0.10); the
+fitted angle is CORROBORATING-ONLY (~2x attenuated by face/union mixing);
+p50 is non-monotone in twist; a null reading is NOT proof of no twist
+(sub-voxel twists read clean) — a positive detection is trustworthy, absence
+claims are bounded by the ~1-voxel resolution floor and must be worded that
+way in the verdict.
+
 Decision tree (from the spec):
-- production spread/angle >> gt spread/angle in the center bands → branch (a)
-  believed-pose. The decompose output then names the injection pattern
+- production dp95 clearly positive across center bands (angle corroborating)
+  → branch (a) believed-pose. The decompose output then names the injection pattern
   (center-bucket yaw_p95 vs rest; worst-window positions; yaw_odom sanity ~0).
   Correlate worst windows with the solver's ICP/gate log lines around those
   timestamps (grep the launch.log tags observed there — e.g. rejected/accept
@@ -1118,7 +1211,7 @@ EOF
 Process per the established discipline: dispatch the fix as its own
 implementer+review cycle AFTER the controller records the verdict; one
 evidence-backed fix, no parameter roulette; full suite adjudication
-(10 failed / 556 passed expected envelope plus any new fix tests).
+(10 failed / 560 passed expected envelope plus any new fix tests).
 
 ---
 
@@ -1147,4 +1240,4 @@ memory archive).
 
 - Spec coverage: instrument a→Task 1, b→Task 2, c→Task 3; protocol/verdict→Task 4; fix principles→Task 5; acceptance/downgrade→Task 6. Coordinate anchors and fairness rules carried into code.
 - Placeholders: Task 5 intentionally defers exact code to the verdict (measure-first phase structure per adjudication 2); everything pre-writable is written. The diag script is specified as four exact deltas against a byte-copied original.
-- Type consistency: `nearest_gt_sample(buffer, t_s)` / `compose_map_sensor(x..qw)` / `segment_band_stats(pts, seg)` / `wall_points(pts, seg)` / `parse_posediag_line(line)` / `bucket_stats(rows, center, half)` consistent between tools and tests; suite-count arithmetic 544→550→553→556.
+- Type consistency: `nearest_gt_sample(buffer, t_s)` / `compose_map_sensor(x..qw)` / `segment_band_stats(pts, seg)` / `wall_points(pts, seg)` / `parse_posediag_line(line)` / `bucket_stats(rows, center, half)` consistent between tools and tests; suite-count arithmetic 544→552→557→560.

@@ -1,0 +1,524 @@
+schema_version: 1
+source_image: package://tugbot_maze/assets/maze_20260528.png
+source_image_path: src/tugbot_maze/assets/maze_20260528.png
+source_image_kind: clean_2d_binary_maze
+source_image_sha256: 173704e201da6f60042f1f39cc84220d9ee7592a3b2934f933bdeeaf9d223c63
+conversion:
+  mode: clean_binary_image_to_wall_segments
+  candidate_not_promoted: true
+world_bounds_m:
+  xmin: -6.0
+  xmax: 6.0
+  ymin: -6.0
+  ymax: 6.0
+transform:
+  image_width_px: 360
+  image_height_px: 360
+  coordinate_origin: image_top_left
+  x_m: xmin + x_px / (image_width_px - 1) * (xmax - xmin)
+  y_m: ymax - y_px / (image_height_px - 1) * (ymax - ymin)
+extraction:
+  binary_threshold: 128
+  min_segment_length_px: 12
+  wall_mask_black_pixel_count: 10438
+  wall_mask_black_pixel_ratio: 0.08054012345679012
+wall_defaults:
+  wall_thickness_m: 0.24
+  wall_height_m: 1.2
+generation_policy:
+  do_not_overwrite_scaffold_world: true
+  candidate_output: src/tugbot_gazebo/worlds/tugbot_maze_world_20260528_clean.sdf
+  baseline_scaffold_world: src/tugbot_gazebo/worlds/tugbot_maze_world.sdf
+  phase29_candidate_world_preserved: src/tugbot_gazebo/worlds/tugbot_maze_world_image_faithful.sdf
+entrance:
+  status: candidate
+  rationale: visually plausible left-side opening in the clean 2D maze; requires Phase32
+    visual acceptance
+  x_m: -6.0
+  y_m: -1.0
+  yaw_rad: 0.0
+exit:
+  status: candidate
+  rationale: visually plausible upper/top opening in the clean 2D maze; requires Phase32
+    visual acceptance
+  x_m: 0.0
+  y_m: 6.0
+  radius_m: 0.6
+segments:
+- orientation: horizontal
+  p0_px:
+  - 29
+  - 30
+  p1_px:
+  - 329
+  - 30
+  outer: true
+  id: outer_001
+- orientation: horizontal
+  p0_px:
+  - 119
+  - 60
+  p1_px:
+  - 150
+  - 60
+  outer: false
+  id: h_001
+- orientation: horizontal
+  p0_px:
+  - 238
+  - 60
+  p1_px:
+  - 270
+  - 60
+  outer: false
+  id: h_002
+- orientation: horizontal
+  p0_px:
+  - 299
+  - 60
+  p1_px:
+  - 330
+  - 60
+  outer: false
+  id: h_003
+- orientation: horizontal
+  p0_px:
+  - 60
+  - 90
+  p1_px:
+  - 91
+  - 90
+  outer: false
+  id: h_004
+- orientation: horizontal
+  p0_px:
+  - 150
+  - 90
+  p1_px:
+  - 240
+  - 90
+  outer: false
+  id: h_005
+- orientation: horizontal
+  p0_px:
+  - 268
+  - 90
+  p1_px:
+  - 300
+  - 90
+  outer: false
+  id: h_006
+- orientation: horizontal
+  p0_px:
+  - 60
+  - 120
+  p1_px:
+  - 91
+  - 120
+  outer: false
+  id: h_007
+- orientation: horizontal
+  p0_px:
+  - 119
+  - 120
+  p1_px:
+  - 150
+  - 120
+  outer: false
+  id: h_008
+- orientation: horizontal
+  p0_px:
+  - 180
+  - 120
+  p1_px:
+  - 210
+  - 120
+  outer: false
+  id: h_009
+- orientation: horizontal
+  p0_px:
+  - 59
+  - 150
+  p1_px:
+  - 91
+  - 150
+  outer: false
+  id: h_010
+- orientation: horizontal
+  p0_px:
+  - 119
+  - 150
+  p1_px:
+  - 181
+  - 150
+  outer: false
+  id: h_011
+- orientation: horizontal
+  p0_px:
+  - 209
+  - 150
+  p1_px:
+  - 240
+  - 150
+  outer: false
+  id: h_012
+- orientation: horizontal
+  p0_px:
+  - 268
+  - 150
+  p1_px:
+  - 330
+  - 150
+  outer: false
+  id: h_013
+- orientation: horizontal
+  p0_px:
+  - 29
+  - 179
+  p1_px:
+  - 61
+  - 179
+  outer: false
+  id: h_014
+- orientation: horizontal
+  p0_px:
+  - 89
+  - 179
+  p1_px:
+  - 150
+  - 179
+  outer: false
+  id: h_015
+- orientation: horizontal
+  p0_px:
+  - 179
+  - 179
+  p1_px:
+  - 300
+  - 179
+  outer: false
+  id: h_016
+- orientation: horizontal
+  p0_px:
+  - 60
+  - 209
+  p1_px:
+  - 91
+  - 209
+  outer: false
+  id: h_017
+- orientation: horizontal
+  p0_px:
+  - 180
+  - 209
+  p1_px:
+  - 240
+  - 209
+  outer: false
+  id: h_018
+- orientation: horizontal
+  p0_px:
+  - 269
+  - 209
+  p1_px:
+  - 330
+  - 209
+  outer: false
+  id: h_019
+- orientation: horizontal
+  p0_px:
+  - 60
+  - 239
+  p1_px:
+  - 151
+  - 239
+  outer: false
+  id: h_020
+- orientation: horizontal
+  p0_px:
+  - 299
+  - 239
+  p1_px:
+  - 330
+  - 239
+  outer: false
+  id: h_021
+- orientation: horizontal
+  p0_px:
+  - 90
+  - 269
+  p1_px:
+  - 121
+  - 269
+  outer: false
+  id: h_022
+- orientation: horizontal
+  p0_px:
+  - 150
+  - 269
+  p1_px:
+  - 240
+  - 269
+  outer: false
+  id: h_023
+- orientation: horizontal
+  p0_px:
+  - 30
+  - 329
+  p1_px:
+  - 330
+  - 329
+  outer: true
+  id: outer_002
+- orientation: vertical
+  p0_px:
+  - 30
+  - 29
+  p1_px:
+  - 30
+  - 299
+  outer: true
+  id: outer_003
+- orientation: vertical
+  p0_px:
+  - 60
+  - 29
+  p1_px:
+  - 60
+  - 60
+  outer: false
+  id: v_001
+- orientation: vertical
+  p0_px:
+  - 60
+  - 149
+  p1_px:
+  - 60
+  - 180
+  outer: false
+  id: v_002
+- orientation: vertical
+  p0_px:
+  - 60
+  - 269
+  p1_px:
+  - 60
+  - 330
+  outer: false
+  id: v_003
+- orientation: vertical
+  p0_px:
+  - 90
+  - 60
+  p1_px:
+  - 90
+  - 210
+  outer: false
+  id: v_004
+- orientation: vertical
+  p0_px:
+  - 90
+  - 299
+  p1_px:
+  - 90
+  - 330
+  outer: false
+  id: v_005
+- orientation: vertical
+  p0_px:
+  - 120
+  - 29
+  p1_px:
+  - 120
+  - 61
+  outer: false
+  id: v_006
+- orientation: vertical
+  p0_px:
+  - 120
+  - 90
+  p1_px:
+  - 120
+  - 151
+  outer: false
+  id: v_007
+- orientation: vertical
+  p0_px:
+  - 120
+  - 178
+  p1_px:
+  - 120
+  - 240
+  outer: false
+  id: v_008
+- orientation: vertical
+  p0_px:
+  - 120
+  - 268
+  p1_px:
+  - 120
+  - 330
+  outer: false
+  id: v_009
+- orientation: vertical
+  p0_px:
+  - 150
+  - 209
+  p1_px:
+  - 150
+  - 240
+  outer: false
+  id: v_010
+- orientation: vertical
+  p0_px:
+  - 150
+  - 299
+  p1_px:
+  - 150
+  - 330
+  outer: false
+  id: v_011
+- orientation: vertical
+  p0_px:
+  - 180
+  - 60
+  p1_px:
+  - 180
+  - 91
+  outer: false
+  id: v_012
+- orientation: vertical
+  p0_px:
+  - 180
+  - 149
+  p1_px:
+  - 180
+  - 180
+  outer: false
+  id: v_013
+- orientation: vertical
+  p0_px:
+  - 180
+  - 239
+  p1_px:
+  - 180
+  - 330
+  outer: false
+  id: v_014
+- orientation: vertical
+  p0_px:
+  - 209
+  - 60
+  p1_px:
+  - 209
+  - 121
+  outer: false
+  id: v_015
+- orientation: vertical
+  p0_px:
+  - 209
+  - 239
+  p1_px:
+  - 209
+  - 270
+  outer: false
+  id: v_016
+- orientation: vertical
+  p0_px:
+  - 209
+  - 299
+  p1_px:
+  - 209
+  - 330
+  outer: false
+  id: v_017
+- orientation: vertical
+  p0_px:
+  - 239
+  - 29
+  p1_px:
+  - 239
+  - 61
+  outer: false
+  id: v_018
+- orientation: vertical
+  p0_px:
+  - 239
+  - 89
+  p1_px:
+  - 239
+  - 239
+  outer: false
+  id: v_019
+- orientation: vertical
+  p0_px:
+  - 239
+  - 268
+  p1_px:
+  - 239
+  - 299
+  outer: false
+  id: v_020
+- orientation: vertical
+  p0_px:
+  - 269
+  - 59
+  p1_px:
+  - 269
+  - 91
+  outer: false
+  id: v_021
+- orientation: vertical
+  p0_px:
+  - 269
+  - 120
+  p1_px:
+  - 269
+  - 151
+  outer: false
+  id: v_022
+- orientation: vertical
+  p0_px:
+  - 269
+  - 239
+  p1_px:
+  - 269
+  - 330
+  outer: false
+  id: v_023
+- orientation: vertical
+  p0_px:
+  - 299
+  - 89
+  p1_px:
+  - 299
+  - 120
+  outer: false
+  id: v_024
+- orientation: vertical
+  p0_px:
+  - 299
+  - 149
+  p1_px:
+  - 299
+  - 180
+  outer: false
+  id: v_025
+- orientation: vertical
+  p0_px:
+  - 299
+  - 269
+  p1_px:
+  - 299
+  - 330
+  outer: false
+  id: v_026
+- orientation: vertical
+  p0_px:
+  - 329
+  - 59
+  p1_px:
+  - 329
+  - 330
+  outer: true
+  id: outer_004
