@@ -185,7 +185,7 @@ oracle 0.000%, zero ERROR — no baseline regression from the instruments)
 
 | | production map | gt map |
 |---|---|---|
-| total voxels | 395,455 / 401,796 | 291,008 / 299,633 |
+| total voxels | 395,455 / 401,796 | 291,008 / 299,633 (capture-time; the on-disk 170140 dump is 300,533 -- the fresher teardown snapshot overwrote the file by design, metrics recompute identically on it) |
 | center-band spread_p95 mean | 0.2250 / 0.2250 | 0.1631 / 0.1631 |
 | **AGG_DELTA dp95_mean** | **+0.0619 (both runs, identical)** | — |
 | AGG_DELTA dp95_p95 | +0.1421 (both runs) | — |
@@ -207,13 +207,14 @@ are exonerated; localization layer owns it.**
    spots.** The worst episode reproduces in ALL runs at the SAME location
    with the SAME magnitude: map (10.05-10.09, 5.0-5.2), heading north into
    the center corridor, peak yaw_res +0.244/+0.245/+0.248 rad with pos_res
-   0.26-0.27 — a mini-attractor in the self-built reference at that spot,
-   not noise. Anatomy (run 170140): an ICP accept at t=…357.38 INJECTS
-   (yaw +0.045 on top of an existing lag, position −0.03), the error then
-   RIDES FROZEN on the drift-free odom for ~1 s while ICP rejects
+   0.26-0.278 — a mini-attractor in the self-built reference at that spot,
+   not noise. Anatomy (run 170140, final-review recompute): successive ICP
+   accepts over ~0.6 s BUILD the error (first injection +0.057 at
+   t=…357.38), it then RIDES FROZEN on the drift-free odom (the clean
+   frozen stretch is the post-snap +0.143 ride, >1.7 s) while ICP rejects
    (`eigmin=0.00` streak = the interior gate holding the 3-DOF localizer off
    in the center corridor), and the next accept at t=…358.28 snaps most of
-   it back (−0.116). Every painted cloud in that window carries ~0.15-0.25
+   it back (−0.100). Every painted cloud in that window carries ~0.15-0.25
    rad of yaw error — fan smear at range.
 3. **Secondary component**: a ~0.03-0.05 rad yaw lag during turn sweeps
    (solver trails the true yaw whichever direction it rotates) — small,
@@ -256,15 +257,15 @@ in-phase per the one-fix-one-measure discipline).
 
 Both EXIT_REACHED, oracle 0.000% (221 samples, 0 collisions), YAW_GATE /
 POS_GATE silent, zero ERROR. The micro gate fired EXACTLY 7 times in each
-run, at the deterministic episode (ydis 0.115-0.122, est yaw ~1.72 vs odom
+run, at the deterministic episode (ydis 0.108-0.140, est yaw ~1.72 vs odom
 1.60) — caught and snapped in real time, no oscillation, no log spam.
 
 | metric | pre-fix (170140/171131) | post-fix (210929/211923) |
 |---|---|---|
 | AGG_DELTA dp95_mean | +0.0619 / +0.0619 | **+0.0375 / +0.0369 (−40%)** |
 | AGG_DELTA dp95_p95 | +0.1421 / +0.1421 | +0.1000 / +0.0904 |
-| yaw_res max (all buckets) | 0.245 / 0.248 | **0.071 / 0.063** |
-| center yaw_p95 | 0.054 / 0.058 | **0.032 / 0.035 (now <= rest)** |
+| yaw_res max (all buckets) | 0.244 / 0.248 | **0.071 / 0.063** |
+| center yaw_p95 | 0.056 / 0.058 | **0.032 / 0.035 (excess over rest eliminated to within noise: 0.032<=0.035 and 0.035 vs 0.033)** |
 | production |angle| mean | 1.385 / 1.532 | 0.833 / 1.151 |
 | production total voxels | 395,455 / 401,796 | 374,561 / 377,962 |
 | center pos_p95 | 0.087-0.094 | 0.091-0.094 (unchanged) |
@@ -273,8 +274,8 @@ Reading against the PRE-REGISTERED prediction: the 0.10-0.25 yaw spike band
 emptied exactly as predicted (max now 0.071-in-clean-band; the old
 (10.06, 5.1) attractor no longer appears in the worst windows); the center
 bucket's yaw excess over the rest bucket is eliminated; the position spikes
-survive unchanged as declared. The residual dp95 (~0.037) lands at the upper
-edge of the predicted 0.015-0.035 window and is attributed per the
+survive unchanged as declared. The residual dp95 (~0.037) lands slightly ABOVE the
+predicted 0.015-0.035 window's upper bound and is attributed per the
 pre-registration to the surviving position spikes plus the ~0.04 turn-lag
 yaw component — the pre-declared second-lever condition, NOT a fix failure.
 
@@ -294,4 +295,7 @@ than the gt map's 1.301 on these bands); YAW_MICRO fired 6x at the
 deterministic episode; POS_GATE/YAW_GATE silent, zero ERROR, oracle 0.000%
 (111 samples); production 399,227 / gt 310,036 voxels (GUI render load runs
 longer, same band). User visual verdict on the center corridor: the fan
-overlap is gone — acceptance PASSED ("perfect").
+overlap is gone — acceptance PASSED ("perfect"). One single-tick spike-band sample (+0.156
+rad at (17.99, 18.10), a near-exit turn instant) appears in the GUI log --
+consistent with the declared turn-sweep measurement artifact, not the
+center attractor.
