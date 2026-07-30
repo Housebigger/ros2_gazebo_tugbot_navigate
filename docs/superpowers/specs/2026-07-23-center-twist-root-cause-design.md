@@ -239,8 +239,15 @@ counter). 99.2% of samples are untouched; the deterministic 0.15-0.25
 episodes are killed at the source; the ride-on-odom stretches then carry
 ≤0.09 rad. Localizer files stay byte-frozen; the real-drifting-odom caveat
 is recorded exactly as for the two predecessor gates. Expectation for the
-re-verify: AGG_DELTA dp95_mean drops toward 0; residual floor bounded by the
-~0.04 turn-lag component (sub-clamp). Position micro-gating is deliberately
+re-verify (pre-registered, incl. the Task 5 quality review's prediction):
+AGG_DELTA dp95_mean drops sharply from +0.062 but floors ABOVE zero
+(~+0.015 to +0.035) -- the residual is attributed to BOTH the ~0.04
+turn-lag yaw component (sub-clamp) AND the surviving ~0.26 m position
+spikes at the same episodes (the yaw-only snap deliberately leaves them;
+they are a bounded rigid shift, not range-amplified fan). A non-zero
+residual dp95 is NOT a fix failure -- it is the pre-declared second-lever
+condition. Decompose expectation: the 0.10-0.25 yaw spike band empties;
+the pos_res 0.26-0.27 spikes remain unchanged. Position micro-gating is deliberately
 NOT included in the first lever (pos spikes ride the same episodes; if the
 post-fix metric shows residual position smear, it becomes the second lever
 in-phase per the one-fix-one-measure discipline).
