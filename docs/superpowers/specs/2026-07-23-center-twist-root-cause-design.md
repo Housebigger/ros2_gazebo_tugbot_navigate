@@ -251,3 +251,39 @@ the pos_res 0.26-0.27 spikes remain unchanged. Position micro-gating is delibera
 NOT included in the first lever (pos spikes ride the same episodes; if the
 post-fix metric shows residual position smear, it becomes the second lever
 in-phase per the one-fix-one-measure discipline).
+
+## Addendum — re-verify (Task 6, post-fix instrumented runs 210929 / 211923)
+
+Both EXIT_REACHED, oracle 0.000% (221 samples, 0 collisions), YAW_GATE /
+POS_GATE silent, zero ERROR. The micro gate fired EXACTLY 7 times in each
+run, at the deterministic episode (ydis 0.115-0.122, est yaw ~1.72 vs odom
+1.60) — caught and snapped in real time, no oscillation, no log spam.
+
+| metric | pre-fix (170140/171131) | post-fix (210929/211923) |
+|---|---|---|
+| AGG_DELTA dp95_mean | +0.0619 / +0.0619 | **+0.0375 / +0.0369 (−40%)** |
+| AGG_DELTA dp95_p95 | +0.1421 / +0.1421 | +0.1000 / +0.0904 |
+| yaw_res max (all buckets) | 0.245 / 0.248 | **0.071 / 0.063** |
+| center yaw_p95 | 0.054 / 0.058 | **0.032 / 0.035 (now <= rest)** |
+| production |angle| mean | 1.385 / 1.532 | 0.833 / 1.151 |
+| production total voxels | 395,455 / 401,796 | 374,561 / 377,962 |
+| center pos_p95 | 0.087-0.094 | 0.091-0.094 (unchanged) |
+
+Reading against the PRE-REGISTERED prediction: the 0.10-0.25 yaw spike band
+emptied exactly as predicted (max now 0.071-in-clean-band; the old
+(10.06, 5.1) attractor no longer appears in the worst windows); the center
+bucket's yaw excess over the rest bucket is eliminated; the position spikes
+survive unchanged as declared. The residual dp95 (~0.037) lands at the upper
+edge of the predicted 0.015-0.035 window and is attributed per the
+pre-registration to the surviving position spikes plus the ~0.04 turn-lag
+yaw component — the pre-declared second-lever condition, NOT a fix failure.
+
+Second-lever adjudication (one-fix-one-measure discipline): the yaw lever
+removed the dominant, range-amplified component (fan twist). The residual is
+a bounded rigid position shift (0.26 m worst, non-amplifying) at the same
+deterministic episodes. A position micro-gate is a natural follow-on but is
+NOT landed in this phase without a fresh measurement round — recorded as
+backlog with its calibration data already in hand (clean pos p95 0.12 /
+spikes 0.26-0.27).
+
+GUI acceptance: pending (user-triggered only).
