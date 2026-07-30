@@ -108,6 +108,21 @@ def test_micro_gate_wrap_around_pi():
     assert gated is False and out == est
 
 
+def test_micro_gate_boundary_is_exclusive():
+    # exactly at the bound is NOT gated (strict > ); just past is gated.
+    est, fired = apply_odom_yaw_micro_gate((0.0, 0.0, 0.09), (0.0, 0.0, 0.0), 0.09)
+    assert fired is False and est == (0.0, 0.0, 0.09)
+    est, fired = apply_odom_yaw_micro_gate((0.0, 0.0, 0.0901), (0.0, 0.0, 0.0), 0.09)
+    assert fired is True and est == (0.0, 0.0, 0.0)
+
+
+def test_micro_gate_negative_spike_is_symmetric():
+    # -0.244 rad (the verdict spike, negative sign) -> fires and snaps to odom yaw, position kept.
+    est = (10.06, 5.1, -0.244); odom_map = (10.06, 5.1, 0.000)
+    out, gated = apply_odom_yaw_micro_gate(est, odom_map, 0.09)
+    assert gated is True and out == (10.06, 5.1, 0.000)
+
+
 def test_ydis_micro_rad_pinned_at_vacuum_midpoint():
     pytest.importorskip("rclpy")
     from tugbot_maze.flood_fill_solver import YDIS_MICRO_RAD
