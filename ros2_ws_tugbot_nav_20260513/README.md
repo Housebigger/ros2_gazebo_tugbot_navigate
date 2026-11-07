@@ -1,5 +1,9 @@
 # ros2_ws_tugbot_nav_20260513
 
+<!-- go2-current-entry -->
+> 历史工作区快照。当前 Go2 自主迷宫入口见 [20261107 工作区](../ros2_ws_go2_maze_20261107/README.md)，本轮 [经验与验收索引](../docs/README.md)。本文“当前/最新”和环境描述属于当时阶段；原有代码与实验正文保留。
+
+
 Tugbot ROS 2 Jazzy + Gazebo + Nav2 验证工作空间。
 
 ## 环境准备

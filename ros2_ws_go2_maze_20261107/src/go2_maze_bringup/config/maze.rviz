@@ -1,0 +1,150 @@
+Panels:
+- Class: rviz_common/Displays
+  Name: Displays
+  Property Tree Widget:
+    Expanded:
+    - /Global Options1
+    - /RobotModel1
+    Splitter Ratio: 0.55
+- Class: rviz_common/Views
+  Name: Views
+Visualization Manager:
+  Class: ''
+  Displays:
+  - Class: rviz_default_plugins/Grid
+    Name: Grid
+    Enabled: true
+    Value: true
+    Alpha: 0.5
+    Cell Size: 1.0
+    Plane Cell Count: 30
+    Color: 130; 140; 150
+    Plane: XY
+    Reference Frame: <Fixed Frame>
+  - Class: rviz_default_plugins/RobotModel
+    Name: RobotModel
+    Enabled: true
+    Value: true
+    Alpha: 1
+    Description Source: Topic
+    Description Topic:
+      Value: /robot_description
+      Depth: 1
+      Durability Policy: Transient Local
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+    Visual Enabled: true
+    Collision Enabled: false
+    Update Interval: 0
+    Links:
+      All Links Enabled: true
+      Link Tree Style: Links in Alphabetic Order
+  - Class: rviz_default_plugins/Path
+    Name: Go2 actual route
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /maze/go2_actual_path
+      Depth: 1
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+    Buffer Length: 1
+    Line Style: Lines
+    Line Width: 0.04
+    Color: 255; 198; 64
+    Alpha: 1
+    Pose Style: None
+  - Class: rviz_default_plugins/TF
+    Name: TF
+    Enabled: false
+    Value: false
+    Show Axes: true
+    Show Arrows: true
+    Show Names: true
+    Marker Scale: 0.2
+  - Class: rviz_default_plugins/PointCloud2
+    Name: Explored 3D maze
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /maze/cloud_map_3d
+      Depth: 1
+      Durability Policy: Transient Local
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+    Style: Flat Squares
+    Size (m): 0.035
+    Alpha: 0.8
+    Color Transformer: AxisColor
+    Axis: Z
+    Position Transformer: XYZ
+    Decay Time: 0
+  - Class: rviz_default_plugins/LaserScan
+    Name: Live 900-beam scan
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /scan
+      Depth: 5
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Best Effort
+    Style: Points
+    Size (Pixels): 3
+    Color Transformer: FlatColor
+    Color: 255; 90; 90
+    Position Transformer: XYZ
+    Decay Time: 0
+  Enabled: true
+  Global Options:
+    Fixed Frame: map
+    Background Color: 48; 52; 61
+    Frame Rate: 20
+  Tools:
+  - Class: rviz_default_plugins/MoveCamera
+  - Class: rviz_default_plugins/Select
+  - Class: rviz_default_plugins/FocusCamera
+  - Class: rviz_default_plugins/Measure
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 38.0
+      Pitch: 1.45
+      Yaw: 1.5708
+      Near Clip Distance: 0.01
+      Target Frame: map
+      Focal Point: &id001
+        X: 10.0
+        Y: 9.0
+        Z: 0.3
+    Saved:
+    - Class: rviz_default_plugins/Orbit
+      Distance: 38.0
+      Pitch: 1.45
+      Yaw: 1.5708
+      Near Clip Distance: 0.01
+      Target Frame: map
+      Focal Point: *id001
+      Name: Maze overview
+    - Class: rviz_default_plugins/Orbit
+      Distance: 3.5
+      Pitch: 0.6
+      Yaw: 0.8
+      Near Clip Distance: 0.01
+      Target Frame: base_link
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Name: Go2 close view
+Window Geometry:
+  Height: 850
+  Width: 1100
+  X: 20
+  Y: 50
+  Hide Left Dock: false
+  Hide Right Dock: true

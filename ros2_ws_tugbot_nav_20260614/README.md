@@ -1,5 +1,9 @@
 # Autonomous Maze Navigation — `ros2_ws_tugbot_nav_20260614`
 
+<!-- go2-current-entry -->
+> 历史工作区快照。当前 Go2 自主迷宫入口见 [20261107 工作区](../ros2_ws_go2_maze_20261107/README.md)，本轮 [经验与验收索引](../docs/README.md)。本文“当前/最新”和环境描述属于当时阶段；原有代码与实验正文保留。
+
+
 ROS 2 (Jazzy) + Gazebo Harmonic stack that drives the Tugbot from the maze entrance
 (map `(0, 0)`, cell `(1,0)`) to the exit (map `(21.07, 18.08)`, cell `(10,9)`) of a
 ~10×10-cell *perfect maze* (a tree: 2 m cells, ~1.76 m corridors). Several explorer

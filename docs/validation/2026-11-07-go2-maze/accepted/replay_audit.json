@@ -1,0 +1,23 @@
+{
+  "samples": 55271,
+  "swept_samples": 55271,
+  "collision_samples": 0,
+  "first_collision": null,
+  "max_tilt_deg": 3.1478971882044053,
+  "final_pose": [
+    20.244673400995246,
+    18.027802248769156,
+    0.06296198477474121
+  ],
+  "footprint": [
+    -0.42,
+    0.37,
+    0.25
+  ],
+  "online_success": true,
+  "tilt_envelope_valid": true,
+  "dataset_complete": true,
+  "exit_distance_m": 0.8297645017192476,
+  "geometry_pass": true,
+  "success": true
+}
