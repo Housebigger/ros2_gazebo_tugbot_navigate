@@ -1,5 +1,9 @@
 # Tugbot ROS 2 + Gazebo 自主探索建图与导航
 
+<!-- go2-current-entry -->
+> 历史工作区快照。当前 Go2 自主迷宫入口见 [20261107 工作区](../ros2_ws_go2_maze_20261107/README.md)，本轮 [经验与验收索引](../docs/README.md)。本文“当前/最新”和环境描述属于当时阶段；原有代码与实验正文保留。
+
+
 一个基于 ROS 2 Jazzy、Gazebo Harmonic、Nav2、slam_toolbox 与 ros_gz_bridge 的 Tugbot 仿真工程，用于验证从未知 Gazebo 环境自主探索建图，到保存自建地图，再到使用自建地图进行静态导航回放的完整链路。
 
 本仓库对应工作空间：`ros2_ws_tugbot_nav_20260514`，继承 0513 工程的 Tugbot / Gazebo / Nav2 基线并在其上扩展自主探索建图能力。

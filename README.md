@@ -1,502 +1,101 @@
 # ros2_gazebo_tugbot_navigate
 
-Tugbot 在 ROS 2 Jazzy + Gazebo Harmonic 中的阶段化导航实验仓库：从视觉巡航最小闭环，到已知静态地图 Nav2 导航，再到未知环境自主探索建图、地图归档与自建地图静态回放，最终到结构化迷宫的自主走迷宫通关（已知地图定位 + 自主路线发现）。
+ROS 2 / Gazebo 导航实验仓库，保留从 Tugbot 视觉巡航、Nav2 导航、在线探索到四足机器人自主走迷宫的阶段工作区。**当前推荐入口是 [Unitree Go2 工作区](ros2_ws_go2_maze_20261107/README.md)**。不同日期的工作区分别构建，分别加载环境。
 
-这个仓库不是单一最终 demo，而是保留了三条互相衔接、可独立运行的工作空间。它适合用来学习和复现实验型移动机器人系统如何逐步搭建：先让仿真、桥接、感知和控制闭环稳定，再接入 Nav2 已知地图导航，最后扩展到 slam_toolbox 在线建图、frontier/perimeter 自主探索、地图保存、推荐地图归档和静态地图导航回放。
+## 当前成果：Go2 自主通关最新版迷宫
 
-说明：仓库现含六个工作空间；最新里程碑是 `ros2_ws_tugbot_nav_20260705/`（**不喂先验墙图**、在线自建地图定位的自主走迷宫通关）。`ros2_ws_tugbot_nav_20260614/` 是“已知地图定位 + 自主路线”的里程碑，`ros2_ws_tugbot_nav_20260514/` 是自主探索建图与静态回放的里程碑，均仍有效。
+Go2 使用官方模型惯量、碰撞体和 12 个关节力矩 PID，通过足地接触运动。沿用 `ros2_ws_tugbot_nav_20260728` 的最新 2 倍尺寸迷宫与在线 flood-fill 导航，内部墙体边走边发现。
 
-## 最新里程碑（2026-06）：结构化迷宫的自主走迷宫通关
+| 本轮验收 | 实测 |
+| --- | ---: |
+| 修正后完整自主运行 | 1 轮通过 |
+| 仿真时间 / 实际累计路程 | 939.334 s / 119.122 m |
+| 实际出口距离 / 项目允许半径 | 0.829765 m / 1.2 m |
+| 最终线速度 | 0 m/s，持续停稳验收通过 |
+| 原生位姿完整重放 | 55,271 条 |
+| 几何碰撞 / 非法越界 | 0 / 0 |
+| 最大总倾角 | 3.148° |
+| Go2 核心回归 | 208 项通过 |
 
-在 0419/0513/0514 的视觉巡航、已知地图导航、自主探索建图之上，仓库又演进出两个面向“结构化迷宫求解”的工作空间，把目标从“建图”推进到“在已知迷宫中自主走到出口”：
+[验收报告与原始数据](docs/validation/2026-11-07-go2-maze/README.md) · [成功经验](docs/experience/2026-11-07-go2-maze-success.md) · [全部文档入口](docs/README.md)
 
-- `ros2_ws_tugbot_nav_20260522`（GCN 引导走廊导航）：沿预计算的 BFS 走廊序列可靠通关（3/3），但路线是**预先计算**的，不是自主发现。长期作为唯一可靠的迷宫通关基线。
-- `ros2_ws_tugbot_nav_20260614`（自主迷宫求解，**已知地图定位**里程碑）：micromouse 式格栅 flood-fill 求解器 + `MazeMotion` 走廊运动 FSM，**用已知迷宫地图做 scan-match 绝对定位**（`pose_source=scan_match`，默认），路线仍由 flood-fill **自主发现**。**可靠自主通关：两批受控实验 16/16 `EXIT_REACHED`，~560s/次**——与 GCN 同速，但为自主发现。
+![Go2 真实轨迹与倾角](docs/validation/2026-11-07-go2-maze/accepted/go2-maze-result.png)
 
-关键突破是**定位而非搜索**：受控诊断显示里程计死推会失同步（75% 的运行 desync），机器人自以为居中实则漂移 → 误感墙 → 误路（odom 下 0/8 通关）。改为每 tick 用 LIDAR 对已知墙图做 point-to-line ICP 求**绝对位姿**后，失同步归零，原有自主性自然生效（16/16）。配套的真实足迹碰撞 oracle 把碰撞率从 odom 下的 ~25–61% 测准并降到 ~0.33%，随后一个「倒车回中」修复把 cell (3,9) 这处唯一边际擦碰**彻底清零**（2026-07-03，受控 Gazebo 16 次 post-fix：16/16 通关、碰撞 0/1788 = 0.000%，基线为 6/1808）。完整说明见 `ros2_ws_tugbot_nav_20260614/README.md`。
+“通关”采用项目的出口区域定义：真实位姿进入半径 1.2 m 的出口范围并停稳。这是单轮修正后实测结果，尚未做多种子可靠性统计。导航沿用 Gazebo 世界坐标里程计，实机腿式里程计与无真值 SLAM 适配属于后续工作。
 
-## 最新里程碑（2026-07）：不喂先验墙图的在线自主走迷宫
+## 快速复现
 
-`ros2_ws_tugbot_nav_20260705`（**当前最新**）把 20260614 唯一的“外挂”——已知墙图——也去掉了：只给已知的**网格几何、入口/出口、外围边界墙**，**内部墙的走向在运行时边走边发现**（`pose_source=online_slam`）。
+已验证环境：Ubuntu 26.04、ROS 2 Lyrical、Gazebo Jetty 10.5。本机使用 NVIDIA RTX 5090 Laptop；GPU 雷达和相机需要可用的渲染环境。历史 Jazzy / Harmonic 工作区的安装与启动命令见各自说明。
 
-关键洞察是**已知网格让 SLAM 塌缩**：一旦感知到某条边是墙，它的中心线就落在一个**已知的格边**上，于是“在线 SLAM”变成“发现哪些已知格边是墙 + 对已确认的墙做 scan-match”。定位器复用 20260614 那套 ICP，只是参照集从“全量已知图”换成一张**增长中的自建图** = 已知外围 + brain 已确认的墙 + **当前格刚感知、已格吸附的墙**（后者是让探索途中也持续无漂移的关键——把 drift=0.03 峰值定位误差从 1.10m 压到 0.40m）。全程**不读先验内部墙图**。
-
-**受控 Gazebo 验收（不喂内部图，16 次）：16/16 `EXIT_REACHED`（~545–555s，与喂图基线同速）、真实足迹碰撞 0/1769 = 0.000%、0 次 stuck/unstick/escape。** 即“已知地图定位”被推进到“**在线自建地图定位**”而通关率与碰撞率不降。完整说明见 `ros2_ws_tugbot_nav_20260705/README.md`。
-
-## 当前结论
-
-当前推荐入口是：
-
-```text
-ros2_ws_tugbot_nav_20260514/
-```
-
-该工作空间已经完成并记录了完整链路：
-
-```text
-Gazebo Tugbot 环境
-  -> ros_gz_bridge 桥接 /scan /odom /tf /cmd_vel /clock /camera
-  -> slam_toolbox 在线建图并发布 live /map
-  -> Nav2 基于 live /map 执行导航
-  -> frontier_explorer 自动生成并发送 NavigateToPose 目标
-  -> perimeter_then_frontier 外轮廓优先探索
-  -> no-spin / 低角速度稳定建图
-  -> map_saver_cli 保存自建地图
-  -> Phase 14 推荐地图人工验收与归档
-  -> map_server + AMCL 加载自建地图
-  -> Nav2 在 Phase 14 推荐地图上完成静态回放 bringup 验证
-```
-
-当前推荐成果地图已经从旧的 Phase 6 cleanup map 更新为 Phase 14 perimeter no-spin map：
-
-```text
-ros2_ws_tugbot_nav_20260514/src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase14_perimeter_no_spin.yaml
-ros2_ws_tugbot_nav_20260514/src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase14_perimeter_no_spin.pgm
-```
-
-当前推荐静态回放入口是 Phase 16 新增的：
+在新终端、仓库根目录执行：
 
 ```bash
-cd ros2_ws_tugbot_nav_20260514
-source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
-source install/setup.bash
-ros2 launch tugbot_bringup tugbot_nav_phase14_map.launch.py \
-  headless:=false \
-  use_rviz:=true
+cd ros2_ws_go2_maze_20261107
+source /opt/ros/lyrical/setup.bash
+colcon build --symlink-install --packages-select \
+  go2_description tugbot_description tugbot_gazebo tugbot_maze go2_maze_bringup
+./tools/test_go2_core.sh
+./run_go2_maze.sh
 ```
 
-最终推荐阅读的最新验收报告见：
-
-```text
-ros2_ws_tugbot_nav_20260514/doc/doc_report/phase16_phase14_static_replay_entry_report.md
-```
-
-关键历史报告：
-
-```text
-ros2_ws_tugbot_nav_20260514/doc/doc_report/phase14_no_spin_mapping_stability_report.md
-ros2_ws_tugbot_nav_20260514/doc/doc_report/phase15_phase14_map_manual_acceptance_archive_report.md
-ros2_ws_tugbot_nav_20260514/doc/doc_report/phase16_phase14_static_replay_entry_report.md
-```
-
-## 五个工作空间
-
-| 工作空间 | 定位 | 主要能力 | 推荐读者 |
-| --- | --- | --- | --- |
-| `ros2_ws_tugbot_20260419` | 视觉巡航最小闭环 | Gazebo + camera + 蓝线检测 + PID 控制 + 丢线搜索恢复 | 想理解最小仿真闭环、感知/控制分层的人 |
-| `ros2_ws_tugbot_nav_20260513` | 已知静态地图 Nav2 基线 | Gazebo + LaserScan + AMCL + map_server + Nav2 + RViz 人工 goal | 想复现经典已知地图导航的人 |
-| `ros2_ws_tugbot_nav_20260514` | 自主探索建图、推荐地图归档与静态回放 | 在线 SLAM、SLAM+Nav2、frontier/perimeter 探索、no-spin 稳定建图、Phase 14 推荐地图、Phase 14 静态回放入口 | 想研究未知环境探索建图完整链路的人 |
-| `ros2_ws_tugbot_nav_20260522` | 引导走廊迷宫通关（GCN） | 预计算 BFS 走廊序列可靠通关（3/3，guided）；Nav2/SLAM | 想看可靠但预计算的迷宫通关基线的人 |
-| `ros2_ws_tugbot_nav_20260614` | 自主迷宫求解（**当前最新**） | flood-fill 求解 + MazeMotion 运动 FSM + scan-match 已知地图定位；自主路线发现，16/16 通关 | 想研究自主迷宫求解与“已知地图定位”如何破解开放区定位墙的人 |
-
-### 1. `ros2_ws_tugbot_20260419`：视觉巡航最小闭环
-
-该工作空间围绕“最小可运行闭环”组织，包含五个 ROS 2 包：
-
-```text
-tugbot_description  机器人模型与 mesh 资源
-tugbot_gazebo       Gazebo world 与 ros_gz bridge 配置
-tugbot_perception   图像到蓝线中心误差
-tugbot_control      误差到 /cmd_vel 的 PID 与搜索恢复控制
-tugbot_bringup      分层 launch 入口
-```
-
-核心链路：
-
-```text
-/camera/image_raw
-  -> lane_detector_node
-  -> /lane_tracking/error
-  -> lane_controller_node
-  -> /cmd_vel
-  -> Gazebo DiffDrive
-  -> /odom
-```
-
-代表入口：
+最后一条命令打开 Gazebo + RViz 并自动起步。Ctrl+C 结束本次 launch。自动化验收入口为：
 
 ```bash
-cd ros2_ws_tugbot_20260419
-source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
-source install/setup.bash
-
-# 最小仿真底座
-ros2 launch tugbot_bringup sim_minimal.launch.py
-
-# formal world 完整视觉巡航闭环
-ros2 launch tugbot_bringup full_system.launch.py
-
-# 感知调试
-ros2 launch tugbot_bringup perception_debug.launch.py
-
-# zeroerr_outer 纹理外环场景闭环
-ros2 launch tugbot_bringup full_system_zeroerr_outer.launch.py
+./tools/run_checked_maze.sh
 ```
 
-该工作空间还包含 `tests/` 与 `artifacts/`，用于保存结构契约、感知逻辑、控制逻辑、搜索恢复和模型视觉细节恢复的验证证据。
+它创建全新证据目录，等待真实出口与停稳验收，关闭本次仿真，再对完整真实轨迹重放；运行上限为 1800 仿真秒或 3600 墙钟秒。[参数和联调说明](ros2_ws_go2_maze_20261107/src/go2_maze_bringup/README.md) · [工具使用](ros2_ws_go2_maze_20261107/tools/README.md)
 
-### 2. `ros2_ws_tugbot_nav_20260513`：已知静态地图 Nav2 基线
+## 本轮可复用经验
 
-该工作空间把 Tugbot 导航链路推进到经典 Nav2 已知地图导航。包含四个 ROS 2 包：
+1. **先检查真实入口与代码，再看历史 README。** 20260728 的实际 SDF 使用 Tugbot，正文仍有 ANYmal 阶段说明。换 Go2 时必须核对模型、运动学、控制器和 TF，不能只替换 mesh。
+2. **先标定身体运动，再调整导航时限。** 官方关节力矩上限保留；P=320、D=4 的实测直行/转向响应优于初始参数。用真实位移、转角和停车结果调整超时。
+3. **足迹必须覆盖后膝、小腿与迈步范围。** 采用 x=[-0.42,0.37]、|y|≤0.25 m 的保守矩形，并将总倾角限制在已抽样的检查域内。
+4. **统一传感器与定位坐标约定。** 中置雷达、真实 sensor header、静态安装 TF、`map→odom→base_link` 和仿真时钟一并验证。
+5. **离散出口格到达后继续精确收尾。** 首轮实际停在 1.223210 m，验收正确拒绝；增加低速收尾进入 0.85 m 内部目标区后，完整重跑通过。
+6. **验收保留独立原始证据。** 完整墙图仅用于验收/绘图；新运行目录、新状态文件、原生位姿扫掠和退出清理共同防止误用旧 PASS。
+
+数值、代码位置、反例和适用范围见 [经验总结](docs/experience/2026-11-07-go2-maze-success.md)。
+
+## 工作区与阅读路线
+
+| 工作区 | 用途 |
+| --- | --- |
+| [20261107 Go2](ros2_ws_go2_maze_20261107/README.md) | 当前四足自主迷宫入口，Lyrical / Jetty |
+| [20260728](ros2_ws_tugbot_nav_20260728/README.md) | 本次集成的实际最新基础工作区 |
+| [20260705](ros2_ws_tugbot_nav_20260705/README.md) | 在线发现内部墙体、增长参照图定位的历史里程碑 |
+| [20260614](ros2_ws_tugbot_nav_20260614/README.md) | 已知完整墙图 scan-match + 自主路线发现 |
+| [20260522](ros2_ws_tugbot_nav_20260522/README.md) | 预计算 BFS 走廊序列的 guided 迷宫基线 |
+| [20260514](ros2_ws_tugbot_nav_20260514/README.md) | SLAM、frontier/perimeter 探索、Phase 14 地图与静态回放 |
+| [20260513](ros2_ws_tugbot_nav_20260513/README.md) | 已知静态地图 AMCL + Nav2 |
+| [20260419](ros2_ws_tugbot_20260419/README.md) | 相机蓝线检测、PID 与视觉巡航最小闭环 |
+
+20260712～20260727 的其他历史迭代入口见 [文档索引](docs/README.md)。历史工作区正文和代码保留；其“当前”“最新”描述属于当时阶段，入口提示指向本轮 Go2。
+
+## 当前源码结构
 
 ```text
-tugbot_description  Tugbot 模型资源
-tugbot_gazebo       Gazebo world、bridge 与仿真启动
-tugbot_navigation   Nav2 参数、静态地图与导航资源
-tugbot_bringup      Gazebo + RViz + Nav2 一键启动入口
+ros2_ws_go2_maze_20261107/
+├── setup.bash / run_go2_maze.sh
+├── src/
+│   ├── go2_description/      # 官方 Go2 URDF、DAE、来源与许可
+│   ├── go2_maze_bringup/     # 当前 launch、bridge、RViz
+│   ├── tugbot_description/   # 当前原生 Go2 SDF；兼有历史模型
+│   ├── tugbot_gazebo/        # 最新迷宫与 Go2 平地验证场景
+│   └── tugbot_maze/          # 在线导航、步态、出口收尾、独立验收
+└── tools/                   # 核心检查、物理标定、验收与绘图
 ```
 
-核心链路：
+[包索引](ros2_ws_go2_maze_20261107/src/README.md)。`build/`、`install/`、`log/`、缓存属于本机生成物，Git 忽略；可复核证据单独归档在 `docs/validation/`。
 
-```text
-静态地图 /map
-  + Gazebo LaserScan /scan
-  + /odom 与 TF
-  -> AMCL 定位
-  -> Nav2 planner/controller/bt_navigator
-  -> /cmd_vel
-  -> Gazebo Tugbot 运动
-```
+## 验证边界
 
-快速运行：
+- 核心 208 项通过。广泛历史测试记录为 564 通过、7 失败；6 项是旧 wall-follow 用例，1 项要求原仓库缺失的 `maze_20260522.jpg`。缺少 `nav2_msgs` 的旧 reactive_pilot 测试未运行。[完整日志与解释](docs/validation/2026-11-07-go2-maze/README.md)。
+- 零碰撞指指定步态/姿态范围内的保守几何检查，未测接触力；完整仿真验收不等于实机安全认证。
+- 聚焦启动不启动 Nav2 或 slam_toolbox。不要同时加载其他日期工作区中同名包，或使用旧脚本全局杀进程、清理共享内存。
 
-```bash
-cd ros2_ws_tugbot_nav_20260513
-source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
-source install/setup.bash
+## 来源与致谢
 
-# Gazebo 单独启动
-ros2 launch tugbot_gazebo tugbot_gazebo.launch.py
+Go2 来自 [Unitree 官方 unitree_ros](https://github.com/unitreerobotics/unitree_ros)，固定提交、原文件与 mesh 校验值见 [SOURCE.md](ros2_ws_go2_maze_20261107/src/go2_description/SOURCE.md)，许可为 [BSD-3-Clause](ros2_ws_go2_maze_20261107/src/go2_description/LICENSE)。历史模型与包保留各自来源和许可；原视觉巡航项目使用 [MIT](ros2_ws_tugbot_20260419/LICENSE)，此处不将所有第三方资源统一改为 MIT。
 
-# Gazebo + RViz + AMCL + Nav2 一键启动
-ros2 launch tugbot_bringup tugbot_nav.launch.py
-```
-
-RViz 使用方式：
-
-1. 用 `2D Pose Estimate` 给 AMCL 设置初始位姿。
-2. 确认 LaserScan 与地图墙体轮廓基本贴合。
-3. 用 `2D Goal Pose` 发送 Nav2 目标点。
-4. 观察 RViz 路径规划与 Gazebo 中 Tugbot 的运动。
-
-该工作空间的 README 已记录 2026-05-13 live 验收：构建、测试、Gazebo、关键话题、AMCL/Nav2 lifecycle、`/navigate_to_pose` goal 和人工 RViz 验收均已通过。
-
-### 3. `ros2_ws_tugbot_nav_20260514`：自主探索建图、推荐地图归档与静态回放
-
-该工作空间是在不破坏 0513 已知地图基线的前提下独立演进出的当前推荐工作空间。包含五个 ROS 2 包：
-
-```text
-tugbot_description  Tugbot 模型资源
-tugbot_gazebo       Gazebo world、bridge、camera 与仿真启动
-tugbot_navigation   Nav2、SLAM、地图、参数与推荐地图资源
-tugbot_bringup      静态导航、SLAM、SLAM+Nav2、探索、Phase 6/Phase 14 回放入口
-tugbot_exploration  frontier_explorer 自主探索节点
-```
-
-主要能力：
-
-- SLAM-only 在线建图：`slam_toolbox` 发布实时 `/map`。
-- SLAM + Nav2 手动导航：Nav2 使用实时 `/map`，不依赖静态地图。
-- frontier 自主探索建图：`frontier_explorer` 自动识别 frontier 并发送 `NavigateToPose` goal。
-- `perimeter_then_frontier` 外轮廓优先探索策略：先尝试沿大跨度墙体生成 perimeter waypoint，再 fallback 到 frontier。
-- no-spin / 低角速度探索模式：默认关闭大角度原地旋转，降低 slam_toolbox scan matching 错位与地图重影风险。
-- residual unknown cleanup：对残留 unknown 区域进行轻量补扫。
-- static box pillar 障碍物：原 cone / snow cone 障碍物已替换为两个 static box pillar。
-- camera 可视化：Tugbot 前向 camera 可在 RViz Image Display 中查看 `/camera/image_raw`。
-- Phase 14 perimeter no-spin map：当前推荐成果地图。
-- Phase 16 静态回放入口：`tugbot_nav_phase14_map.launch.py` 默认加载 Phase 14 推荐地图，启动 `map_server + AMCL + Nav2`，不启动 `slam_toolbox` 或 `frontier_explorer`。
-
-主要 launch 入口：
-
-| Launch | 推荐程度 | 用途 | 地图来源 | AMCL | slam_toolbox | 备注 |
-| --- | --- | --- | --- | --- | --- | --- |
-| `tugbot_nav.launch.py` | 保留 / 基线 | 原 0513 静态地图导航基线 | 原始静态地图 `map_1725111373.yaml` | 是 | 否 | 用于回归验证原始已知地图导航链路 |
-| `tugbot_slam.launch.py` | 调试入口 | SLAM-only 在线建图 | live `/map` | 否 | 是 | 不启动 Nav2 navigation，不启动 AMCL |
-| `tugbot_slam_nav.launch.py` | 调试入口 | SLAM + Nav2 手动目标导航 | live `/map` | 否 | 是 | 适合手动发送 NavigateToPose goal 验证在线地图导航 |
-| `tugbot_explore.launch.py` | 当前推荐探索入口 | 未知地图自主探索建图、perimeter/frontier、cleanup、可选保存地图 | live `/map` | 否 | 是 | 推荐显式使用 `exploration_strategy:=perimeter_then_frontier`；默认 no-spin / 低角速度；不要覆盖 Phase 14 推荐地图 |
-| `tugbot_nav_phase14_map.launch.py` | 当前推荐静态回放入口 | Phase 14 推荐地图静态导航回放 | Phase 14 perimeter no-spin map | 是 | 否 | 新增于 Phase 16；加载当前推荐地图；不重新建图 |
-| `tugbot_nav_phase6_map.launch.py` | 历史稳定回放入口 | Phase 6 cleanup map 静态导航回放 | Phase 6 cleanup map | 是 | 否 | 上一版稳定地图回放；不加载 Phase 14 推荐地图 |
-
-快速构建：
-
-```bash
-cd ros2_ws_tugbot_nav_20260514
-source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
-source install/setup.bash
-```
-
-人工可视化自主探索，推荐使用 Phase 14 策略并保存为普通实验文件名：
-
-```bash
-ros2 launch tugbot_bringup tugbot_explore.launch.py \
-  headless:=false \
-  use_rviz:=true \
-  exploration_strategy:=perimeter_then_frontier \
-  max_goals:=20 \
-  enable_cleanup_mode:=true \
-  save_map:=true \
-  map_save_path:=/absolute/path/to/ros2_ws_tugbot_nav_20260514/src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_manual
-```
-
-注意：请把 `/absolute/path/to/ros2_ws_tugbot_nav_20260514` 替换成自己的工作空间绝对路径。普通探索结果不要保存到 `tugbot_nav_world_slam_phase14_perimeter_no_spin` 路径，避免覆盖当前推荐成果地图。
-
-使用当前推荐 Phase 14 地图做静态导航回放：
-
-```bash
-ros2 launch tugbot_bringup tugbot_nav_phase14_map.launch.py \
-  headless:=false \
-  use_rviz:=true
-```
-
-该入口会：
-
-- 加载 `src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase14_perimeter_no_spin.yaml`。
-- 启动 `map_server + AMCL + Nav2`。
-- 不启动 `slam_toolbox`。
-- 不启动 `frontier_explorer`。
-- 不进行重新建图或保存地图。
-- 启用 RViz 后，建议先用 `2D Pose Estimate` 设置 AMCL 初始位姿，再用 `2D Goal Pose` 或 `NavigateToPose` 发送目标。
-
-使用 Phase 6 上一版稳定地图做静态导航回放：
-
-```bash
-ros2 launch tugbot_bringup tugbot_nav_phase6_map.launch.py \
-  headless:=false \
-  use_rviz:=true
-```
-
-Phase 6 cleanup map 仍被保留为上一版稳定地图。Phase 7A budget map 仅作为负面实验记录保留，不推荐作为默认成果。
-
-## 推荐地图与历史地图
-
-### 当前推荐地图：Phase 14 perimeter no-spin map
-
-```text
-ros2_ws_tugbot_nav_20260514/src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase14_perimeter_no_spin.yaml
-ros2_ws_tugbot_nav_20260514/src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase14_perimeter_no_spin.pgm
-```
-
-推荐理由：
-
-- Phase 14 人工验收通过。
-- no-spin + 低角速度 + `perimeter_then_frontier` 策略改善了地图重影问题。
-- 地图墙线清晰，外轮廓完整，内墙稳定。
-- 无明显重影、错层、多层黑边。
-- box pillar 能被稳定测绘。
-- camera image 正常显示。
-- Phase 15 已将人工验收通过的 `tugbot_nav_world_slam_perimeter_test.yaml/.pgm` 归档为 Phase 14 推荐地图，并修正 YAML `image` 字段指向新的 `.pgm` 文件名。
-- Phase 16 已新增独立静态回放入口，默认加载该推荐地图。
-
-### 上一版稳定地图：Phase 6 cleanup map
-
-```text
-ros2_ws_tugbot_nav_20260514/src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase6_cleanup.yaml
-ros2_ws_tugbot_nav_20260514/src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase6_cleanup.pgm
-```
-
-Phase 6 cleanup map 作为上一版稳定地图保留。Phase 8 已验证该地图可被 `map_server` 加载，AMCL 可定位，Nav2 可完成静态地图导航回放。
-
-### 负面实验地图：Phase 7A budget map
-
-```text
-ros2_ws_tugbot_nav_20260514/src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase7_budget.yaml
-ros2_ws_tugbot_nav_20260514/src/tugbot_navigation/maps/explored/tugbot_nav_world_slam_phase7_budget.pgm
-```
-
-Phase 7A 执行过程通过，但地图质量不采纳。原因包括重影、墙线重复、局部错层、扫描未对齐，以及过度补扫降低 SLAM 一致性。该地图仅作为负面实验记录保留，不推荐默认使用。
-
-## 环境要求
-
-已验证环境：
-
-```text
-Ubuntu 24.04
-ROS 2 Jazzy
-Gazebo Harmonic
-Python 3
-```
-
-推荐安装依赖：
-
-```bash
-sudo apt update
-sudo apt install -y \
-  ros-jazzy-navigation2 \
-  ros-jazzy-nav2-bringup \
-  ros-jazzy-slam-toolbox \
-  ros-jazzy-ros-gz \
-  ros-jazzy-tf-transformations \
-  python3-colcon-common-extensions \
-  python3-pytest
-```
-
-如果你的系统已经通过 ROS desktop/full 或源码方式安装了相关组件，可按实际环境调整。
-
-## 仓库结构
-
-```text
-ros2_gazebo_tugbot_navigate/
-├── README.md
-├── .gitignore
-├── ros2_ws_tugbot_20260419/
-│   ├── README.md
-│   ├── LICENSE
-│   ├── CHANGELOG.md
-│   ├── CONTRIBUTING.md
-│   ├── CODE_OF_CONDUCT.md
-│   ├── SECURITY.md
-│   ├── artifacts/
-│   ├── tests/
-│   └── src/
-│       ├── tugbot_description/
-│       ├── tugbot_gazebo/
-│       ├── tugbot_perception/
-│       ├── tugbot_control/
-│       └── tugbot_bringup/
-├── ros2_ws_tugbot_nav_20260513/
-│   ├── README.md
-│   └── src/
-│       ├── tugbot_description/
-│       ├── tugbot_gazebo/
-│       ├── tugbot_navigation/
-│       └── tugbot_bringup/
-├── ros2_ws_tugbot_nav_20260514/
-│   ├── README.md
-│   ├── doc/
-│   │   ├── doc_report/
-│   │   └── doc_experience/
-│   └── src/
-│       ├── tugbot_description/
-│       ├── tugbot_gazebo/
-│       ├── tugbot_navigation/
-│       ├── tugbot_bringup/
-│       └── tugbot_exploration/
-├── ros2_ws_tugbot_nav_20260522/        # GCN 引导走廊迷宫通关（src/tugbot_maze, tugbot_bringup, …）
-└── ros2_ws_tugbot_nav_20260614/        # 自主迷宫求解：flood-fill + scan-match 已知地图定位
-    ├── README.md
-    ├── tools/                          # run_flood_fill_maze.sh, batch_diagnose_floodfill.sh, diagnose_floodfill_runs.py
-    └── src/tugbot_maze/                # flood_fill_solver, maze_motion, scan_match_localizer, cell_walls, maze_sim, footprint, …
-```
-
-说明：各工作空间下的 `build/`、`install/`、`log/` 是 colcon 构建产物，不是理解源码的首要入口。新 clone 后建议在对应工作空间内重新构建。
-
-## 推荐阅读路线
-
-如果你是第一次阅读这个仓库，建议按下面顺序：
-
-1. 先读本 README，理解三个工作空间之间的递进关系。
-2. 读 `ros2_ws_tugbot_20260419/README.md`，理解最小仿真闭环、感知、控制与 Gazebo bridge。
-3. 读 `ros2_ws_tugbot_nav_20260513/README.md`，理解已知地图 AMCL + Nav2 的基线。
-4. 读 `ros2_ws_tugbot_nav_20260514/README.md`，进入自主探索建图、Phase 14 推荐地图和 Phase 14 静态回放。
-5. 读 `ros2_ws_tugbot_nav_20260514/doc/doc_report/phase16_phase14_static_replay_entry_report.md`，查看最新 Phase 16 静态回放入口结论。
-6. 回看 `ros2_ws_tugbot_nav_20260514/doc/doc_report/phase15_phase14_map_manual_acceptance_archive_report.md`，理解 Phase 14 推荐地图如何归档为当前成果。
-7. 回看 `ros2_ws_tugbot_nav_20260514/doc/doc_report/phase14_no_spin_mapping_stability_report.md`，理解 no-spin / 低角速度策略为什么被采用。
-8. 如果要继续改探索策略，读 `ros2_ws_tugbot_nav_20260514/doc/doc_experience/tugbot_autonomous_mapping_success_experience.md`。
-9. 读 `ros2_ws_tugbot_nav_20260522/README.md`，理解 GCN 引导走廊迷宫通关（可靠但预计算）。
-10. 读 `ros2_ws_tugbot_nav_20260614/README.md`，进入自主迷宫求解 + scan-match 已知地图定位，理解“开放区两轴定位墙”如何被破解——这是项目当前最新里程碑。
-
-## 常用验证命令
-
-构建当前推荐工作空间：
-
-```bash
-cd ros2_ws_tugbot_nav_20260514
-source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
-source install/setup.bash
-```
-
-运行 contract test：
-
-```bash
-cd ros2_ws_tugbot_nav_20260514
-python3 -m pytest -q src/tugbot_bringup/test/test_contract.py
-```
-
-查看 Phase 14 静态回放入口参数：
-
-```bash
-cd ros2_ws_tugbot_nav_20260514
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 launch tugbot_bringup tugbot_nav_phase14_map.launch.py --show-args
-```
-
-启动 Phase 14 静态地图回放后，可查看 ROS graph：
-
-```bash
-ros2 node list
-ros2 topic list
-ros2 topic info -v /map
-ros2 topic echo /odom --once
-ros2 topic echo /scan --once
-ros2 service call /lifecycle_manager_navigation/is_active std_srvs/srv/Trigger '{}'
-```
-
-发送一个 Nav2 goal：
-
-```bash
-ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
-  "{pose: {header: {frame_id: 'map'}, pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}}" \
-  --feedback
-```
-
-运行 20260419 视觉巡航工作空间的 Python 测试：
-
-```bash
-cd ros2_ws_tugbot_20260419
-python3 -m pytest tests -q
-```
-
-## Phase 14 / Phase 15 / Phase 16 关系
-
-```text
-Phase 14：no-spin / 低角速度 + perimeter_then_frontier 策略得到人工验收通过的高质量地图。
-Phase 15：将人工验收通过的地图归档为当前推荐成果地图：tugbot_nav_world_slam_phase14_perimeter_no_spin.yaml/.pgm。
-Phase 16：新增 tugbot_nav_phase14_map.launch.py，让当前推荐地图拥有独立、语义清晰的静态导航回放入口。
-```
-
-Phase 16 的边界：
-
-- 新增 `tugbot_nav_phase14_map.launch.py`。
-- 新增 `nav2_phase14_map_params.yaml`，语义上对应 Phase 14 推荐地图静态回放。
-- 默认 map 指向 Phase 14 推荐地图。
-- 启动 `map_server + AMCL + Nav2`。
-- 不启动 `slam_toolbox`、`frontier_explorer` 或探索 launch。
-- 不重新生成地图，不保存新地图。
-- 不修改 Phase 14 推荐地图本身。
-- 保留 Phase 6 cleanup map 作为上一版稳定地图。
-- 保留 Phase 7A budget map 作为负面实验记录。
-
-## 已知边界
-
-- 这是实验型 ROS 2/Gazebo 仓库，优先展示可复现实验链路与阶段验证，而不是已经产品化的机器人系统。
-- Gazebo GUI 在 VMware、Wayland/X11、OpenGL/EGL 组合环境下可能出现图形 warning；headless 模式通常更适合自动化验证。
-- `ros2_ws_tugbot_nav_20260514` 中 Phase 14 perimeter no-spin map 是当前推荐成果；Phase 6 cleanup map 是上一版稳定成果；Phase 7A budget map 是负面实验记录。
-- `tugbot_explore.launch.py` 默认策略仍是 `frontier`，推荐演示 Phase 14 策略时请显式设置 `exploration_strategy:=perimeter_then_frontier`。
-- 普通探索、headless 验证或新实验应保存到新文件名，避免覆盖 Phase 14 推荐地图、Phase 6 稳定地图或 Phase 7A 负面实验地图。
-- Phase 16 只验证了 Phase 14 静态回放入口可以启动、`map_server` 加载 Phase 14 map、AMCL/Nav2 lifecycle active、`/map` 由 `/map_server` 发布；没有重新执行长时间探索，也没有重新生成地图。
-- 当前 camera 仅用于可视化，不参与 Nav2 避障；Nav2 仍主要依赖 `/scan`。
-- 自主探索仍依赖 SLAM 几何一致性和 frontier/perimeter 候选点安全性；更复杂环境下建议继续做地图质量评分、planner precheck 和多 world 泛化测试。
-- 当前仓库中部分工作空间保留了历史构建产物目录；正式分发或二次开发时可清理 `build/`、`install/`、`log/` 后重新构建。
-
-## License / Acknowledgements
-
-当前仓库内 `ros2_ws_tugbot_20260419/LICENSE` 为 MIT License。若将三个工作空间统一对外发布，建议在仓库根目录补充统一 LICENSE 文件，并同步检查各 ROS package 的 maintainer 与 license metadata。
-
-感谢以下开源生态：
-
-- ROS 2
-- Gazebo / Gazebo Harmonic
-- ros_gz packages
-- Nav2 / Navigation2
-- slam_toolbox
-
-特别致谢：
-
-- UM FST 徐老师
-- bilibili 后来老师
+感谢 ROS 2、Gazebo、ros_gz、Nav2、slam_toolbox、Unitree Robotics，以及 UM FST 徐老师、bilibili 后来老师。

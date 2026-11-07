@@ -1,0 +1,7 @@
+Configurations: 81000 body orientations: 25 primitive count: 27
+Configuration order: vx, wz, stabilizer roll, stabilizer pitch, phase
+min x: (-0.39525469895977183, ('rl_shank_link_collision', [-0.25, 0.5, 0.06, 0.06, 3.141592653589793], -0.1, 0.1))
+max x: (0.3445262254252712, ('base_link_fixed_joint_lump__Head_lower_collision_2', [-0.25, -0.5, -0.06, -0.06, 0.0], 0.0, -0.1))
+min y: (-0.2180484609316213, ('rr_shank_link_fixed_joint_lump__rr_foot_collision_3', [-0.25, -0.5, 0.06, -0.06, 4.60766922526503], -0.1, -0.1))
+max y: (0.2180484609316213, ('rl_shank_link_fixed_joint_lump__rl_foot_collision_3', [-0.25, 0.5, -0.06, -0.06, 1.4660765716752369], 0.1, -0.1))
+Bounds including 1 cm tracking allowance: -0.40525469895977184 0.35452622542527124 0.22804846093162132

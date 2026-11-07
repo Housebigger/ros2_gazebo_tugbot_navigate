@@ -1,0 +1,104 @@
+........................................................................ [ 12%]
+........................................................................ [ 25%]
+........................................................................ [ 37%]
+........................................................................ [ 50%]
+........................................................................ [ 63%]
+..........................FF.FFFF....................................... [ 75%]
+........................................................................ [ 88%]
+....................F..............................................      [100%]
+=================================== FAILURES ===================================
+____________________ test_sealed_left_hand_solves_interior _____________________
+
+    def test_sealed_left_hand_solves_interior():
+        steps, closest, outside = run_to_exit('left', sealed=True)
+>       assert steps is not None, f"sealed left failed to reach exit; closest={closest:.2f} m"
+E       AssertionError: sealed left failed to reach exit; closest=26.08 m
+E       assert None is not None
+
+src/tugbot_maze/test/test_wall_follow_maze_sim.py:60: AssertionError
+____________________ test_sealed_right_hand_solves_interior ____________________
+
+    def test_sealed_right_hand_solves_interior():
+        steps, closest, outside = run_to_exit('right', sealed=True)
+>       assert steps is not None, f"sealed right failed to reach exit; closest={closest:.2f} m"
+E       AssertionError: sealed right failed to reach exit; closest=22.38 m
+E       assert None is not None
+
+src/tugbot_maze/test/test_wall_follow_maze_sim.py:68: AssertionError
+______________________ test_report_faster_legitimate_hand ______________________
+
+capsys = <_pytest.capture.CaptureFixture object at 0x78fab0249e80>
+
+    def test_report_faster_legitimate_hand(capsys):
+        steps_l, _, out_l = run_to_exit('left', sealed=True)
+        steps_r, _, out_r = run_to_exit('right', sealed=True)
+>       assert steps_l is not None and steps_r is not None
+E       assert (None is not None)
+
+src/tugbot_maze/test/test_wall_follow_maze_sim.py:92: AssertionError
+_______ test_sealed_left_hand_robust_to_start_perturbation[0.2-0.2-0.1] ________
+
+dx = 0.2, dy = 0.2, dyaw = 0.1
+
+    @pytest.mark.parametrize("dx,dy,dyaw", [(0.2, 0.2, 0.1), (-0.2, -0.2, -0.1), (0.2, -0.2, 0.1)])
+    def test_sealed_left_hand_robust_to_start_perturbation(dx, dy, dyaw):
+        steps, closest, outside = run_to_exit('left', sealed=True,
+                                              start_xy=(START_XY[0] + dx, START_XY[1] + dy),
+                                              start_yaw=START_YAW + dyaw)
+>       assert steps is not None, (
+            f"perturbed sealed left failed to reach exit; closest={closest:.2f} m "
+            f"(dx={dx}, dy={dy}, dyaw={dyaw})")
+E       AssertionError: perturbed sealed left failed to reach exit; closest=25.98 m (dx=0.2, dy=0.2, dyaw=0.1)
+E       assert None is not None
+
+src/tugbot_maze/test/test_wall_follow_maze_sim.py:112: AssertionError
+______ test_sealed_left_hand_robust_to_start_perturbation[-0.2--0.2--0.1] ______
+
+dx = -0.2, dy = -0.2, dyaw = -0.1
+
+    @pytest.mark.parametrize("dx,dy,dyaw", [(0.2, 0.2, 0.1), (-0.2, -0.2, -0.1), (0.2, -0.2, 0.1)])
+    def test_sealed_left_hand_robust_to_start_perturbation(dx, dy, dyaw):
+        steps, closest, outside = run_to_exit('left', sealed=True,
+                                              start_xy=(START_XY[0] + dx, START_XY[1] + dy),
+                                              start_yaw=START_YAW + dyaw)
+>       assert steps is not None, (
+            f"perturbed sealed left failed to reach exit; closest={closest:.2f} m "
+            f"(dx={dx}, dy={dy}, dyaw={dyaw})")
+E       AssertionError: perturbed sealed left failed to reach exit; closest=26.22 m (dx=-0.2, dy=-0.2, dyaw=-0.1)
+E       assert None is not None
+
+src/tugbot_maze/test/test_wall_follow_maze_sim.py:112: AssertionError
+_______ test_sealed_left_hand_robust_to_start_perturbation[0.2--0.2-0.1] _______
+
+dx = 0.2, dy = -0.2, dyaw = 0.1
+
+    @pytest.mark.parametrize("dx,dy,dyaw", [(0.2, 0.2, 0.1), (-0.2, -0.2, -0.1), (0.2, -0.2, 0.1)])
+    def test_sealed_left_hand_robust_to_start_perturbation(dx, dy, dyaw):
+        steps, closest, outside = run_to_exit('left', sealed=True,
+                                              start_xy=(START_XY[0] + dx, START_XY[1] + dy),
+                                              start_yaw=START_YAW + dyaw)
+>       assert steps is not None, (
+            f"perturbed sealed left failed to reach exit; closest={closest:.2f} m "
+            f"(dx={dx}, dy={dy}, dyaw={dyaw})")
+E       AssertionError: perturbed sealed left failed to reach exit; closest=26.26 m (dx=0.2, dy=-0.2, dyaw=0.1)
+E       assert None is not None
+
+src/tugbot_maze/test/test_wall_follow_maze_sim.py:112: AssertionError
+____________________ test_maze_asset_and_config_are_present ____________________
+
+    def test_maze_asset_and_config_are_present():
+>       assert (MAZE_PKG / 'assets' / 'maze_20260522.jpg').exists()
+E       AssertionError: assert False
+E        +  where False = exists()
+E        +    where exists = ((PosixPath('/home/inna0xyk/Documents/ros2_gazebo_tugbot_navigate/ros2_ws_go2_maze_20261107/src/tugbot_maze') / 'assets') / 'maze_20260522.jpg').exists
+
+src/tugbot_maze/test/test_tugbot_maze_contract.py:16: AssertionError
+=========================== short test summary info ============================
+FAILED src/tugbot_maze/test/test_wall_follow_maze_sim.py::test_sealed_left_hand_solves_interior
+FAILED src/tugbot_maze/test/test_wall_follow_maze_sim.py::test_sealed_right_hand_solves_interior
+FAILED src/tugbot_maze/test/test_wall_follow_maze_sim.py::test_report_faster_legitimate_hand
+FAILED src/tugbot_maze/test/test_wall_follow_maze_sim.py::test_sealed_left_hand_robust_to_start_perturbation[0.2-0.2-0.1]
+FAILED src/tugbot_maze/test/test_wall_follow_maze_sim.py::test_sealed_left_hand_robust_to_start_perturbation[-0.2--0.2--0.1]
+FAILED src/tugbot_maze/test/test_wall_follow_maze_sim.py::test_sealed_left_hand_robust_to_start_perturbation[0.2--0.2-0.1]
+FAILED src/tugbot_maze/test/test_tugbot_maze_contract.py::test_maze_asset_and_config_are_present
+7 failed, 564 passed in 133.66s (0:02:13)

@@ -1,0 +1,4 @@
+# Preserve official mesh checksums and original simulation record bytes.
+**/go2_description/dae/*.dae -text
+**/models/go2/dae/*.dae -text
+docs/validation/**/accepted/ground_truth.csv -text

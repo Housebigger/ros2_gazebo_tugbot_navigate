@@ -1,0 +1,41 @@
+Starting >>> go2_description
+Starting >>> tugbot_description
+Starting >>> tugbot_gazebo
+Starting >>> tugbot_maze
+/usr/lib/python3/dist-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+--- stderr: tugbot_gazebo
+CMake Deprecation Warning at CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+---
+Finished <<< tugbot_gazebo [0.94s]
+Finished <<< go2_description [1.04s]
+--- stderr: tugbot_maze
+/usr/lib/python3/dist-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+---
+Finished <<< tugbot_maze [1.25s]
+--- stderr: tugbot_description
+CMake Deprecation Warning at CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+---
+Finished <<< tugbot_description [1.44s]
+Starting >>> go2_maze_bringup
+Finished <<< go2_maze_bringup [0.78s]
+
+Summary: 5 packages finished [2.32s]
+  3 packages had stderr output: tugbot_description tugbot_gazebo tugbot_maze
