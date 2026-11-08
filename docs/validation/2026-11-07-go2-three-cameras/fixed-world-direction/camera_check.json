@@ -1,0 +1,88 @@
+{
+  "streams": {
+    "front": {
+      "count": 172,
+      "dimensions": [
+        720,
+        540
+      ],
+      "frame": "go2/base_link/camera_front",
+      "simulated_hz": 16.930693069307083,
+      "max_gap_sim_s": 0.15000000000009095,
+      "last_stamp": 1197.5,
+      "intrinsics": [
+        183.43,
+        0.0,
+        360.5,
+        0.0,
+        183.43,
+        270.5,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "max_image_change": 0.0018711419753087099,
+      "final_age_sim_s": 0.11599999999998545
+    },
+    "chase": {
+      "count": 187,
+      "dimensions": [
+        1280,
+        720
+      ],
+      "frame": "camera_chase_optical",
+      "simulated_hz": 18.235294117646976,
+      "max_gap_sim_s": 0.15000000000009095,
+      "last_stamp": 1197.55,
+      "intrinsics": [
+        1700.3060913085938,
+        0.0,
+        640.0,
+        0.0,
+        1700.3059387207031,
+        360.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "max_image_change": 0.0010271080829260977,
+      "final_age_sim_s": 0.06600000000003092
+    },
+    "overview": {
+      "count": 88,
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "frame": "camera_overview_optical",
+      "simulated_hz": 8.7,
+      "max_gap_sim_s": 0.2999999999999545,
+      "last_stamp": 1197.6,
+      "intrinsics": [
+        937.2096557617188,
+        0.0,
+        512.0,
+        0.0,
+        937.2096557617188,
+        512.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "max_image_change": 0.0002220988704126161,
+      "final_age_sim_s": 0.016000000000076398
+    }
+  },
+  "require_motion": false,
+  "chase_mode": "fixed_world_direction",
+  "time_aligned_tf_samples": 500,
+  "max_follow_error_m": 1.1918426015169192e-06,
+  "max_aim_error_rad": 1.3898877878619466e-07,
+  "max_horizon_vertical_component": 2.7755575615628914e-16,
+  "p99_image_stamp_spread_sim_s": 0.2320000000000157,
+  "travel_m": 1.451234008068117e-06,
+  "yaw_range_rad": 1.4380607596120587e-06,
+  "elapsed_sim_s": 10.268000000000029,
+  "passed": true,
+  "max_world_optical_direction_error": 4.2276033262255756e-16
+}

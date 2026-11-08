@@ -13,6 +13,13 @@
         <mesh filename="file://$(find go2_description)/dae/base.dae" />
       </geometry>
     </visual>
+    <!-- Local visual-only marker: +X points toward the head. -->
+    <visual name="back_direction_arrow">
+      <origin xyz="0 0 0.102" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="file://$(find go2_description)/dae/back_direction_arrow.dae" />
+      </geometry>
+    </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0" />
       <geometry>

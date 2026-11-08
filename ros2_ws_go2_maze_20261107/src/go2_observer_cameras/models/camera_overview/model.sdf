@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.12">
+  <model name="camera_overview">
+    <static>true</static>
+    <pose>0 0 24 0 1.5707963267948966 1.5707963267948966</pose>
+    <link name="camera_link">
+      <sensor name="camera_overview" type="camera">
+        <always_on>1</always_on>
+        <update_rate>10</update_rate>
+        <pose>0 0 0 0 0 0</pose>
+        <topic>/camera/overview/image</topic>
+        <camera name="camera_front">
+          <horizontal_fov>1.0</horizontal_fov>
+          <camera_info_topic>/camera/overview/camera_info</camera_info_topic>
+          <image>
+            <width>1024</width>
+            <height>1024</height>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>100</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+        <frame_id>camera_overview_optical</frame_id>
+      </sensor>
+    </link>
+  </model>
+</sdf>

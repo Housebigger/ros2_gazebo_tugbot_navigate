@@ -12,6 +12,8 @@
 - `OdometryPublisher` 发布三维 `/odom` 与 `odom→base_link`。当前保留世界坐标里程计约定。
 - 模型不通过基座外力或平移插件运动。Go2 步态由 `locomotion_controller` 计算目标、由足地接触推进身体。
 
+背部有带黑边的亮绿色前向箭头，只作为 base_link 的 visual。与 RViz 使用相同 mesh，随身体完整姿态运动，用于相机画面中的位置/朝向识别，不改变物理参数。
+
 ## 感知安装
 
 | 传感器 | base_link 下位置 (m) | 实际 frame |

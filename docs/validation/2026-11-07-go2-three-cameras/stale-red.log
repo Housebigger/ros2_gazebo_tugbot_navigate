@@ -1,0 +1,18 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_camera_verifier_rejects_a_stream_that_froze_while_the_robot_kept_moving _
+
+    def test_camera_verifier_rejects_a_stream_that_froze_while_the_robot_kept_moving():
+        spec = importlib.util.spec_from_file_location('check_go2_cameras', WS / 'tools/check_go2_cameras.py')
+        checker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(checker)
+        # A previously healthy stream is stale even if its internal timestamps look good.
+        with pytest.raises(AssertionError, match='stale'):
+>           checker.check_image_times(np.arange(0, 4, .1), 90., 0.)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'check_go2_cameras' has no attribute 'check_image_times'
+
+src/tugbot_maze/test/test_go2_three_cameras.py:131: AttributeError
+=========================== short test summary info ============================
+FAILED src/tugbot_maze/test/test_go2_three_cameras.py::test_camera_verifier_rejects_a_stream_that_froze_while_the_robot_kept_moving
+1 failed, 7 deselected in 0.51s

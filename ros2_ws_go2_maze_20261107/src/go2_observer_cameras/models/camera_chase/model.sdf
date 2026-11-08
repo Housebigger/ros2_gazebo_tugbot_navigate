@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.12">
+  <model name="camera_chase">
+    <static>true</static>
+    <pose>-12.211281 -9.925070 3.96 0 0 0</pose>
+    <link name="camera_link">
+      <sensor name="camera_chase" type="camera">
+        <always_on>1</always_on>
+        <update_rate>20</update_rate>
+        <pose>0 0 0 0 0 0</pose>
+        <topic>/camera/chase/image</topic>
+        <camera name="camera_front">
+          <horizontal_fov>0.72</horizontal_fov>
+          <camera_info_topic>/camera/chase/camera_info</camera_info_topic>
+          <image>
+            <width>1280</width>
+            <height>720</height>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>100</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+        <frame_id>camera_chase_optical</frame_id>
+      </sensor>
+    </link>
+    <plugin filename="go2_chase_camera" name="go2_observer_cameras::ChaseCameraSystem">
+      <target_model>go2</target_model>
+      <target_link>base_link</target_link>
+      <offset>-1.2 -0.9 3.5</offset>
+      <focus_height>-0.1</focus_height>
+      <follow_yaw>false</follow_yaw>
+    </plugin>
+  </model>
+</sdf>

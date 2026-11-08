@@ -1,0 +1,88 @@
+{
+  "streams": {
+    "front": {
+      "count": 768,
+      "dimensions": [
+        720,
+        540
+      ],
+      "frame": "go2/base_link/camera_front",
+      "simulated_hz": 17.025527192008877,
+      "max_gap_sim_s": 0.20000000000000107,
+      "last_stamp": 45.1,
+      "intrinsics": [
+        183.43,
+        0.0,
+        360.5,
+        0.0,
+        183.43,
+        270.5,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "max_image_change": 54.02036861672279,
+      "final_age_sim_s": 0.018000000000000682
+    },
+    "chase": {
+      "count": 801,
+      "dimensions": [
+        1280,
+        720
+      ],
+      "frame": "camera_chase_optical",
+      "simulated_hz": 17.758046614872363,
+      "max_gap_sim_s": 0.1999999999999993,
+      "last_stamp": 45.1,
+      "intrinsics": [
+        1700.3060913085938,
+        0.0,
+        640.0,
+        0.0,
+        1700.3059387207031,
+        360.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "max_image_change": 50.93707379746098,
+      "final_age_sim_s": 0.018000000000000682
+    },
+    "overview": {
+      "count": 412,
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "frame": "camera_overview_optical",
+      "simulated_hz": 9.133333333333333,
+      "max_gap_sim_s": 0.40000000000000213,
+      "last_stamp": 45.1,
+      "intrinsics": [
+        937.2096557617188,
+        0.0,
+        512.0,
+        0.0,
+        937.2096557617188,
+        512.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "max_image_change": 0.02377573328714231,
+      "final_age_sim_s": 0.018000000000000682
+    }
+  },
+  "require_motion": true,
+  "chase_mode": "fixed_world_direction",
+  "time_aligned_tf_samples": 2255,
+  "max_follow_error_m": 0.020957276514821873,
+  "max_aim_error_rad": 0.0020518597626721707,
+  "max_horizon_vertical_component": 4.718447854656915e-16,
+  "p99_image_stamp_spread_sim_s": 0.25,
+  "travel_m": 5.872509496516141,
+  "yaw_range_rad": 1.6914413033454572,
+  "elapsed_sim_s": 45.084,
+  "passed": true,
+  "max_world_optical_direction_error": 8.617648093045562e-16
+}

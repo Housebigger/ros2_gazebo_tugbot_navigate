@@ -1,0 +1,18 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_image_change_measurement_does_not_mistake_camera_noise_for_motion ____
+
+    def test_image_change_measurement_does_not_mistake_camera_noise_for_motion():
+        spec = importlib.util.spec_from_file_location('camera_checker', WS / 'tools/check_go2_cameras.py')
+        checker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(checker)
+        rng = np.random.default_rng(72)
+        frames = [np.clip(128+rng.normal(0, 255*.007, (540, 720, 3)), 0, 255).astype(np.uint8) for _ in range(5)]
+>       reference = checker.scene_thumbnail(frames[0])
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'camera_checker' has no attribute 'scene_thumbnail'
+
+src/tugbot_maze/test/test_go2_three_cameras.py:143: AttributeError
+=========================== short test summary info ============================
+FAILED src/tugbot_maze/test/test_go2_three_cameras.py::test_image_change_measurement_does_not_mistake_camera_noise_for_motion
+1 failed, 8 deselected in 0.61s

@@ -6,10 +6,12 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [三相机与箭头经验](experience/2026-11-07-go2-cameras-and-marker.md) | 最终设置、排查要点、视觉隔离与复现顺序 |
 | [成功经验](experience/2026-11-07-go2-maze-success.md) | 根因、修正、证据与迁移顺序 |
 | [验收记录索引](validation/README.md) | 运行数据、原始位姿与复核方式 |
 | [2026-11-07 验收报告](validation/2026-11-07-go2-maze/README.md) | 一轮物理通关、首轮反例、测试边界 |
-| [包索引](../ros2_ws_go2_maze_20261107/src/README.md) | 当前五个包与遗留模块的职责 |
+| [包索引](../ros2_ws_go2_maze_20261107/src/README.md) | 当前六个包与遗留模块的职责 |
+| [三相机联调](validation/2026-11-07-go2-three-cameras/README.md) | 三路实时图像、固定世界方向、背部标记和完整通关数据 |
 | [工具](../ros2_ws_go2_maze_20261107/tools/README.md) | 构建后检查、平地标定、自动验收与重放 |
 | [设计](superpowers/specs/2026-11-07-go2-maze-design.md) | 本轮集成范围和验收约定 |
 | [实施记录](superpowers/plans/2026-11-07-go2-maze.md) | 验证顺序与已完成结果 |

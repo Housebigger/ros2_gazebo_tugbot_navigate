@@ -48,6 +48,15 @@
           </mesh>
         </geometry>
       </visual>
+      <visual name="base_link_fixed_joint_lump__back_direction_arrow_visual_1">
+        <pose>0 0 0.10199999999999999 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://go2/dae/back_direction_arrow.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
       <sensor name="lidar_3d" type="gpu_lidar">
         <pose>0 0 0.25 0 0 0</pose>
         <topic>/lidar/points</topic>

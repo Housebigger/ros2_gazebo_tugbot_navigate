@@ -1,0 +1,152 @@
+[rviz_rendering:debug] Available Renderers(1): OpenGL Rendering Subsystem, at ./src/rviz_rendering/render_system.cpp:293
+[rviz_rendering:info] Stereo is NOT SUPPORTED, at ./src/rviz_rendering/render_system.cpp:530
+[rviz_rendering:info] OpenGl version: 4.6 (GLSL 4.6), at ./src/rviz_rendering/render_system.cpp:276
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/plus.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/plus.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/minus.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/minus.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_rendering:info] Stereo is NOT SUPPORTED, at ./src/rviz_rendering/render_system.cpp:530
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/TF.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/TF.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/TF.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/TF.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/classes/Identity.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/classes/Identity.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/classes/Identity.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/classes/Identity.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/default_class_icon.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/default_class_icon.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/options.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/options.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/ok.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/ok.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/warning.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/warning.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/error.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/error.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Orbit.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Orbit.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Orbit.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Orbit.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/rotate.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/rotate.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/cursor.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/cursor.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/rotate_cam.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/rotate_cam.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/move2d.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/move2d.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/move_z.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/move_z.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/zoom.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/zoom.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/crosshair.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/crosshair.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/FocusCamera.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/FocusCamera.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Interact.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Interact.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Interact.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Interact.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Measure.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Measure.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/MoveCamera.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/MoveCamera.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/MoveCamera.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/MoveCamera.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/PublishPoint.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/PublishPoint.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Select.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Select.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Select.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Select.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/SetGoal.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/SetGoal.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/SetGoal.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/SetGoal.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/SetInitialPose.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/SetInitialPose.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/SetInitialPose.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/SetInitialPose.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Grid.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Grid.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Grid.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Grid.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/RobotModel.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/RobotModel.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/RobotModel.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/RobotModel.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Path.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Path.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Path.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Path.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/PointCloud2.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/PointCloud2.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/PointCloud2.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/PointCloud2.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plu[INFO] [1794069480.284367251] [go2_layout_reload_check]: Subscribing to: /maze/cloud_map_3d
+[INFO] [1794069480.284754588] [go2_layout_reload_check]: Subscribing to: /maze/cloud_map_3d
+[INFO] [1794069480.284982340] [go2_layout_reload_check]: Subscribing to: /maze/cloud_map_3d
+[INFO] [1794069480.285137556] [go2_layout_reload_check]: Subscribing to: /maze/cloud_map_3d
+[INFO] [1794069480.295612122] [go2_layout_reload_check]: Subscribing to: /maze/cloud_map_3d
+gins/icons/classes/LaserScan.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/LaserScan.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/LaserScan.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/LaserScan.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Image.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Image.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Image.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Image.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/close.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/close.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/Intensity.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/Intensity.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/AxisColor.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/AxisColor.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/XYZ.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/XYZ.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/RGBF32.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/RGBF32.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/FlatColor.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/FlatColor.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/RGB8.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/RGB8.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/classes/Displays.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/classes/Displays.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_common/icons/classes/Views.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_common/icons/classes/Views.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/FPS.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/FPS.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://[INFO] [1794069482.767828317] [go2_layout_reload_check]: Subscribing to: /maze/cloud_map_3d
+[INFO] [1794069482.768119761] [go2_layout_reload_check]: Subscribing to: /maze/cloud_map_3d
+[INFO] [1794069482.768376736] [go2_layout_reload_check]: Subscribing to: /maze/cloud_map_3d
+[INFO] [1794069482.768564771] [go2_layout_reload_check]: Subscribing to: /maze/cloud_map_3d
+[INFO] [1794069482.875945858] [go2_layout_reload_check]: Subscribing to: /maze/cloud_map_3d
+rviz_default_plugins/icons/classes/FPS.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/FPS.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/FrameAligned.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/FrameAligned.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/FrameAligned.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/FrameAligned.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/ThirdPersonFollower.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/ThirdPersonFollower.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/ThirdPersonFollower.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/ThirdPersonFollower.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/TopDownOrtho.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/TopDownOrtho.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/TopDownOrtho.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/TopDownOrtho.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/XYOrbit.svg, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/XYOrbit.svg, at ./src/rviz_common/load_resource.cpp:50
+[rviz_common:debug] Load pixmap at package://rviz_default_plugins/icons/classes/XYOrbit.png, at ./src/rviz_common/load_resource.cpp:68
+[rviz_common:debug] rviz_common::getResource() loading resource: package://rviz_default_plugins/icons/classes/XYOrbit.png, at ./src/rviz_common/load_resource.cpp:50
+[rviz_rendering:info] Stereo is NOT SUPPORTED, at ./src/rviz_rendering/render_system.cpp:530
+[rviz_rendering:info] Stereo is NOT SUPPORTED, at ./src/rviz_rendering/render_system.cpp:530
+[rviz_rendering:info] Stereo is NOT SUPPORTED, at ./src/rviz_rendering/render_system.cpp:530
+[rviz_rendering:info] Stereo is NOT SUPPORTED, at ./src/rviz_rendering/render_system.cpp:530
+[rviz_rendering:info] Stereo is NOT SUPPORTED, at ./src/rviz_rendering/render_system.cpp:530
+[rviz_rendering:info] Stereo is NOT SUPPORTED, at ./src/rviz_rendering/render_system.cpp:530
+Camera 3 - Maze Overview visible=1 size=342x143
+Camera 2 - Stable Chase visible=1 size=342x144
+Camera 1 - Head Forward visible=1 size=342x143
+RELOAD PASS

@@ -1,0 +1,21 @@
+Starting >>> go2_description
+Starting >>> go2_observer_cameras
+Starting >>> tugbot_description
+Starting >>> tugbot_gazebo
+Starting >>> tugbot_maze
+/usr/lib/python3/dist-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+Finished <<< go2_description [0.17s]
+Finished <<< go2_observer_cameras [0.17s]
+Finished <<< tugbot_gazebo [0.18s]
+Finished <<< tugbot_description [0.19s]
+--- stderr: tugbot_maze
+/usr/lib/python3/dist-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+---
+Finished <<< tugbot_maze [0.77s]
+Starting >>> go2_maze_bringup
+Finished <<< go2_maze_bringup [0.06s]
+
+Summary: 6 packages finished [0.91s]
+  1 package had stderr output: tugbot_maze

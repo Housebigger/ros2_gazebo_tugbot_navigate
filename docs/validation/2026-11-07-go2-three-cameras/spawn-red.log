@@ -1,0 +1,15 @@
+......F                                                                  [100%]
+=================================== FAILURES ===================================
+________ test_spawn_preserves_overview_pose_instead_of_create_defaults _________
+
+    def test_spawn_preserves_overview_pose_instead_of_create_defaults():
+        # ros_gz_sim/create always overrides SDF model pose, even with no pose flags.
+        tree = ast.parse((BRINGUP / 'launch/maze.launch.py').read_text())
+>       function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'camera_spawn_arguments')
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+../ros2_gazebo_tugbot_navigate/ros2_ws_go2_maze_20261107/src/tugbot_maze/test/test_go2_three_cameras.py:113: StopIteration
+=========================== short test summary info ============================
+FAILED ../ros2_gazebo_tugbot_navigate/ros2_ws_go2_maze_20261107/src/tugbot_maze/test/test_go2_three_cameras.py::test_spawn_preserves_overview_pose_instead_of_create_defaults
+1 failed, 6 passed in 0.30s

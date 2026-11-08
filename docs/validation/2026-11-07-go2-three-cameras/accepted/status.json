@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "samples": 54050,
+  "swept_samples": 54050,
+  "collision_samples": 0,
+  "exterior_samples": 0,
+  "pose_pair_samples": 54050,
+  "max_pose_pair_error": 0.00986724077905844,
+  "min_height": 0.3279810664932399,
+  "max_tilt_deg": 4.194628901347168,
+  "route_length_m": 117.93642600350512,
+  "elapsed_sim_s": 918.9319999999999,
+  "exit_distance_m": 0.7092542165094745,
+  "solver_exit": true,
+  "pose": [
+    20.36338777366619,
+    18.072914223607828,
+    0.026856974476396882
+  ],
+  "speed_m_s": 0.0
+}
