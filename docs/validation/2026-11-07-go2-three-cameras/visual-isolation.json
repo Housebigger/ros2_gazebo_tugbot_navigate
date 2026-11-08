@@ -1,0 +1,20 @@
+{
+  "baseline_commit": "d51462542b04fceaa4a4dd78e87be55517013021",
+  "passed": true,
+  "checks": {
+    "src/go2_description/urdf/go2.urdf.xacro": {
+      "removed_marker_visuals": 1,
+      "remaining_model_identical_to_base": true,
+      "canonical_sha256": "0e22db069036ea0129a2457931487ddd7408fc3f202b6bda5ebcc392bd6b8c5d"
+    },
+    "src/tugbot_description/models/go2/model.sdf": {
+      "removed_marker_visuals": 1,
+      "remaining_model_identical_to_base": true,
+      "canonical_sha256": "c01b864bfe26124fc58a891d92448a3c5c0f135559e55e9c4e30c0bbe26598fa"
+    },
+    "marker": {
+      "copies_identical": true,
+      "sha256": "73cb8569d5e9c08b11176b2c71f84214e1f1c922945b1eeeac43b2c22e6d4ea4"
+    }
+  }
+}

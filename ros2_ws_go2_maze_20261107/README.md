@@ -2,7 +2,7 @@
 
 本工作区基于仓库 `2381e500e369b7a33d6ca9968e3b7ce7d45f762f` 的 `ros2_ws_tugbot_nav_20260728`，保留最新 2 倍尺寸迷宫和在线 flood-fill 导航，替换为宇树官方 Go2 模型。历史工作区的运行代码保留。模型来源、固定提交和 BSD 许可证见 `src/go2_description/SOURCE.md`。
 
-[成功经验](../docs/experience/2026-11-07-go2-maze-success.md) · [包索引](src/README.md) · [启动参数](src/go2_maze_bringup/README.md) · [工具](tools/README.md)
+[通关经验](../docs/experience/2026-11-07-go2-maze-success.md) · [三相机与箭头经验](../docs/experience/2026-11-07-go2-cameras-and-marker.md) · [包索引](src/README.md) · [启动参数](src/go2_maze_bringup/README.md) · [工具](tools/README.md)
 
 ## 构建与启动
 
@@ -12,7 +12,7 @@
 cd ros2_ws_go2_maze_20261107
 source /opt/ros/lyrical/setup.bash
 colcon build --symlink-install --packages-select \
-  go2_description tugbot_description tugbot_gazebo tugbot_maze go2_maze_bringup
+  go2_description go2_observer_cameras tugbot_description tugbot_gazebo tugbot_maze go2_maze_bringup
 ./run_go2_maze.sh
 ```
 
@@ -23,6 +23,8 @@ colcon build --symlink-install --packages-select \
 ./run_go2_maze.sh gui:=false rviz:=false
 # 仅站立，不启动导航、建图或验收器
 ./run_go2_maze.sh autonomous:=false
+# 关闭两路观察相机，使用原地图 RViz 布局
+./run_go2_maze.sh observer_cameras:=false
 # 平地运动检查
 source setup.bash
 ros2 launch go2_maze_bringup maze.launch.py autonomous:=false \
@@ -46,6 +48,32 @@ Go2 的速度上限为 0.25 m/s、0.5 rad/s，巡航指令 0.22 m/s。实际速�
 
 RViz 显示 Go2 实时关节姿态、在线积累的三维迷宫、实时扫描和独立真实轨迹。轨迹/完整墙体验收不会发布控制命令。
 
+Go2 背部带黑边的亮绿色箭头沿机体 +X 指向机头，帮助在灰色迷宫中辨认位置与朝向。标记在 Gazebo 相机和 RViz RobotModel 中一致显示，仅新增视觉元素。
+
+## 三路实时相机
+
+默认启用 `observer_cameras:=true`，Gazebo 和 RViz 同时运行时无需另开图像查看器：
+
+| RViz 窗格 | 视角 | ROS 图像 topic | 原始分辨率 / 仿真帧率 |
+| --- | --- | --- | --- |
+| Camera 1 - Head Forward | Go2 头部前向传感器 | /camera/front/image | 720×540 / 20 Hz |
+| Camera 2 - Stable Chase | 只随位置平移，保持世界方向和地平线的斜上方近景 | /camera/chase/image | 1280×720 / 20 Hz |
+| Camera 3 - Maze Overview | 世界中心 (0,0,24 m) 垂直俯视，画面上方为 +Y | /camera/overview/image | 1024×1024 / 10 Hz |
+
+一号在地图下方，二、三号在右侧上下排列；可以拖动标题栏浮动、调整尺寸。三路均为真实 Gazebo camera 图像，使用同一仿真时钟，按各自帧率异步刷新。头部相机随身体姿态运动，二号采用用户选择的固定世界方向：只随位置平移，Go2 转弯时镜头不绕狗旋转，也不随身体横滚/俯仰倾斜。三号覆盖全部迷宫，Go2 在大全景中相应较小，姿态细节看二号。
+
+新增观察模型无碰撞、无关节，不连接 Go2，不写 Go2 位姿、速度或力矩。原步态和导航配置保持原值。额外图像按订阅懒桥接，但启用传感器仍有渲染开销；完全关闭请用 `observer_cameras:=false`。[相机包说明](src/go2_observer_cameras/README.md)。
+
+在同一实例的另一个终端执行只读检查：
+
+```bash
+source setup.bash
+python3 tools/check_go2_cameras.py /tmp/my-new-camera-check --seconds 90 --require-motion
+ctest --test-dir build/go2_observer_cameras --output-on-failure
+```
+
+检查器不发布运动指令；`--require-motion` 需要正在自主行走并转弯。仅站立检查时去掉该参数。输出目录必须为空，保存三路起止 PNG 与时间、内参、实际跟随误差 JSON。[实际联调记录](../docs/validation/2026-11-07-go2-three-cameras/README.md)。
+
 ## 独立验收与记录
 
 每次运行输出到 `log/runs/<时间>/`：
@@ -68,7 +96,7 @@ source setup.bash
 python3 tools/check_go2_motion.py  # 需先单独启动平地仿真
 ```
 
-上述检查覆盖核心导航、定位与 Go2 关节限位。本机 Go2 核心回归为 208 项通过。更广的历史测试实测为 564 项通过、7 项失败：6 项旧 wall-follow 算法用例和 1 项要求缺失的 maze_20260522.jpg 的旧资产用例；原工作区 README 已记录此类历史失败。依赖未安装 nav2_msgs 的旧 reactive_pilot 测试未运行。不能声称整个历史测试集全绿。不要使用旧 `run_sim.sh` 的全局进程清理逻辑启动本工作区。
+上述检查覆盖核心导航、定位与 Go2 关节限位。本机三相机阶段 Go2 核心回归为 218 项通过，原生相机几何 CTest 1/1 通过。更广的历史测试实测为 564 项通过、7 项失败：6 项旧 wall-follow 算法用例和 1 项要求缺失的 maze_20260522.jpg 的旧资产用例；原工作区 README 已记录此类历史失败。依赖未安装 nav2_msgs 的旧 reactive_pilot 测试未运行。不能声称整个历史测试集全绿。不要使用旧 `run_sim.sh` 的全局进程清理逻辑启动本工作区。
 
 可用 `python3 tools/replay_go2_audit.py <运行目录> --require-success` 对完整真实轨迹重新验收。保守足迹为 x=[-0.42,0.37]、|y|≤0.25 m，覆盖 Go2 后膝及后小腿；不能沿用轮式底盘边界。
 
@@ -92,8 +120,15 @@ RViz 的 Views 面板已预设 `Maze overview` 与跟随 base_link 的 `Go2 clos
 
 本机完整通关记录见 [2026-11-07 验收报告](../docs/validation/2026-11-07-go2-maze/README.md)。
 
-## 本轮结论与复用
+## 前阶段通关基线
 
 修正后从入口完整自主运行一轮，通过出口范围和持续停稳验收：939.334 s、119.122 m，出口距离 0.829765 m，在线验收零非法越界，55,271 条原生位姿完整重放零几何碰撞。当前仍使用 Gazebo 世界坐标里程计，未做多种子批量统计。
 
 经验重点是模型/运动学/反馈一起适配，先实体标定再调导航时限，足迹覆盖后膝和小腿，以及用真实数据发现“出口格到达但实际停车仍在范围外”的情况。详见经验总结和原始验收报告。历史 Nav2 包的 README 已标明其适用范围。
+
+
+## 本轮观察功能结论
+
+三路真实图像在 RViz 独立窗格同时显示，默认二号 follow_yaw=false、世界坐标偏移 (-1.2,-0.9,+3.5) m；三号固定世界中心上空 24 m。背部亮绿黑边箭头随身体朝向机头。观察模型与标记不改变 Go2 物理参数，图像不输入导航。
+
+最终设置完整通关并封存成功快照：918.932 s、117.936 m、出口距离 0.709254 m、线速度 0 m/s，54,050 条原生位姿严格重放通过，零几何碰撞与非法越界；最大总倾角 4.195°。阶段相机检查、完整数据及发布回归见 [本轮报告](../docs/validation/2026-11-07-go2-three-cameras/README.md)。

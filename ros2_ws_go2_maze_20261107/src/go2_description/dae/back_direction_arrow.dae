@@ -1,0 +1,144 @@
+<?xml version='1.0' encoding='utf-8'?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+  <asset>
+    <created>2026-11-07T00:00:00Z</created>
+    <modified>2026-11-07T00:00:00Z</modified>
+    <unit name="meter" meter="1" />
+    <up_axis>Z_UP</up_axis>
+  </asset>
+  <library_effects>
+    <effect id="outline-effect">
+      <profile_COMMON>
+        <technique sid="common">
+          <lambert>
+            <emission>
+              <color>0 0 0 1</color>
+            </emission>
+            <ambient>
+              <color>.008 .008 .008 1</color>
+            </ambient>
+            <diffuse>
+              <color>.008 .008 .008 1</color>
+            </diffuse>
+          </lambert>
+        </technique>
+      </profile_COMMON>
+    </effect>
+    <effect id="green-effect">
+      <profile_COMMON>
+        <technique sid="common">
+          <lambert>
+            <emission>
+              <color>0 .7 0 1</color>
+            </emission>
+            <ambient>
+              <color>.02 1 0 1</color>
+            </ambient>
+            <diffuse>
+              <color>.02 1 0 1</color>
+            </diffuse>
+          </lambert>
+        </technique>
+      </profile_COMMON>
+    </effect>
+  </library_effects>
+  <library_materials>
+    <material id="outline-material">
+      <instance_effect url="#outline-effect" />
+    </material>
+    <material id="green-material">
+      <instance_effect url="#green-effect" />
+    </material>
+  </library_materials>
+  <library_geometries>
+    <geometry id="outline-geometry">
+      <mesh>
+        <source id="outline-positions">
+          <float_array id="outline-positions-array" count="216">-0.125 0.033 0 0.065 -0.033 0 -0.125 -0.033 0 -0.125 0.033 0 0.065 0.033 0 0.065 -0.033 0 0.215 0 0 0.065 -0.084 0 0.065 -0.033 0 0.065 0.033 0 0.215 0 0 0.065 -0.033 0 0.065 0.033 0 0.065 0.084 0 0.215 0 0 -0.125 -0.033 0.003 0.065 -0.033 0.003 -0.125 0.033 0.003 0.065 -0.033 0.003 0.065 0.033 0.003 -0.125 0.033 0.003 0.065 -0.033 0.003 0.065 -0.084 0.003 0.215 0 0.003 0.065 -0.033 0.003 0.215 0 0.003 0.065 0.033 0.003 0.215 0 0.003 0.065 0.084 0.003 0.065 0.033 0.003 -0.125 -0.033 0 0.065 -0.033 0 0.065 -0.033 0.003 -0.125 -0.033 0 0.065 -0.033 0.003 -0.125 -0.033 0.003 0.065 -0.033 0 0.065 -0.084 0 0.065 -0.084 0.003 0.065 -0.033 0 0.065 -0.084 0.003 0.065 -0.033 0.003 0.065 -0.084 0 0.215 0 0 0.215 0 0.003 0.065 -0.084 0 0.215 0 0.003 0.065 -0.084 0.003 0.215 0 0 0.065 0.084 0 0.065 0.084 0.003 0.215 0 0 0.065 0.084 0.003 0.215 0 0.003 0.065 0.084 0 0.065 0.033 0 0.065 0.033 0.003 0.065 0.084 0 0.065 0.033 0.003 0.065 0.084 0.003 0.065 0.033 0 -0.125 0.033 0 -0.125 0.033 0.003 0.065 0.033 0 -0.125 0.033 0.003 0.065 0.033 0.003 -0.125 0.033 0 -0.125 -0.033 0 -0.125 -0.033 0.003 -0.125 0.033 0 -0.125 -0.033 0.003 -0.125 0.033 0.003</float_array>
+          <technique_common>
+            <accessor source="#outline-positions-array" count="72" stride="3">
+              <param name="X" type="float" />
+              <param name="Y" type="float" />
+              <param name="Z" type="float" />
+            </accessor>
+          </technique_common>
+        </source>
+        <source id="outline-normals">
+          <float_array id="outline-normals-array" count="216">0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 1 0 0 1 0 0 1 0 -0 1 0 -0 1 0 -0 1 -0 0 1 -0 0 1 -0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 0.488603369 -0.872506016 0 0.488603369 -0.872506016 0 0.488603369 -0.872506016 0 0.488603369 -0.872506016 0 0.488603369 -0.872506016 0 0.488603369 -0.872506016 0 0.488603369 0.872506016 0 0.488603369 0.872506016 0 0.488603369 0.872506016 0 0.488603369 0.872506016 -0 0.488603369 0.872506016 -0 0.488603369 0.872506016 -0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 0 1 0 0 1 0 0 1 0 0 1 -0 0 1 -0 0 1 -0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0</float_array>
+          <technique_common>
+            <accessor source="#outline-normals-array" count="72" stride="3">
+              <param name="X" type="float" />
+              <param name="Y" type="float" />
+              <param name="Z" type="float" />
+            </accessor>
+          </technique_common>
+        </source>
+        <vertices id="outline-vertices">
+          <input semantic="POSITION" source="#outline-positions" />
+        </vertices>
+        <triangles count="24" material="outline">
+          <input semantic="VERTEX" source="#outline-vertices" offset="0" />
+          <input semantic="NORMAL" source="#outline-normals" offset="1" />
+          <p>0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13 14 14 15 15 16 16 17 17 18 18 19 19 20 20 21 21 22 22 23 23 24 24 25 25 26 26 27 27 28 28 29 29 30 30 31 31 32 32 33 33 34 34 35 35 36 36 37 37 38 38 39 39 40 40 41 41 42 42 43 43 44 44 45 45 46 46 47 47 48 48 49 49 50 50 51 51 52 52 53 53 54 54 55 55 56 56 57 57 58 58 59 59 60 60 61 61 62 62 63 63 64 64 65 65 66 66 67 67 68 68 69 69 70 70 71 71</p>
+        </triangles>
+      </mesh>
+    </geometry>
+    <geometry id="green-geometry">
+      <mesh>
+        <source id="green-positions">
+          <float_array id="green-positions-array" count="216">-0.115 0.025 0.0031 0.07 -0.025 0.0031 -0.115 -0.025 0.0031 -0.115 0.025 0.0031 0.07 0.025 0.0031 0.07 -0.025 0.0031 0.205 0 0.0031 0.07 -0.075 0.0031 0.07 -0.025 0.0031 0.07 0.025 0.0031 0.205 0 0.0031 0.07 -0.025 0.0031 0.07 0.025 0.0031 0.07 0.075 0.0031 0.205 0 0.0031 -0.115 -0.025 0.0061 0.07 -0.025 0.0061 -0.115 0.025 0.0061 0.07 -0.025 0.0061 0.07 0.025 0.0061 -0.115 0.025 0.0061 0.07 -0.025 0.0061 0.07 -0.075 0.0061 0.205 0 0.0061 0.07 -0.025 0.0061 0.205 0 0.0061 0.07 0.025 0.0061 0.205 0 0.0061 0.07 0.075 0.0061 0.07 0.025 0.0061 -0.115 -0.025 0.0031 0.07 -0.025 0.0031 0.07 -0.025 0.0061 -0.115 -0.025 0.0031 0.07 -0.025 0.0061 -0.115 -0.025 0.0061 0.07 -0.025 0.0031 0.07 -0.075 0.0031 0.07 -0.075 0.0061 0.07 -0.025 0.0031 0.07 -0.075 0.0061 0.07 -0.025 0.0061 0.07 -0.075 0.0031 0.205 0 0.0031 0.205 0 0.0061 0.07 -0.075 0.0031 0.205 0 0.0061 0.07 -0.075 0.0061 0.205 0 0.0031 0.07 0.075 0.0031 0.07 0.075 0.0061 0.205 0 0.0031 0.07 0.075 0.0061 0.205 0 0.0061 0.07 0.075 0.0031 0.07 0.025 0.0031 0.07 0.025 0.0061 0.07 0.075 0.0031 0.07 0.025 0.0061 0.07 0.075 0.0061 0.07 0.025 0.0031 -0.115 0.025 0.0031 -0.115 0.025 0.0061 0.07 0.025 0.0031 -0.115 0.025 0.0061 0.07 0.025 0.0061 -0.115 0.025 0.0031 -0.115 -0.025 0.0031 -0.115 -0.025 0.0061 -0.115 0.025 0.0031 -0.115 -0.025 0.0061 -0.115 0.025 0.0061</float_array>
+          <technique_common>
+            <accessor source="#green-positions-array" count="72" stride="3">
+              <param name="X" type="float" />
+              <param name="Y" type="float" />
+              <param name="Z" type="float" />
+            </accessor>
+          </technique_common>
+        </source>
+        <source id="green-normals">
+          <float_array id="green-normals-array" count="216">0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 1 0 0 1 0 0 1 0 -0 1 0 -0 1 0 -0 1 -0 0 1 -0 0 1 -0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 0.485642931 -0.874157276 0 0.485642931 -0.874157276 0 0.485642931 -0.874157276 0 0.485642931 -0.874157276 0 0.485642931 -0.874157276 0 0.485642931 -0.874157276 0 0.485642931 0.874157276 0 0.485642931 0.874157276 0 0.485642931 0.874157276 0 0.485642931 0.874157276 -0 0.485642931 0.874157276 -0 0.485642931 0.874157276 -0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 0 1 0 0 1 0 0 1 0 0 1 -0 0 1 -0 0 1 -0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0</float_array>
+          <technique_common>
+            <accessor source="#green-normals-array" count="72" stride="3">
+              <param name="X" type="float" />
+              <param name="Y" type="float" />
+              <param name="Z" type="float" />
+            </accessor>
+          </technique_common>
+        </source>
+        <vertices id="green-vertices">
+          <input semantic="POSITION" source="#green-positions" />
+        </vertices>
+        <triangles count="24" material="green">
+          <input semantic="VERTEX" source="#green-vertices" offset="0" />
+          <input semantic="NORMAL" source="#green-normals" offset="1" />
+          <p>0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13 14 14 15 15 16 16 17 17 18 18 19 19 20 20 21 21 22 22 23 23 24 24 25 25 26 26 27 27 28 28 29 29 30 30 31 31 32 32 33 33 34 34 35 35 36 36 37 37 38 38 39 39 40 40 41 41 42 42 43 43 44 44 45 45 46 46 47 47 48 48 49 49 50 50 51 51 52 52 53 53 54 54 55 55 56 56 57 57 58 58 59 59 60 60 61 61 62 62 63 63 64 64 65 65 66 66 67 67 68 68 69 69 70 70 71 71</p>
+        </triangles>
+      </mesh>
+    </geometry>
+  </library_geometries>
+  <library_visual_scenes>
+    <visual_scene id="Scene">
+      <node id="outline-node">
+        <instance_geometry url="#outline-geometry">
+          <bind_material>
+            <technique_common>
+              <instance_material symbol="outline" target="#outline-material" />
+            </technique_common>
+          </bind_material>
+        </instance_geometry>
+      </node>
+      <node id="green-node">
+        <instance_geometry url="#green-geometry">
+          <bind_material>
+            <technique_common>
+              <instance_material symbol="green" target="#green-material" />
+            </technique_common>
+          </bind_material>
+        </instance_geometry>
+      </node>
+    </visual_scene>
+  </library_visual_scenes>
+  <scene>
+    <instance_visual_scene url="#Scene" />
+  </scene>
+</COLLADA>

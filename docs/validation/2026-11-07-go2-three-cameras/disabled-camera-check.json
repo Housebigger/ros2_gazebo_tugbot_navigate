@@ -1,0 +1,43 @@
+{
+  "passed": true,
+  "head_images": 10,
+  "nodes": [
+    "disabled_observer_probe",
+    "ros_gz_bridge",
+    "robot_state_publisher",
+    "go2_lidar_tf",
+    "go2_camera_tf",
+    "scan_slice_projector",
+    "locomotion_controller"
+  ],
+  "topics": [
+    "/camera/front/camera_info",
+    "/camera/front/image",
+    "/camera/front/image/_buf_cpu",
+    "/clock",
+    "/cmd_vel",
+    "/gt/dynamic_pose",
+    "/joint_states",
+    "/lidar/points",
+    "/lidar/points/_buf_cpu",
+    "/model/go2/joint/LF_HAA/cmd_pos",
+    "/model/go2/joint/LF_HFE/cmd_pos",
+    "/model/go2/joint/LF_KFE/cmd_pos",
+    "/model/go2/joint/LH_HAA/cmd_pos",
+    "/model/go2/joint/LH_HFE/cmd_pos",
+    "/model/go2/joint/LH_KFE/cmd_pos",
+    "/model/go2/joint/RF_HAA/cmd_pos",
+    "/model/go2/joint/RF_HFE/cmd_pos",
+    "/model/go2/joint/RF_KFE/cmd_pos",
+    "/model/go2/joint/RH_HAA/cmd_pos",
+    "/model/go2/joint/RH_HFE/cmd_pos",
+    "/model/go2/joint/RH_KFE/cmd_pos",
+    "/odom",
+    "/parameter_events",
+    "/robot_description",
+    "/rosout",
+    "/scan",
+    "/tf",
+    "/tf_static"
+  ]
+}

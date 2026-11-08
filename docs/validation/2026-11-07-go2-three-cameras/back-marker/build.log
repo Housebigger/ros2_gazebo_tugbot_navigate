@@ -1,0 +1,10 @@
+Starting >>> go2_description
+Starting >>> tugbot_description
+Starting >>> tugbot_gazebo
+Finished <<< tugbot_gazebo [0.09s]
+Finished <<< tugbot_description [0.11s]
+Finished <<< go2_description [0.13s]
+Starting >>> go2_maze_bringup
+Finished <<< go2_maze_bringup [0.10s]
+
+Summary: 4 packages finished [0.35s]

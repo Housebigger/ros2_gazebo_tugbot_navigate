@@ -1,0 +1,86 @@
+{
+  "streams": {
+    "front": {
+      "count": 1702,
+      "dimensions": [
+        720,
+        540
+      ],
+      "frame": "go2/base_link/camera_front",
+      "simulated_hz": 18.868552412645595,
+      "max_gap_sim_s": 0.15000000000000568,
+      "last_stamp": 301.4,
+      "intrinsics": [
+        183.43,
+        0.0,
+        360.5,
+        0.0,
+        183.43,
+        270.5,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "max_image_change": 42.776427469135804,
+      "final_age_sim_s": 0.04400000000003956
+    },
+    "chase": {
+      "count": 1566,
+      "dimensions": [
+        1280,
+        720
+      ],
+      "frame": "camera_chase_optical",
+      "simulated_hz": 17.369589345172038,
+      "max_gap_sim_s": 0.30000000000001137,
+      "last_stamp": 301.4,
+      "intrinsics": [
+        1700.3060913085938,
+        0.0,
+        640.0,
+        0.0,
+        1700.3059387207031,
+        360.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "max_image_change": 20.86802279874214,
+      "final_age_sim_s": 0.04400000000003956
+    },
+    "overview": {
+      "count": 784,
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "frame": "camera_overview_optical",
+      "simulated_hz": 8.700000000000003,
+      "max_gap_sim_s": 0.5,
+      "last_stamp": 301.4,
+      "intrinsics": [
+        937.2096557617188,
+        0.0,
+        512.0,
+        0.0,
+        937.2096557617188,
+        512.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "max_image_change": 0.004116538590745226,
+      "final_age_sim_s": 0.04400000000003956
+    }
+  },
+  "require_motion": true,
+  "time_aligned_tf_samples": 4512,
+  "max_follow_error_m": 0.02239934061685871,
+  "max_aim_error_rad": 0.0011418252116119625,
+  "max_horizon_vertical_component": 1.5612511283791264e-15,
+  "p99_image_stamp_spread_sim_s": 0.25,
+  "travel_m": 12.15228323425925,
+  "yaw_range_rad": 3.7839494327064958,
+  "elapsed_sim_s": 90.23600000000002,
+  "passed": true
+}

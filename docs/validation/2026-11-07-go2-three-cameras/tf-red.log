@@ -1,0 +1,81 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________ test_chase_tf_covers_the_whole_walk_and_turn_window ______________
+
+    def test_chase_tf_covers_the_whole_walk_and_turn_window():
+        CHECKER = Path(__file__).resolve().parents[3] / 'tools/check_go2_cameras.py'
+        tree = ast.parse(CHECKER.read_text())
+        functions = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                     and n.name in ('stamp', 'rotation', 'check_image_times')]
+        camera_class = next(n for n in tree.body
+                            if isinstance(n, ast.ClassDef) and n.name == 'CameraCheck')
+        evaluate = next(n for n in camera_class.body
+                        if isinstance(n, ast.FunctionDef) and n.name == 'evaluate')
+        namespace = {'np': np, 'math': math, 'bisect_left': bisect_left}
+        exec(compile(ast.fix_missing_locations(ast.Module(
+            body=functions + [evaluate], type_ignores=[])), str(CHECKER), 'exec'), namespace)
+    
+    
+        def header(t, frame='odom'):
+            return S(stamp=S(sec=int(t), nanosec=int(round((t-int(t))*1e9))),
+                     frame_id=frame)
+    
+    
+        def vec(a):
+            return S(x=float(a[0]), y=float(a[1]), z=float(a[2]))
+    
+    
+        def quat(matrix):
+            q = np.sqrt(np.maximum(0, [
+                1+matrix[0, 0]-matrix[1, 1]-matrix[2, 2],
+                1-matrix[0, 0]+matrix[1, 1]-matrix[2, 2],
+                1-matrix[0, 0]-matrix[1, 1]+matrix[2, 2],
+                1+np.trace(matrix)]))/2
+            q[:3] = np.copysign(q[:3], [matrix[2, 1]-matrix[1, 2],
+                                       matrix[0, 2]-matrix[2, 0],
+                                       matrix[1, 0]-matrix[0, 1]])
+            return S(x=q[0], y=q[1], z=q[2], w=q[3])
+    
+    
+        forward = np.array([1.2, .9, -3.6])
+        forward /= np.linalg.norm(forward)
+        right = np.array([.6, -.8, 0])
+        optical_q = quat(np.column_stack([right, np.cross(forward, right), forward]))
+        node = S(images={}, infos={}, times={}, samples={}, odom=[], chase=[],
+                 sync_spreads=[0.], overview=S(header=header(0), transform=S(
+                     translation=vec([0, 0, 24]), rotation=S(x=1., y=0., z=0., w=0.))))
+        for name, size in {'front': (720, 540), 'chase': (1280, 720),
+                           'overview': (1024, 1024)}.items():
+            rate = 10 if name == 'overview' else 20
+            times = np.arange(0, 90+1e-8, 1/rate)
+            node.times[name] = times
+            node.images[name] = S(width=size[0], height=size[1],
+                                  header=header(times[-1], name+'_optical'))
+            hfov = .72 if name == 'chase' else 1.
+            focal = size[0]/(2*math.tan(hfov/2))
+            node.infos[name] = S(width=size[0], height=size[1],
+                                 header=header(times[-1], name+'_optical'),
+                                 k=[focal, 0, size[0]/2, 0, focal, size[1]/2, 0, 0, 1])
+            node.samples[name] = [np.zeros((2, 2, 3)), np.ones((2, 2, 3))*3]
+        for t in np.arange(0, 90.00001, .02):
+            position = np.array([t*.1, 0, .34])
+            yaw = t/90
+            node.odom.append(S(header=header(t), pose=S(pose=S(
+                position=vec(position), orientation=S(
+                    x=0, y=0, z=math.sin(yaw/2), w=math.cos(yaw/2))))))
+            node.chase.append(S(header=header(t), transform=S(
+                translation=vec(position+[-1.2, -.9, 3.5]), rotation=optical_q)))
+    
+        complete = node.chase
+        # Frozen after 3s, missing the first 86s, and a long gap in the middle.
+        invalid = [complete[:151], complete[-201:], complete[:151]+complete[2000:]]
+        for transforms in invalid:
+            node.chase = transforms
+>           with pytest.raises(AssertionError, match='Chase TF'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE <class 'AssertionError'>
+
+src/tugbot_maze/test/test_go2_camera_tf.py:80: Failed
+=========================== short test summary info ============================
+FAILED src/tugbot_maze/test/test_go2_camera_tf.py::test_chase_tf_covers_the_whole_walk_and_turn_window
+1 failed in 0.66s

@@ -2,11 +2,23 @@
 
 ROS 2 / Gazebo 导航实验仓库，保留从 Tugbot 视觉巡航、Nav2 导航、在线探索到四足机器人自主走迷宫的阶段工作区。**当前推荐入口是 [Unitree Go2 工作区](ros2_ws_go2_maze_20261107/README.md)**。不同日期的工作区分别构建，分别加载环境。
 
-## 当前成果：Go2 自主通关最新版迷宫
+## 本轮：三路实时相机与绿色背部箭头
+
+- 一号头部前视，720×540 / 20 Hz；二号固定世界方向跟随，1280×720 / 20 Hz；三号迷宫中心 24 m 高空俯视，1024×1024 / 10 Hz。
+- RViz 默认同时显示三个可拖动、浮动的 Image 窗格；二号只跟随位置，Go2 转弯时镜头不绕狗旋转，地平线保持稳定。
+- 背部亮绿色大箭头带深色边框，沿机体 +X 指向机头，提升灰色迷宫中的位置与朝向辨识度；Gazebo 和 RViz 使用相同视觉资源。
+
+带最终三相机设置和箭头的实例完成一轮自主通关：918.932 仿真秒、117.936 m，出口距离 0.709254 m，最终线速度 0 m/s。54,050 条原生位姿严格重放通过，几何碰撞 / 非法越界为 0 / 0。它是单轮仿真结果，未做多种子统计。
+
+[本轮经验总结](docs/experience/2026-11-07-go2-cameras-and-marker.md) · [完整验证与原始数据](docs/validation/2026-11-07-go2-three-cameras/README.md) · [标记近景](docs/validation/2026-11-07-go2-three-cameras/back-marker/chase-end.png)
+
+![三相机与绿色背部箭头](docs/validation/2026-11-07-go2-three-cameras/back-marker/rviz.png)
+
+## 前阶段：Go2 自主通关基线
 
 Go2 使用官方模型惯量、碰撞体和 12 个关节力矩 PID，通过足地接触运动。沿用 `ros2_ws_tugbot_nav_20260728` 的最新 2 倍尺寸迷宫与在线 flood-fill 导航，内部墙体边走边发现。
 
-| 本轮验收 | 实测 |
+| 相机扩展前的验收 | 实测 |
 | --- | ---: |
 | 修正后完整自主运行 | 1 轮通过 |
 | 仿真时间 / 实际累计路程 | 939.334 s / 119.122 m |
@@ -15,7 +27,7 @@ Go2 使用官方模型惯量、碰撞体和 12 个关节力矩 PID，通过足�
 | 原生位姿完整重放 | 55,271 条 |
 | 几何碰撞 / 非法越界 | 0 / 0 |
 | 最大总倾角 | 3.148° |
-| Go2 核心回归 | 208 项通过 |
+| Go2 核心回归 | 通关阶段 208 项；新增观察功能后 218 项通过 |
 
 [验收报告与原始数据](docs/validation/2026-11-07-go2-maze/README.md) · [成功经验](docs/experience/2026-11-07-go2-maze-success.md) · [全部文档入口](docs/README.md)
 
@@ -33,12 +45,17 @@ Go2 使用官方模型惯量、碰撞体和 12 个关节力矩 PID，通过足�
 cd ros2_ws_go2_maze_20261107
 source /opt/ros/lyrical/setup.bash
 colcon build --symlink-install --packages-select \
-  go2_description tugbot_description tugbot_gazebo tugbot_maze go2_maze_bringup
+  go2_description go2_observer_cameras tugbot_description tugbot_gazebo tugbot_maze go2_maze_bringup
 ./tools/test_go2_core.sh
+ctest --test-dir build/go2_observer_cameras --output-on-failure
 ./run_go2_maze.sh
 ```
 
-最后一条命令打开 Gazebo + RViz 并自动起步。Ctrl+C 结束本次 launch。自动化验收入口为：
+最后一条命令打开 Gazebo + RViz 并自动起步。Ctrl+C 结束本次 launch。
+
+RViz 默认同时显示三个实时图像窗格：Go2 头部前视、只随 Go2 位置平移、保持世界方向的斜上方近景、迷宫中心上空的固定大全景。窗格可拖动、缩放或浮动。仅观察站立画面使用 `./run_go2_maze.sh autonomous:=false`；关闭两路观察相机使用 `observer_cameras:=false`。[三相机说明](ros2_ws_go2_maze_20261107/src/go2_observer_cameras/README.md) · [联调记录](docs/validation/2026-11-07-go2-three-cameras/README.md)
+
+自动化验收入口为：
 
 ```bash
 ./tools/run_checked_maze.sh
@@ -80,6 +97,7 @@ ros2_ws_go2_maze_20261107/
 ├── src/
 │   ├── go2_description/      # 官方 Go2 URDF、DAE、来源与许可
 │   ├── go2_maze_bringup/     # 当前 launch、bridge、RViz
+│   ├── go2_observer_cameras/ # 跟随/全景相机及原生跟随插件
 │   ├── tugbot_description/   # 当前原生 Go2 SDF；兼有历史模型
 │   ├── tugbot_gazebo/        # 最新迷宫与 Go2 平地验证场景
 │   └── tugbot_maze/          # 在线导航、步态、出口收尾、独立验收
@@ -90,7 +108,7 @@ ros2_ws_go2_maze_20261107/
 
 ## 验证边界
 
-- 核心 208 项通过。广泛历史测试记录为 564 通过、7 失败；6 项是旧 wall-follow 用例，1 项要求原仓库缺失的 `maze_20260522.jpg`。缺少 `nav2_msgs` 的旧 reactive_pilot 测试未运行。[完整日志与解释](docs/validation/2026-11-07-go2-maze/README.md)。
+- 本轮观察功能核心 218 项及原生几何 CTest 1/1 通过；通关阶段核心为 208 项。广泛历史测试记录为 564 通过、7 失败；6 项是旧 wall-follow 用例，1 项要求原仓库缺失的 `maze_20260522.jpg`。缺少 `nav2_msgs` 的旧 reactive_pilot 测试未运行。[完整日志与解释](docs/validation/2026-11-07-go2-maze/README.md)。
 - 零碰撞指指定步态/姿态范围内的保守几何检查，未测接触力；完整仿真验收不等于实机安全认证。
 - 聚焦启动不启动 Nav2 或 slam_toolbox。不要同时加载其他日期工作区中同名包，或使用旧脚本全局杀进程、清理共享内存。
 

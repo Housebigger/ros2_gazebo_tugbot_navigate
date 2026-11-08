@@ -20,3 +20,5 @@ ros2 launch go2_maze_bringup maze.launch.py autonomous:=false \
 ```
 
 `$PWD` 应为工作区根目录。不要用历史 Tugbot/ANYmal 的 bringup 代替当前入口；它们的底盘控制和传感器契约不同。
+
+观察相机由 go2_maze_bringup 按 observer_cameras 开关独立生成；world 几何不因观察功能改变。三号相机对应世界 (0,0,24) m，以北向上的图像覆盖全部迷宫墙角；两路观察模型静态、无碰撞，不进入 Go2 动态顶层真值流。
